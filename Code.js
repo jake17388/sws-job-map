@@ -9,7 +9,7 @@ function doGet(e) {
   const action = e.parameter.action;
  
   if (action === 'getJobs') {
-    return ContentService.createTextOutput(JSON.stringify(getJobs()))
+    return ContentService.createTextOutput(JSON.stringify(getJobs(e)))
       .setMimeType(ContentService.MimeType.JSON);
   }
   if (action === 'getUnsched') {
@@ -32,16 +32,32 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify(removeUnsched(data.id)))
       .setMimeType(ContentService.MimeType.JSON);
   }
+  if (data.action === 'updateUnsched') {
+    return ContentService.createTextOutput(JSON.stringify(updateUnsched(data)))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
  
 // ── Calendar jobs ─────────────────────────────────────────────────────────────
-function getJobs() {
+function getJobs(e) {
+  const params = (e && e.parameter) || {};
   const now = new Date();
-  const start = new Date(now); start.setDate(start.getDate() - 7);
-  const end = new Date(now); end.setDate(end.getDate() + 60);
+  let start, end;
+  if (params.from) {
+    const p = params.from.split('-');
+    start = new Date(+p[0], +p[1] - 1, +p[2]);
+  } else {
+    start = new Date(now); start.setDate(start.getDate() - 7);
+  }
+  if (params.to) {
+    const p = params.to.split('-');
+    end = new Date(+p[0], +p[1] - 1, +p[2], 23, 59, 59);
+  } else {
+    end = new Date(now); end.setDate(end.getDate() + 60);
+  }
   const installJobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', start, end);
   const serviceJobs = fetchCalendarEvents(SERVICE_CAL_ID, 'service', start, end);
-  return { jobs: [...installJobs, ...serviceJobs], timestamp: new Date().toISOString() };
+  return { jobs: [...installJobs, ...serviceJobs], timestamp: new Date().toISOString(), fetchedFrom: formatDate(start), fetchedTo: formatDate(end) };
 }
  
 function fetchCalendarEvents(calId, type, start, end) {
@@ -123,6 +139,28 @@ function removeUnsched(id) {
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][4]) === String(id)) {
         sheet.deleteRow(i + 1);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Row not found' };
+  } catch(e) {
+    return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function updateUnsched(data) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const sheet = SpreadsheetApp.openById(SHEET_ID).getActiveSheet();
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][4]) === String(data.id)) {
+        sheet.getRange(i + 1, 1).setValue(data.job_num);
+        sheet.getRange(i + 1, 2).setValue(data.title);
+        sheet.getRange(i + 1, 3).setValue(data.address);
         return { success: true };
       }
     }

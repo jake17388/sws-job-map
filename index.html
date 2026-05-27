@@ -112,6 +112,16 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .btn-remove:hover { color: #e74c3c; }
 .no-results { padding: 40px 14px; text-align: center; color: #ccc; font-size: 13px; }
 .loading-state { padding: 40px 14px; text-align: center; color: #ccc; font-size: 13px; }
+.search-input { width: 100%; border: 1px solid #e8e8e8; border-radius: 6px; padding: 7px 10px; font-size: 12px; background: #fafafa; outline: none; color: #1a1a1a; font-family: 'DM Sans', sans-serif; margin-top: 8px; display: block; }
+.search-input:focus { border-color: #999; background: #fff; }
+.date-warn { font-size: 11px; color: #8a4a00; background: #fff6ec; border: 1px solid #f0d090; border-radius: 5px; padding: 5px 8px; margin-top: 6px; display: none; }
+.geo-error-text { font-size: 10px; color: #e74c3c; margin-top: 3px; display: flex; align-items: center; gap: 4px; }
+.btn-retry { background: none; border: none; color: #e74c3c; font-size: 13px; cursor: pointer; padding: 0 2px; line-height: 1; }
+.btn-retry:hover { color: #c0392b; }
+.btn-edit { background: none; border: none; color: #c0a0e0; font-size: 14px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; line-height: 1; }
+.btn-edit:hover { color: #7a3db5; }
+.btn-cancel { width: 100%; padding: 7px; border: 1px solid #e8d8f8; border-radius: 6px; background: #fff; color: #7a3db5; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; margin-bottom: 6px; display: none; }
+.btn-cancel:hover { background: #f5eeff; }
  
 /* ── Map ── */
 .map-container { flex: 1; position: relative; }
@@ -196,7 +206,9 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
           <span class="date-sep">→</span>
           <input type="date" id="date-to" onchange="applyFilters()" />
         </div>
+        <div class="date-warn" id="date-warn">⚠ Dates exceed loaded range — hit Refresh to load</div>
         <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
+        <input type="text" id="job-search" class="search-input" placeholder="Search job # or name…" oninput="searchQuery=this.value.trim();renderList()" />
       </div>
  
       <div class="unsched-add visible" id="unsched-add">
@@ -206,7 +218,8 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
           <input class="inp-title" id="u-title" type="text" placeholder="Job name" />
         </div>
         <input class="inp-addr" id="u-addr" type="text" placeholder="Full address..." />
-        <button class="btn-add" id="add-btn" onclick="addUnscheduled()">+ Add to map</button>
+        <button class="btn-cancel" id="cancel-edit-btn" onclick="cancelEdit()">✕ Cancel edit</button>
+        <button class="btn-add" id="add-btn" onclick="submitUnschedForm()">+ Add to map</button>
       </div>
  
       <div class="job-list" id="job-list">
@@ -244,6 +257,7 @@ const PINS = {
  
 const COLORS = { install:'#1a4a8a', service:'#b84a00', unscheduled:'#7a3db5' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API limit reached', OVER_QUERY_LIMIT:'Rate limited', REQUEST_DENIED:'API key error', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
  
 // ── State ─────────────────────────────────────────────────────────────────────
 let map, geocoder, infoWindowOpen = null;
@@ -251,6 +265,9 @@ let scheduledJobs = [], unscheduledJobs = [];
 const activeTypes = new Set(['install','service','unscheduled']);
 let currentUser = null;
 let pinEntry = '';
+let fetchedDateRange = null;
+let searchQuery = '';
+let editingId = null;
  
 // ── PIN logic ─────────────────────────────────────────────────────────────────
 function pinKey(k) {
@@ -367,12 +384,15 @@ function loadJobs() {
   document.getElementById('map-overlay').style.display = 'flex';
   document.getElementById('header-count').textContent = '';
  
-  scriptGet('getJobs')
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+  scriptGet(`getJobs&from=${from}&to=${to}`)
     .then(data => {
       scheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
       scheduledJobs = data.jobs || [];
       scheduledJobs.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
       scheduledJobs.forEach(j => { j._status = 'pending'; j._marker = null; j._iw = null; });
+      fetchedDateRange = { from: data.fetchedFrom || from, to: data.fetchedTo || to };
       const ts = new Date(data.timestamp);
       document.getElementById('last-updated').textContent = `Updated ${ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
       document.getElementById('map-overlay').style.display = 'none';
@@ -396,14 +416,14 @@ function geocodeScheduled() {
           job._lng = results[0].geometry.location.lng();
           job._status = 'ok';
           buildScheduledMarker(job);
-        } else { job._status = 'error'; }
+        } else { job._status = 'error'; job._geoError = status; }
         renderList(); updateCount();
       });
     }, delay);
     delay += 120;
   });
 }
- 
+
 // ── Markers ───────────────────────────────────────────────────────────────────
 function makeSVG(label, color) {
   const s = String(label);
@@ -472,6 +492,8 @@ function buildUnschedMarker(job, label) {
 function applyFilters() {
   const from = document.getElementById('date-from').value;
   const to = document.getElementById('date-to').value;
+  const warn = document.getElementById('date-warn');
+  if (warn) warn.style.display = (fetchedDateRange && (from < fetchedDateRange.from || to > fetchedDateRange.to)) ? 'block' : 'none';
   scheduledJobs.forEach(j => { if (j._marker) j._marker.setVisible(false); });
   unscheduledJobs.forEach(j => { if (j._marker) j._marker.setVisible(false); });
   if (activeTypes.has('unscheduled')) {
@@ -514,6 +536,8 @@ function resetFilters() {
   activeTypes.add('install'); activeTypes.add('service'); activeTypes.add('unscheduled');
   updateButtons();
   document.getElementById('unsched-add').className = 'unsched-add visible';
+  searchQuery = '';
+  document.getElementById('job-search').value = '';
   applyFilters();
 }
  
@@ -521,9 +545,14 @@ function resetFilters() {
 function renderList() {
   const list = document.getElementById('job-list');
   const rows = [];
+  const q = searchQuery.toLowerCase();
   if (activeTypes.has('unscheduled')) {
     unscheduledJobs.forEach((job, i) => {
+      if (q && !String(job.job_num).toLowerCase().includes(q) && !job.title.toLowerCase().includes(q)) return;
       const sc = job._status === 'pending' ? 'pending' : job._status === 'error' ? 'error' : 'unscheduled';
+      const errText = job._status === 'error'
+        ? `<div class="geo-error-text">${GEO_ERRORS[job._geoError] || 'Geocode failed'} <button class="btn-retry" onclick="event.stopPropagation();retryGeocodeUnsched('${job.id}')" title="Retry">↺</button></div>`
+        : '';
       rows.push(`<div class="job-item" id="item-unsched-${i}" onclick="focusUnsched('${job.id}')">
         <div class="pin-badge ${sc}">U${i + 1}</div>
         <div class="job-info">
@@ -534,23 +563,31 @@ function renderList() {
             <span class="badge unscheduled">unscheduled</span>
             <span class="added-by">Added by ${job.added_by || 'Unknown'}</span>
           </div>
+          ${errText}
         </div>
+        <button class="btn-edit" onclick="event.stopPropagation();editUnsched('${job.id}')" title="Edit">✎</button>
         <button class="btn-remove" onclick="event.stopPropagation();removeUnsched('${job.id}')" title="Remove">✕</button>
       </div>`);
     });
   }
   let n = 0;
   getVisibleScheduled().forEach(job => {
+    if (q && !String(job.num).toLowerCase().includes(q) && !job.title.toLowerCase().includes(q)) return;
     const sc = job._status === 'pending' ? 'pending' : job._status === 'error' ? 'error' : job.type;
     const dateStr = job.start === job.end ? fmtDate(job.start) : `${fmtDate(job.start)} – ${fmtDate(job.end)}`;
     const label = job._status === 'ok' ? ++n : '–';
-    rows.push(`<div class="job-item" id="item-sched-${scheduledJobs.indexOf(job)}" onclick="focusJob(${scheduledJobs.indexOf(job)})">
+    const idx = scheduledJobs.indexOf(job);
+    const errText = job._status === 'error'
+      ? `<div class="geo-error-text">${GEO_ERRORS[job._geoError] || 'Geocode failed'} <button class="btn-retry" onclick="event.stopPropagation();retryGeocodeScheduled(${idx})" title="Retry">↺</button></div>`
+      : '';
+    rows.push(`<div class="job-item" id="item-sched-${idx}" onclick="focusJob(${idx})">
       <div class="pin-badge ${sc}">${label}</div>
       <div class="job-info">
         <div class="job-num">${job.num || '—'}</div>
         <div class="job-title">${job.title}</div>
         <div class="job-addr">${job.addr}</div>
         <div class="job-meta"><span class="badge ${job.type}">${job.type}</span>${dateStr}</div>
+        ${errText}
       </div>
     </div>`);
   });
@@ -589,7 +626,7 @@ function geocodeUnscheduled() {
           job._lng = results[0].geometry.location.lng();
           job._status = 'ok';
           buildUnschedMarker(job, 'U' + (i + 1));
-        } else { job._status = 'error'; }
+        } else { job._status = 'error'; job._geoError = status; }
         renderList(); updateCount();
       });
     }, delay);
@@ -655,8 +692,83 @@ function updateCount() {
  
 document.addEventListener('keydown', e => {
   if (document.getElementById('app').style.display === 'none') return;
-  if (e.key === 'Enter' && ['u-num', 'u-title', 'u-addr'].includes(document.activeElement?.id)) addUnscheduled();
+  if (e.key === 'Enter' && ['u-num', 'u-title', 'u-addr'].includes(document.activeElement?.id)) submitUnschedForm();
+  if (e.key === 'Escape' && editingId !== null) cancelEdit();
 });
+
+// ── Geocode retry ─────────────────────────────────────────────────────────────
+function retryGeocodeScheduled(idx) {
+  const job = scheduledJobs[idx];
+  if (!job) return;
+  job._status = 'pending'; job._geoError = null;
+  renderList();
+  geocoder.geocode({ address: job.addr }, (results, status) => {
+    if (status === 'OK') {
+      job._lat = results[0].geometry.location.lat();
+      job._lng = results[0].geometry.location.lng();
+      job._status = 'ok';
+      buildScheduledMarker(job);
+    } else { job._status = 'error'; job._geoError = status; }
+    renderList(); updateCount();
+  });
+}
+
+function retryGeocodeUnsched(id) {
+  const job = unscheduledJobs.find(j => String(j.id) === String(id));
+  if (!job) return;
+  job._status = 'pending'; job._geoError = null;
+  renderList();
+  geocoder.geocode({ address: job.address }, (results, status) => {
+    if (status === 'OK') {
+      job._lat = results[0].geometry.location.lat();
+      job._lng = results[0].geometry.location.lng();
+      job._status = 'ok';
+      buildUnschedMarker(job, 'U' + (unscheduledJobs.indexOf(job) + 1));
+    } else { job._status = 'error'; job._geoError = status; }
+    renderList(); updateCount();
+  });
+}
+
+// ── Edit unscheduled ──────────────────────────────────────────────────────────
+function submitUnschedForm() {
+  editingId !== null ? saveUnschedEdit() : addUnscheduled();
+}
+
+function editUnsched(id) {
+  const job = unscheduledJobs.find(j => String(j.id) === String(id));
+  if (!job) return;
+  editingId = id;
+  document.getElementById('u-num').value = job.job_num;
+  document.getElementById('u-title').value = job.title;
+  document.getElementById('u-addr').value = job.address;
+  document.getElementById('add-btn').textContent = 'Save Changes';
+  document.querySelector('.add-form-label').textContent = 'Edit Unscheduled Job';
+  document.getElementById('cancel-edit-btn').style.display = 'block';
+  document.getElementById('unsched-add').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.getElementById('u-num').focus();
+}
+
+function cancelEdit() {
+  editingId = null;
+  document.getElementById('u-num').value = '';
+  document.getElementById('u-title').value = '';
+  document.getElementById('u-addr').value = '';
+  document.getElementById('add-btn').textContent = '+ Add to map';
+  document.querySelector('.add-form-label').textContent = 'Add Unscheduled Job';
+  document.getElementById('cancel-edit-btn').style.display = 'none';
+}
+
+function saveUnschedEdit() {
+  const num = document.getElementById('u-num').value.trim();
+  const title = document.getElementById('u-title').value.trim();
+  const addr = document.getElementById('u-addr').value.trim();
+  if (!num || !addr) { alert('Job number and address are required.'); return; }
+  const btn = document.getElementById('add-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  scriptPost({ action: 'updateUnsched', id: editingId, job_num: num, title: title || num, address: addr })
+    .then(() => { cancelEdit(); loadUnscheduled(); })
+    .catch(() => { btn.disabled = false; btn.textContent = 'Save Changes'; alert('Failed to save. Try again.'); });
+}
 </script>
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBxzLeU1u-5AAmb-J_wAC2-QT-wf2-qiXQ&loading=async&callback=Function.prototype" async defer></script>
 </body>
