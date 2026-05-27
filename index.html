@@ -6,10 +6,10 @@
 <title>SWS Job Map</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap');
-
+ 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'DM Sans', system-ui, sans-serif; background: #f4f3f0; color: #1a1a1a; height: 100vh; display: flex; flex-direction: column; }
-
+ 
 /* ── PIN Screen ── */
 #pin-screen {
   position: fixed; inset: 0; background: #1a1a1a;
@@ -32,23 +32,7 @@ body { font-family: 'DM Sans', system-ui, sans-serif; background: #f4f3f0; color
 .pin-key.del { font-size: 16px; color: #888; }
 .pin-key.empty { background: transparent; cursor: default; pointer-events: none; }
 .pin-error { color: #e74c3c; font-size: 12px; margin-top: 16px; min-height: 18px; }
-
-/* ── Auth overlay (Google Sign-In) ── */
-#auth-screen {
-  position: fixed; inset: 0; background: #1a1a1a;
-  display: none; flex-direction: column; align-items: center; justify-content: center;
-  z-index: 999;
-}
-.auth-card { background: #242424; border-radius: 16px; padding: 36px 40px; width: 340px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.4); }
-.auth-logo { font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #555; margin-bottom: 24px; font-family: 'DM Mono', monospace; }
-.auth-logo span { color: #fff; }
-.auth-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 8px; }
-.auth-sub { font-size: 13px; color: #666; margin-bottom: 28px; line-height: 1.5; }
-#google-signin-btn { width: 100%; padding: 13px; border: 1px solid #3a3a3a; border-radius: 10px; background: #2e2e2e; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
-#google-signin-btn:hover { background: #383838; border-color: #4a4a4a; }
-#google-signin-btn svg { flex-shrink: 0; }
-.auth-note { font-size: 11px; color: #444; margin-top: 16px; line-height: 1.4; }
-
+ 
 /* ── App ── */
 #app { display: none; flex-direction: column; flex: 1; height: 100vh; }
 header { background: #1a1a1a; color: #fff; padding: 11px 20px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
@@ -63,11 +47,11 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .hdr-btn:hover { background: #333; color: #fff; }
 .hdr-btn.danger { color: #c0392b; border-color: #3a2020; }
 .hdr-btn.danger:hover { background: #2a1010; color: #e74c3c; }
-
+ 
 /* ── Layout ── */
 .main { display: flex; flex: 1; overflow: hidden; }
 .sidebar { width: 330px; background: #fff; border-right: 1px solid #e8e8e8; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
-
+ 
 /* ── Filters ── */
 .filters { padding: 12px 14px 10px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }
 .filter-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #bbb; margin-bottom: 7px; font-family: 'DM Mono', monospace; }
@@ -87,7 +71,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .date-sep { font-size: 11px; color: #ccc; }
 .filter-reset { font-size: 11px; color: #ccc; cursor: pointer; text-decoration: underline; margin-top: 6px; display: inline-block; }
 .filter-reset:hover { color: #888; }
-
+ 
 /* ── Add form ── */
 .unsched-add { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; display: none; background: #fdf8ff; }
 .unsched-add.visible { display: block; }
@@ -102,7 +86,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .btn-add { width: 100%; padding: 8px; border: none; border-radius: 6px; background: #7a3db5; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s; font-family: 'DM Sans', sans-serif; }
 .btn-add:hover { background: #6331a0; }
 .btn-add:disabled { background: #ccc; cursor: not-allowed; }
-
+ 
 /* ── Job list ── */
 .job-list { flex: 1; overflow-y: auto; }
 .job-item { display: flex; align-items: flex-start; gap: 10px; padding: 9px 14px; border-bottom: 1px solid #f5f5f5; cursor: pointer; transition: background 0.1s; }
@@ -128,10 +112,13 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .btn-remove:hover { color: #e74c3c; }
 .no-results { padding: 40px 14px; text-align: center; color: #ccc; font-size: 13px; }
 .loading-state { padding: 40px 14px; text-align: center; color: #ccc; font-size: 13px; }
-
+ 
 /* ── Map ── */
 .map-container { flex: 1; position: relative; }
 #map { width: 100%; height: 100%; }
+.map-controls { position: absolute; top: 12px; right: 12px; z-index: 10; }
+.map-btn { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 7px 12px; font-size: 12px; font-weight: 500; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.1); font-family: 'DM Sans', sans-serif; }
+.map-btn:hover { background: #f5f5f5; }
 .legend { position: absolute; bottom: 30px; left: 12px; background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; padding: 10px 14px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); z-index: 10; }
 .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; color: #555; }
 .legend-row:last-child { margin-bottom: 0; }
@@ -139,13 +126,10 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .map-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; z-index: 20; font-size: 14px; color: #aaa; }
 .spinner { width: 30px; height: 30px; border: 3px solid #e8e8e8; border-top-color: #1a4a8a; border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.map-controls { position: absolute; top: 12px; right: 12px; z-index: 10; }
-.map-btn { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 7px 12px; font-size: 12px; font-weight: 500; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.1); font-family: 'DM Sans', sans-serif; }
-.map-btn:hover { background: #f5f5f5; }
 </style>
 </head>
 <body>
-
+ 
 <!-- PIN Screen -->
 <div id="pin-screen">
   <div class="pin-logo"><span>SWS</span> Job Map</div>
@@ -175,21 +159,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
     <div class="pin-error" id="pin-error"></div>
   </div>
 </div>
-
-<!-- Google Auth Screen -->
-<div id="auth-screen">
-  <div class="auth-card">
-    <div class="auth-logo"><span>SWS</span> Job Map</div>
-    <div class="auth-title">Sign in with Google</div>
-    <div class="auth-sub">Sign in with your summitwestsigns.com account to access the calendar and job data.</div>
-    <button id="google-signin-btn" onclick="startGoogleAuth()">
-      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
-      Sign in with Google
-    </button>
-    <div class="auth-note">Only summitwestsigns.com accounts can access this app.</div>
-  </div>
-</div>
-
+ 
 <!-- Main App -->
 <div id="app">
   <header>
@@ -204,7 +174,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
       <button class="hdr-btn danger" onclick="signOut()">Sign out</button>
     </div>
   </header>
-
+ 
   <div class="main">
     <div class="sidebar">
       <div class="filters">
@@ -228,7 +198,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
         </div>
         <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
       </div>
-
+ 
       <div class="unsched-add visible" id="unsched-add">
         <div class="add-form-label">Add Unscheduled Job</div>
         <div class="input-row">
@@ -238,12 +208,12 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
         <input class="inp-addr" id="u-addr" type="text" placeholder="Full address..." />
         <button class="btn-add" id="add-btn" onclick="addUnscheduled()">+ Add to map</button>
       </div>
-
+ 
       <div class="job-list" id="job-list">
         <div class="loading-state">Loading calendar...</div>
       </div>
     </div>
-
+ 
     <div class="map-container">
       <div id="map"></div>
       <div class="map-overlay" id="map-overlay">
@@ -261,33 +231,27 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
     </div>
   </div>
 </div>
-
+ 
 <script>
 // ── Config ────────────────────────────────────────────────────────────────────
-const CONFIG = {
-  CLIENT_ID: '994884630491-87m9kg699cfbk057tpj2kl88qpiqofqa.apps.googleusercontent.com',
-  MAPS_API_KEY: 'AIzaSyBxzLeU1u-5AAmb-J_wAC2-QT-wf2-qiXQ',
-  SHEET_ID: '1CTh3Fd3zvC0XDLTruuNz7RSLdgpVxy0TtCL9fZ2_9JU',
-  INSTALL_CAL_ID: 'summitwestsigns.com_5ehu6it6pfpcg2g9ifpcuv6gd8@group.calendar.google.com',
-  SERVICE_CAL_ID: 'summitwestsigns.com_plamgq5u79k125mvl50ie49fu0@group.calendar.google.com',
-  SKIP_KEYWORDS: ['no install','hunter out','johnny out','randy off','jake out','eli out','maintenance','crane service','2018 crane',"mother's day",'memorial day'],
-  SCOPES: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets',
-  PINS: { '2580': 'Jake Banks', '4567': 'Ryan Chapman' },
-  ALLOWED_DOMAIN: 'summitwestsigns.com',
+// Your Apps Script deployment URL — update this if you redeploy
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
+ 
+const PINS = {
+  '2580': 'Jake Banks',
+  '4567': 'Ryan Chapman',
 };
-
+ 
 const COLORS = { install:'#1a4a8a', service:'#b84a00', unscheduled:'#7a3db5' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
+ 
 // ── State ─────────────────────────────────────────────────────────────────────
 let map, geocoder, infoWindowOpen = null;
 let scheduledJobs = [], unscheduledJobs = [];
 const activeTypes = new Set(['install','service','unscheduled']);
 let currentUser = null;
 let pinEntry = '';
-let accessToken = null;
-let tokenClient = null;
-
+ 
 // ── PIN logic ─────────────────────────────────────────────────────────────────
 function pinKey(k) {
   if (pinEntry.length >= 4) return;
@@ -303,226 +267,143 @@ function pinDel() {
 }
 function updateDots(state) {
   for (let i = 0; i < 4; i++) {
-    const dot = document.getElementById('d'+i);
+    const dot = document.getElementById('d' + i);
     dot.className = 'pin-dot';
     if (state === 'error') dot.classList.add('error');
     else if (i < pinEntry.length) dot.classList.add('filled');
   }
 }
 function submitPin() {
-  const user = CONFIG.PINS[pinEntry];
+  const user = PINS[pinEntry];
   if (user) {
     currentUser = user;
     document.getElementById('pin-screen').style.display = 'none';
-    // Check if we already have a valid token
-    if (accessToken) {
-      showApp();
-    } else {
-      showAuthScreen();
-    }
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('user-badge').textContent = currentUser;
+    initMap();
   } else {
     updateDots('error');
     document.getElementById('pin-error').textContent = 'Incorrect PIN. Try again.';
     setTimeout(() => { pinEntry = ''; updateDots(); document.getElementById('pin-error').textContent = ''; }, 1200);
   }
 }
-
+function signOut() {
+  currentUser = null; pinEntry = '';
+  updateDots();
+  document.getElementById('pin-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  scheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
+  unscheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
+  scheduledJobs = []; unscheduledJobs = [];
+}
 document.addEventListener('keydown', e => {
   if (document.getElementById('pin-screen').style.display === 'none') return;
   if (e.key >= '0' && e.key <= '9') pinKey(e.key);
   if (e.key === 'Backspace') pinDel();
 });
-
-// ── Google OAuth ──────────────────────────────────────────────────────────────
-function showAuthScreen() {
-  document.getElementById('auth-screen').style.display = 'flex';
+ 
+// ── API calls to Apps Script ──────────────────────────────────────────────────
+function scriptGet(action) {
+  return fetch(`${SCRIPT_URL}?action=${action}`)
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
 }
-
-function startGoogleAuth() {
-  if (!tokenClient) {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: CONFIG.CLIENT_ID,
-      scope: CONFIG.SCOPES,
-      callback: handleTokenResponse,
-    });
-  }
-  tokenClient.requestAccessToken();
-}
-
-function handleTokenResponse(resp) {
-  if (resp.error) { console.error('Auth error:', resp); return; }
-  accessToken = resp.access_token;
-  // Verify the token belongs to the right domain
-  fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-    headers: { Authorization: `Bearer ${accessToken}` }
-  })
-  .then(r => r.json())
-  .then(info => {
-    const email = info.email || '';
-    if (!email.endsWith('@' + CONFIG.ALLOWED_DOMAIN)) {
-      accessToken = null;
-      alert(`Access denied. Only ${CONFIG.ALLOWED_DOMAIN} accounts can use this app.\n\nYou signed in as: ${email}`);
-      return;
-    }
-    document.getElementById('auth-screen').style.display = 'none';
-    showApp();
-  });
-}
-
-function showApp() {
-  document.getElementById('app').style.display = 'flex';
-  document.getElementById('user-badge').textContent = currentUser;
-  initMap();
-}
-
-function signOut() {
-  currentUser = null; pinEntry = ''; accessToken = null;
-  updateDots();
-  document.getElementById('pin-screen').style.display = 'flex';
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('auth-screen').style.display = 'none';
-  scheduledJobs.forEach(j => { if(j._marker) j._marker.setMap(null); });
-  unscheduledJobs.forEach(j => { if(j._marker) j._marker.setMap(null); });
-  scheduledJobs = []; unscheduledJobs = [];
-  if (google && google.accounts && google.accounts.oauth2) {
-    google.accounts.oauth2.revoke(accessToken || '', () => {});
-  }
-}
-
-// ── API helpers ───────────────────────────────────────────────────────────────
-async function apiGet(url) {
-  const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (!r.ok) throw new Error(`API error ${r.status}: ${await r.text()}`);
-  return r.json();
-}
-async function apiPost(url, body) {
-  const r = await fetch(url, {
+function scriptPost(body) {
+  return fetch(SCRIPT_URL, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) throw new Error(`API error ${r.status}: ${await r.text()}`);
-  return r.json();
+    body: JSON.stringify(body),
+  }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
 }
-
+ 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtDate(d) {
   if (!d) return '';
-  const [,m,day] = d.split('-');
-  return `${MONTHS[+m-1]} ${+day}`;
+  const [, m, day] = d.split('-');
+  return `${MONTHS[+m - 1]} ${+day}`;
 }
 function fmt(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-
+ 
 // ── Map init ──────────────────────────────────────────────────────────────────
 function initMap() {
   if (map) { loadAll(); return; }
   map = new google.maps.Map(document.getElementById('map'), {
-    center:{lat:33.40,lng:-111.85}, zoom:10,
-    mapTypeControl:false, streetViewControl:false, fullscreenControl:false,
-    gestureHandling:'greedy',
-    styles:[
-      {featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]},
-      {featureType:'transit',stylers:[{visibility:'off'}]}
+    center: { lat: 33.40, lng: -111.85 }, zoom: 10,
+    mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+    gestureHandling: 'greedy',
+    styles: [
+      { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+      { featureType: 'transit', stylers: [{ visibility: 'off' }] }
     ]
   });
   geocoder = new google.maps.Geocoder();
   const today = new Date();
-  const twoMonths = new Date(today); twoMonths.setDate(twoMonths.getDate()+60);
+  const twoMonths = new Date(today); twoMonths.setDate(twoMonths.getDate() + 60);
   document.getElementById('date-from').value = fmt(today);
   document.getElementById('date-to').value = fmt(twoMonths);
   loadAll();
 }
-
+ 
 function loadAll() { loadJobs(); loadUnscheduled(); }
-
+ 
 // ── Toggle ────────────────────────────────────────────────────────────────────
 function toggleType(type) {
-  if (activeTypes.has(type)) { if (activeTypes.size===1) return; activeTypes.delete(type); }
+  if (activeTypes.has(type)) { if (activeTypes.size === 1) return; activeTypes.delete(type); }
   else activeTypes.add(type);
   updateButtons();
   document.getElementById('unsched-add').className = 'unsched-add' + (activeTypes.has('unscheduled') ? ' visible' : '');
   applyFilters();
 }
 function updateButtons() {
-  ['install','service','unscheduled'].forEach(t => {
-    const btn = document.getElementById('btn-'+t);
+  ['install', 'service', 'unscheduled'].forEach(t => {
+    const btn = document.getElementById('btn-' + t);
     activeTypes.has(t) ? btn.classList.add('on') : btn.classList.remove('on');
   });
 }
-
-// ── Load Calendar jobs ────────────────────────────────────────────────────────
-async function loadJobs() {
+ 
+// ── Load scheduled jobs ───────────────────────────────────────────────────────
+function loadJobs() {
   document.getElementById('job-list').innerHTML = '<div class="loading-state">Fetching calendar...</div>';
   document.getElementById('map-overlay').style.display = 'flex';
   document.getElementById('header-count').textContent = '';
-
-  try {
-    const now = new Date();
-    const start = new Date(now); start.setDate(start.getDate() - 7);
-    const end = new Date(now); end.setDate(end.getDate() + 60);
-    const tMin = start.toISOString();
-    const tMax = end.toISOString();
-
-    const [installData, serviceData] = await Promise.all([
-      apiGet(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CONFIG.INSTALL_CAL_ID)}/events?timeMin=${tMin}&timeMax=${tMax}&singleEvents=true&maxResults=500`),
-      apiGet(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CONFIG.SERVICE_CAL_ID)}/events?timeMin=${tMin}&timeMax=${tMax}&singleEvents=true&maxResults=500`)
-    ]);
-
-    scheduledJobs.forEach(j => { if(j._marker) j._marker.setMap(null); });
-    scheduledJobs = [
-      ...parseCalEvents(installData.items || [], 'install'),
-      ...parseCalEvents(serviceData.items || [], 'service')
-    ];
-    scheduledJobs.sort((a,b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
-    scheduledJobs.forEach(j => { j._status='pending'; j._marker=null; j._iw=null; });
-
-    const now2 = new Date();
-    document.getElementById('last-updated').textContent = `Updated ${now2.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
-    document.getElementById('map-overlay').style.display = 'none';
-    renderList();
-    geocodeScheduled();
-  } catch(err) {
-    console.error('Calendar load error:', err);
-    document.getElementById('job-list').innerHTML = '<div class="no-results">Failed to load calendar.<br>Try refreshing.</div>';
-    document.getElementById('map-overlay').style.display = 'none';
-  }
-}
-
-function parseCalEvents(items, type) {
-  const jobs = [];
-  items.forEach(event => {
-    const title = (event.summary || '').trim();
-    const location = (event.location || '').trim();
-    if (!location) return;
-    const titleLower = title.toLowerCase();
-    if (CONFIG.SKIP_KEYWORDS.some(k => titleLower.includes(k))) return;
-    const numMatch = title.match(/\b(\d{5,6})\b/);
-    const jobNum = numMatch ? numMatch[1] : '';
-    let cleanTitle = title
-      .replace(/^\([^)]+\)\s*/, '')
-      .replace(/\b\d{5,6}\b\s*[-–]?\s*/, '')
-      .replace(/^\s*[-–]\s*/, '')
-      .trim();
-    const cleanAddr = location.replace(/\s*\|\s*/g, ', ').replace(/\s+/g, ' ').trim();
-    // Handle all-day events (date only) vs timed events
-    const startRaw = event.start.date || event.start.dateTime;
-    const endRaw = event.end.date || event.end.dateTime;
-    const startDate = new Date(startRaw);
-    const endDate = new Date(endRaw);
-    // For all-day end dates, Google returns the day after — subtract 1
-    if (event.end.date) endDate.setDate(endDate.getDate() - 1);
-    jobs.push({
-      type, num: jobNum, title: cleanTitle || title,
-      addr: cleanAddr,
-      start: fmt(startDate),
-      end: fmt(endDate),
+ 
+  scriptGet('getJobs')
+    .then(data => {
+      scheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
+      scheduledJobs = data.jobs || [];
+      scheduledJobs.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
+      scheduledJobs.forEach(j => { j._status = 'pending'; j._marker = null; j._iw = null; });
+      const ts = new Date(data.timestamp);
+      document.getElementById('last-updated').textContent = `Updated ${ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      document.getElementById('map-overlay').style.display = 'none';
+      renderList();
+      geocodeScheduled();
+    })
+    .catch(() => {
+      document.getElementById('job-list').innerHTML = '<div class="no-results">Failed to load calendar.<br>Try refreshing.</div>';
+      document.getElementById('map-overlay').style.display = 'none';
     });
-  });
-  return jobs;
 }
-
+ 
+function geocodeScheduled() {
+  let delay = 0;
+  scheduledJobs.forEach(job => {
+    setTimeout(() => {
+      if (!job.addr) { job._status = 'error'; renderList(); return; }
+      geocoder.geocode({ address: job.addr }, (results, status) => {
+        if (status === 'OK') {
+          job._lat = results[0].geometry.location.lat();
+          job._lng = results[0].geometry.location.lng();
+          job._status = 'ok';
+          buildScheduledMarker(job);
+        } else { job._status = 'error'; }
+        renderList(); updateCount();
+      });
+    }, delay);
+    delay += 120;
+  });
+}
+ 
 // ── Markers ───────────────────────────────────────────────────────────────────
 function makeSVG(label, color) {
   const s = String(label);
@@ -534,97 +415,100 @@ function makeSVG(label, color) {
   </svg>`;
 }
 function makeIcon(label, color) {
-  return { url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(makeSVG(label,color)), scaledSize:new google.maps.Size(34,42), anchor:new google.maps.Point(17,42) };
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeSVG(label, color)),
+    scaledSize: new google.maps.Size(34, 42),
+    anchor: new google.maps.Point(17, 42)
+  };
 }
-
-function geocodeScheduled() {
-  let delay = 0;
-  scheduledJobs.forEach(job => {
-    setTimeout(() => {
-      if (!job.addr) { job._status='error'; renderList(); return; }
-      geocoder.geocode({address:job.addr}, (results,status) => {
-        if (status==='OK') {
-          job._lat = results[0].geometry.location.lat();
-          job._lng = results[0].geometry.location.lng();
-          job._status = 'ok';
-          buildScheduledMarker(job);
-        } else { job._status='error'; }
-        renderList(); updateCount();
-      });
-    }, delay);
-    delay += 120;
-  });
-}
-
+ 
 function buildScheduledMarker(job) {
   const color = COLORS[job.type] || COLORS.install;
-  const dateStr = job.start===job.end ? fmtDate(job.start) : `${fmtDate(job.start)} – ${fmtDate(job.end)}`;
+  const dateStr = job.start === job.end ? fmtDate(job.start) : `${fmtDate(job.start)} – ${fmtDate(job.end)}`;
   const marker = new google.maps.Marker({
-    position:{lat:job._lat,lng:job._lng}, map,
-    icon:makeIcon('•', color), title:`${job.num} — ${job.title}`, zIndex:100
+    position: { lat: job._lat, lng: job._lng }, map,
+    icon: makeIcon('•', color), title: `${job.num} — ${job.title}`, zIndex: 100
   });
   const iw = new google.maps.InfoWindow({
-    content:`<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:3px 0">
+    content: `<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:3px 0">
       <div style="font-size:10px;color:#aaa;font-weight:700;letter-spacing:.05em;font-family:'DM Mono',monospace">${job.num}</div>
       <div style="font-weight:700;font-size:13px;margin:3px 0;color:#1a1a1a">${job.title}</div>
       <div style="font-size:11px;color:#888;margin-bottom:5px">${job.addr}</div>
       <div style="font-size:11px;font-weight:600;color:${color}">${job.type.toUpperCase()} · ${dateStr}</div>
     </div>`
   });
-  marker.addListener('click',()=>{ if(infoWindowOpen)infoWindowOpen.close(); iw.open(map,marker); infoWindowOpen=iw; highlightItem('sched-'+scheduledJobs.indexOf(job)); });
-  job._marker=marker; job._iw=iw;
+  marker.addListener('click', () => {
+    if (infoWindowOpen) infoWindowOpen.close();
+    iw.open(map, marker); infoWindowOpen = iw;
+    highlightItem('sched-' + scheduledJobs.indexOf(job));
+  });
+  job._marker = marker; job._iw = iw;
   applyFilters();
 }
-
+ 
 function buildUnschedMarker(job, label) {
   const color = COLORS.unscheduled;
   const marker = new google.maps.Marker({
-    position:{lat:job._lat,lng:job._lng}, map,
-    icon:makeIcon(label, color), title:`${job.job_num} — ${job.title}`, zIndex:200
+    position: { lat: job._lat, lng: job._lng }, map,
+    icon: makeIcon(label, color), title: `${job.job_num} — ${job.title}`, zIndex: 200
   });
   const iw = new google.maps.InfoWindow({
-    content:`<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:3px 0">
+    content: `<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:3px 0">
       <div style="font-size:10px;color:#aaa;font-weight:700;letter-spacing:.05em;font-family:'DM Mono',monospace">${job.job_num}</div>
       <div style="font-weight:700;font-size:13px;margin:3px 0;color:#1a1a1a">${job.title}</div>
       <div style="font-size:11px;color:#888;margin-bottom:5px">${job.address}</div>
-      <div style="font-size:11px;font-weight:600;color:${color}">UNSCHEDULED · Added by ${job.added_by||'Unknown'}</div>
+      <div style="font-size:11px;font-weight:600;color:${color}">UNSCHEDULED · Added by ${job.added_by || 'Unknown'}</div>
     </div>`
   });
-  marker.addListener('click',()=>{ if(infoWindowOpen)infoWindowOpen.close(); iw.open(map,marker); infoWindowOpen=iw; highlightItem('unsched-'+unscheduledJobs.indexOf(job)); });
-  job._marker=marker; job._iw=iw;
+  marker.addListener('click', () => {
+    if (infoWindowOpen) infoWindowOpen.close();
+    iw.open(map, marker); infoWindowOpen = iw;
+    highlightItem('unsched-' + unscheduledJobs.indexOf(job));
+  });
+  job._marker = marker; job._iw = iw;
 }
-
+ 
 // ── Filters ───────────────────────────────────────────────────────────────────
 function applyFilters() {
   const from = document.getElementById('date-from').value;
   const to = document.getElementById('date-to').value;
-  scheduledJobs.forEach(j => { if(j._marker) j._marker.setVisible(false); });
-  unscheduledJobs.forEach(j => { if(j._marker) j._marker.setVisible(false); });
+  scheduledJobs.forEach(j => { if (j._marker) j._marker.setVisible(false); });
+  unscheduledJobs.forEach(j => { if (j._marker) j._marker.setVisible(false); });
   if (activeTypes.has('unscheduled')) {
-    unscheduledJobs.forEach((job,i) => {
-      if (job._marker&&job._status==='ok') { job._marker.setIcon(makeIcon('U'+(i+1),COLORS.unscheduled)); job._marker.setVisible(true); }
+    unscheduledJobs.forEach((job, i) => {
+      if (job._marker && job._status === 'ok') {
+        job._marker.setIcon(makeIcon('U' + (i + 1), COLORS.unscheduled));
+        job._marker.setVisible(true);
+      }
     });
   }
   let n = 0;
   scheduledJobs.forEach(job => {
-    const show = activeTypes.has(job.type)&&job.start>=from&&job.start<=to&&job._status==='ok';
+    const show = activeTypes.has(job.type) && job.start >= from && job.start <= to && job._status === 'ok';
     if (job._marker) {
-      if (show) { n++; job._visLabel=n; job._marker.setIcon(makeIcon(n,COLORS[job.type]||COLORS.install)); job._marker.setZIndex(n); job._marker.setVisible(true); }
-      else { job._visLabel=null; job._marker.setVisible(false); }
+      if (show) {
+        n++; job._visLabel = n;
+        job._marker.setIcon(makeIcon(n, COLORS[job.type] || COLORS.install));
+        job._marker.setZIndex(n);
+        job._marker.setVisible(true);
+      } else {
+        job._visLabel = null;
+        job._marker.setVisible(false);
+      }
     }
   });
   renderList(); updateCount();
 }
-
+ 
 function getVisibleScheduled() {
   const from = document.getElementById('date-from').value;
   const to = document.getElementById('date-to').value;
-  return scheduledJobs.filter(j => activeTypes.has(j.type)&&j.start>=from&&j.start<=to);
+  return scheduledJobs.filter(j => activeTypes.has(j.type) && j.start >= from && j.start <= to);
 }
-
+ 
 function resetFilters() {
   const today = new Date();
-  const twoMonths = new Date(today); twoMonths.setDate(twoMonths.getDate()+60);
+  const twoMonths = new Date(today); twoMonths.setDate(twoMonths.getDate() + 60);
   document.getElementById('date-from').value = fmt(today);
   document.getElementById('date-to').value = fmt(twoMonths);
   activeTypes.add('install'); activeTypes.add('service'); activeTypes.add('unscheduled');
@@ -632,23 +516,23 @@ function resetFilters() {
   document.getElementById('unsched-add').className = 'unsched-add visible';
   applyFilters();
 }
-
+ 
 // ── Render list ───────────────────────────────────────────────────────────────
 function renderList() {
   const list = document.getElementById('job-list');
   const rows = [];
   if (activeTypes.has('unscheduled')) {
-    unscheduledJobs.forEach((job,i) => {
-      const sc = job._status==='pending'?'pending':job._status==='error'?'error':'unscheduled';
+    unscheduledJobs.forEach((job, i) => {
+      const sc = job._status === 'pending' ? 'pending' : job._status === 'error' ? 'error' : 'unscheduled';
       rows.push(`<div class="job-item" id="item-unsched-${i}" onclick="focusUnsched('${job.id}')">
-        <div class="pin-badge ${sc}">U${i+1}</div>
+        <div class="pin-badge ${sc}">U${i + 1}</div>
         <div class="job-info">
           <div class="job-num">${job.job_num}</div>
           <div class="job-title">${job.title}</div>
           <div class="job-addr">${job.address}</div>
           <div class="job-meta">
             <span class="badge unscheduled">unscheduled</span>
-            <span class="added-by">Added by ${job.added_by||'Unknown'}</span>
+            <span class="added-by">Added by ${job.added_by || 'Unknown'}</span>
           </div>
         </div>
         <button class="btn-remove" onclick="event.stopPropagation();removeUnsched('${job.id}')" title="Remove">✕</button>
@@ -657,13 +541,13 @@ function renderList() {
   }
   let n = 0;
   getVisibleScheduled().forEach(job => {
-    const sc = job._status==='pending'?'pending':job._status==='error'?'error':job.type;
-    const dateStr = job.start===job.end?fmtDate(job.start):`${fmtDate(job.start)} – ${fmtDate(job.end)}`;
-    const label = job._status==='ok'?++n:'–';
+    const sc = job._status === 'pending' ? 'pending' : job._status === 'error' ? 'error' : job.type;
+    const dateStr = job.start === job.end ? fmtDate(job.start) : `${fmtDate(job.start)} – ${fmtDate(job.end)}`;
+    const label = job._status === 'ok' ? ++n : '–';
     rows.push(`<div class="job-item" id="item-sched-${scheduledJobs.indexOf(job)}" onclick="focusJob(${scheduledJobs.indexOf(job)})">
       <div class="pin-badge ${sc}">${label}</div>
       <div class="job-info">
-        <div class="job-num">${job.num||'—'}</div>
+        <div class="job-num">${job.num || '—'}</div>
         <div class="job-title">${job.title}</div>
         <div class="job-addr">${job.addr}</div>
         <div class="job-meta"><span class="badge ${job.type}">${job.type}</span>${dateStr}</div>
@@ -672,152 +556,109 @@ function renderList() {
   });
   list.innerHTML = rows.length ? rows.join('') : '<div class="no-results">No jobs match current filters</div>';
 }
-
+ 
 function focusJob(idx) {
   const job = scheduledJobs[idx];
-  if (!job._marker||!job._marker.getVisible()) return;
-  map.panTo({lat:job._lat,lng:job._lng}); map.setZoom(14);
+  if (!job._marker || !job._marker.getVisible()) return;
+  map.panTo({ lat: job._lat, lng: job._lng }); map.setZoom(14);
   if (infoWindowOpen) infoWindowOpen.close();
-  job._iw.open(map,job._marker); infoWindowOpen=job._iw;
-  highlightItem('sched-'+idx);
+  job._iw.open(map, job._marker); infoWindowOpen = job._iw;
+  highlightItem('sched-' + idx);
 }
-
-// ── Unscheduled (Sheets API) ──────────────────────────────────────────────────
-async function loadUnscheduled() {
-  try {
-    const data = await apiGet(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/A:F`);
-    const rows = data.values || [];
-    unscheduledJobs.forEach(j => { if(j._marker) j._marker.setMap(null); });
-    unscheduledJobs = rows.slice(1)
-      .filter(r => r[0])
-      .map(r => ({
-        job_num: r[0] || '',
-        title: r[1] || '',
-        address: r[2] || '',
-        added: r[3] || '',
-        id: String(r[4] || ''),
-        added_by: r[5] || '',
-        _status: 'pending', _marker: null, _iw: null
-      }));
-    renderList();
-    geocodeUnscheduled();
-  } catch(err) {
-    console.error('Sheets load error:', err);
-  }
+ 
+// ── Unscheduled ───────────────────────────────────────────────────────────────
+function loadUnscheduled() {
+  scriptGet('getUnsched')
+    .then(data => {
+      unscheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
+      unscheduledJobs = data.jobs || [];
+      unscheduledJobs.forEach(j => { j._status = 'pending'; j._marker = null; j._iw = null; });
+      renderList();
+      geocodeUnscheduled();
+    })
+    .catch(err => console.error('Failed to load unscheduled:', err));
 }
-
+ 
 function geocodeUnscheduled() {
   let delay = 0;
-  unscheduledJobs.forEach((job,i) => {
+  unscheduledJobs.forEach((job, i) => {
     setTimeout(() => {
-      geocoder.geocode({address:job.address},(results,status) => {
-        if (status==='OK') {
-          job._lat=results[0].geometry.location.lat(); job._lng=results[0].geometry.location.lng();
-          job._status='ok'; buildUnschedMarker(job,'U'+(i+1));
-        } else { job._status='error'; }
+      geocoder.geocode({ address: job.address }, (results, status) => {
+        if (status === 'OK') {
+          job._lat = results[0].geometry.location.lat();
+          job._lng = results[0].geometry.location.lng();
+          job._status = 'ok';
+          buildUnschedMarker(job, 'U' + (i + 1));
+        } else { job._status = 'error'; }
         renderList(); updateCount();
       });
     }, delay);
     delay += 120;
   });
 }
-
-async function addUnscheduled() {
+ 
+function addUnscheduled() {
   const num = document.getElementById('u-num').value.trim();
   const title = document.getElementById('u-title').value.trim();
   const addr = document.getElementById('u-addr').value.trim();
-  if (!num||!addr) { alert('Job number and address are required.'); return; }
+  if (!num || !addr) { alert('Job number and address are required.'); return; }
   const btn = document.getElementById('add-btn');
-  btn.disabled=true; btn.textContent='Saving...';
-  try {
-    const id = Date.now();
-    await apiPost(
-      `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/A:F:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
-      { values: [[num, title||num, addr, new Date().toISOString(), id, currentUser||'Unknown']] }
-    );
-    document.getElementById('u-num').value='';
-    document.getElementById('u-title').value='';
-    document.getElementById('u-addr').value='';
-    btn.disabled=false; btn.textContent='+ Add to map';
-    document.getElementById('u-num').focus();
-    loadUnscheduled();
-  } catch(err) {
-    btn.disabled=false; btn.textContent='+ Add to map';
-    alert('Failed to save. Try again.\n'+err.message);
-  }
+  btn.disabled = true; btn.textContent = 'Saving...';
+  scriptPost({ action: 'addUnsched', job_num: num, title: title || num, address: addr, added_by: currentUser })
+    .then(() => {
+      document.getElementById('u-num').value = '';
+      document.getElementById('u-title').value = '';
+      document.getElementById('u-addr').value = '';
+      btn.disabled = false; btn.textContent = '+ Add to map';
+      document.getElementById('u-num').focus();
+      loadUnscheduled();
+    })
+    .catch(() => { btn.disabled = false; btn.textContent = '+ Add to map'; alert('Failed to save. Try again.'); });
 }
-
-async function removeUnsched(id) {
-  // First find the row number
-  try {
-    const data = await apiGet(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/A:F`);
-    const rows = data.values || [];
-    const rowIdx = rows.findIndex((r,i) => i > 0 && String(r[4]) === String(id));
-    if (rowIdx === -1) { alert('Row not found'); return; }
-
-    // Remove from map immediately
-    const job = unscheduledJobs.find(j => String(j.id)===String(id));
-    if (job&&job._marker) job._marker.setMap(null);
-
-    // Get spreadsheet metadata for sheet ID
-    const meta = await apiGet(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`);
-    const sheetId = meta.sheets[0].properties.sheetId;
-
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        requests: [{
-          deleteDimension: {
-            range: { sheetId, dimension: 'ROWS', startIndex: rowIdx, endIndex: rowIdx + 1 }
-          }
-        }]
-      })
-    });
-    loadUnscheduled();
-  } catch(err) {
-    alert('Failed to remove. Try again.\n'+err.message);
-  }
+ 
+function removeUnsched(id) {
+  const job = unscheduledJobs.find(j => String(j.id) === String(id));
+  if (job && job._marker) job._marker.setMap(null);
+  scriptPost({ action: 'removeUnsched', id })
+    .then(() => loadUnscheduled())
+    .catch(() => alert('Failed to remove. Try again.'));
 }
-
+ 
 function focusUnsched(id) {
-  const job = unscheduledJobs.find(j => String(j.id)===String(id));
-  if (!job||!job._marker) return;
-  map.panTo({lat:job._lat,lng:job._lng}); map.setZoom(14);
+  const job = unscheduledJobs.find(j => String(j.id) === String(id));
+  if (!job || !job._marker) return;
+  map.panTo({ lat: job._lat, lng: job._lng }); map.setZoom(14);
   if (infoWindowOpen) infoWindowOpen.close();
-  job._iw.open(map,job._marker); infoWindowOpen=job._iw;
-  highlightItem('unsched-'+unscheduledJobs.indexOf(job));
+  job._iw.open(map, job._marker); infoWindowOpen = job._iw;
+  highlightItem('unsched-' + unscheduledJobs.indexOf(job));
 }
-
+ 
 function highlightItem(id) {
-  document.querySelectorAll('.job-item').forEach(el=>el.classList.remove('highlighted'));
-  const el = document.getElementById('item-'+id);
-  if (el) { el.classList.add('highlighted'); el.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+  document.querySelectorAll('.job-item').forEach(el => el.classList.remove('highlighted'));
+  const el = document.getElementById('item-' + id);
+  if (el) { el.classList.add('highlighted'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
 }
-
+ 
 function fitVisible() {
   const bounds = new google.maps.LatLngBounds(); let any = false;
-  scheduledJobs.forEach(j => { if(j._marker&&j._marker.getVisible()){ bounds.extend({lat:j._lat,lng:j._lng}); any=true; } });
-  unscheduledJobs.forEach(j => { if(j._marker&&j._marker.getVisible()){ bounds.extend({lat:j._lat,lng:j._lng}); any=true; } });
+  scheduledJobs.forEach(j => { if (j._marker && j._marker.getVisible()) { bounds.extend({ lat: j._lat, lng: j._lng }); any = true; } });
+  unscheduledJobs.forEach(j => { if (j._marker && j._marker.getVisible()) { bounds.extend({ lat: j._lat, lng: j._lng }); any = true; } });
   if (any) map.fitBounds(bounds);
 }
-
+ 
 function updateCount() {
-  const sched = getVisibleScheduled().filter(j=>j._status==='ok').length;
-  const unsched = activeTypes.has('unscheduled') ? unscheduledJobs.filter(j=>j._status==='ok').length : 0;
-  const total = sched+unsched;
-  document.getElementById('header-count').textContent = `${total} job${total!==1?'s':''} shown`;
+  const sched = getVisibleScheduled().filter(j => j._status === 'ok').length;
+  const unsched = activeTypes.has('unscheduled') ? unscheduledJobs.filter(j => j._status === 'ok').length : 0;
+  const total = sched + unsched;
+  document.getElementById('header-count').textContent = `${total} job${total !== 1 ? 's' : ''} shown`;
 }
-
+ 
 document.addEventListener('keydown', e => {
   if (document.getElementById('app').style.display === 'none') return;
-  if (e.key==='Enter'&&['u-num','u-title','u-addr'].includes(document.activeElement?.id)) addUnscheduled();
+  if (e.key === 'Enter' && ['u-num', 'u-title', 'u-addr'].includes(document.activeElement?.id)) addUnscheduled();
 });
 </script>
-
-<!-- Google Identity Services (OAuth) -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<!-- Google Maps -->
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBxzLeU1u-5AAmb-J_wAC2-QT-wf2-qiXQ&loading=async&callback=Function.prototype" async defer></script>
 </body>
 </html>
+ 
