@@ -268,7 +268,7 @@ const COLORS = { install:'#1a4a8a', service:'#b84a00', unscheduled:'#7a3db5' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API limit reached', OVER_QUERY_LIMIT:'Rate limited', REQUEST_DENIED:'API key error', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
 const CREW = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
-const CREW_COLORS = { Johnny:'#3b82f6', Jonathan:'#14b8a6', Randy:'#ef4444', Eli:'#22c55e', Jerry:'#f97316', Jake:'#a855f7' };
+const CREW_COLORS = { Johnny:'#3b82f6', Jonathan:'#a855f7', Randy:'#ef4444', Eli:'#22c55e', Jerry:'#f97316', Jake:'#18181b' };
  
 // ── State ─────────────────────────────────────────────────────────────────────
 let map, geocoder, infoWindowOpen = null;
@@ -441,30 +441,30 @@ function geocodeScheduled() {
 function makeSVG(label, color, crew = []) {
   const s = String(label);
   const fs = s.length > 2 ? '7' : s.length === 2 ? '9' : '11';
-  const pad = crew.length > 0 ? 13 : 0;
-  const h = 42 + pad;
-  let dots = '';
+  let ring = '';
   if (crew.length > 0) {
+    const r = 11;
+    const C = +(2 * Math.PI * r).toFixed(3);
+    const gap = crew.length > 1 ? 3.5 : 0;
+    const seg = +((C - crew.length * gap) / crew.length).toFixed(3);
     crew.forEach((name, i) => {
-      const cx = crew.length === 1 ? 17 : Math.round(5 + i * 24 / (crew.length - 1));
-      dots += `<circle cx="${cx}" cy="6" r="4.5" fill="${CREW_COLORS[name] || '#999'}" stroke="white" stroke-width="1.5"/>`;
+      const rot = +(-90 + (i * (seg + gap) / C) * 360).toFixed(2);
+      ring += `<circle cx="17" cy="14" r="${r}" fill="none" stroke="${CREW_COLORS[name]||'#999'}" stroke-width="4.5" stroke-dasharray="${seg} ${+(C-seg).toFixed(3)}" transform="rotate(${rot} 17 14)" stroke-linecap="round"/>`;
     });
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="${h}" viewBox="0 0 34 ${h}">
-    ${dots}
-    <g transform="translate(0,${pad})">
-      <path d="M17 2C10.37 2 5 7.37 5 14c0 9.5 12 26 12 26s12-16.5 12-26C29 7.37 23.63 2 17 2z" fill="${color}" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
-      <circle cx="17" cy="14" r="9.5" fill="rgba(255,255,255,0.93)"/>
-      <text x="17" y="18.5" text-anchor="middle" font-family="'DM Mono',monospace" font-size="${fs}" font-weight="700" fill="${color}">${s}</text>
-    </g>
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="42" viewBox="0 0 34 42">
+    <defs><clipPath id="pc"><path d="M17 2C10.37 2 5 7.37 5 14c0 9.5 12 26 12 26s12-16.5 12-26C29 7.37 23.63 2 17 2z"/></clipPath></defs>
+    <path d="M17 2C10.37 2 5 7.37 5 14c0 9.5 12 26 12 26s12-16.5 12-26C29 7.37 23.63 2 17 2z" fill="${color}" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+    <g clip-path="url(#pc)">${ring}</g>
+    <circle cx="17" cy="14" r="8.5" fill="rgba(255,255,255,0.95)"/>
+    <text x="17" y="18.5" text-anchor="middle" font-family="'DM Mono',monospace" font-size="${fs}" font-weight="700" fill="${color}">${s}</text>
   </svg>`;
 }
 function makeIcon(label, color, crew = []) {
-  const pad = crew.length > 0 ? 13 : 0;
   return {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeSVG(label, color, crew)),
-    scaledSize: new google.maps.Size(34, 42 + pad),
-    anchor: new google.maps.Point(17, 42 + pad)
+    scaledSize: new google.maps.Size(34, 42),
+    anchor: new google.maps.Point(17, 42)
   };
 }
  
