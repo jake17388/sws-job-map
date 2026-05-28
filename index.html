@@ -123,6 +123,12 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .btn-edit:hover { color: #7a3db5; }
 .btn-cancel { width: 100%; padding: 7px; border: 1px solid #e8d8f8; border-radius: 6px; background: #fff; color: #7a3db5; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; margin-bottom: 6px; display: none; }
 .btn-cancel:hover { background: #f5eeff; }
+.crew-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 4px; }
+.crew-btn { padding: 6px 3px; border: 1.5px solid #e8e8e8; border-radius: 7px; font-size: 11px; font-weight: 600; cursor: pointer; background: #fff; color: #aaa; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 4px; user-select: none; font-family: 'DM Sans', sans-serif; }
+.crew-btn .dot { width: 7px; height: 7px; border-radius: 50%; background: #e0e0e0; flex-shrink: 0; transition: all 0.15s; }
+.crew-btn.on { color: #fff; border-color: var(--cc); background: var(--cc); }
+.crew-btn.on .dot { background: rgba(255,255,255,0.6); }
+.crew-dot-sm { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; vertical-align: middle; }
  
 /* ── Map ── */
 .map-container { flex: 1; position: relative; }
@@ -201,7 +207,9 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
             <span class="dot"></span>Unscheduled
           </button>
         </div>
-        <div class="filter-label">Date Range</div>
+        <div class="filter-label" style="margin-top:10px">Crew</div>
+        <div class="crew-btns" id="crew-btns"></div>
+        <div class="filter-label" style="margin-top:10px">Date Range</div>
         <div class="date-row">
           <input type="date" id="date-from" onchange="applyFilters()" />
           <span class="date-sep">→</span>
@@ -259,6 +267,8 @@ const PINS = {
 const COLORS = { install:'#1a4a8a', service:'#b84a00', unscheduled:'#7a3db5' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API limit reached', OVER_QUERY_LIMIT:'Rate limited', REQUEST_DENIED:'API key error', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
+const CREW = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
+const CREW_COLORS = { Johnny:'#3b82f6', Jonathan:'#14b8a6', Randy:'#ef4444', Eli:'#22c55e', Jerry:'#f97316', Jake:'#a855f7' };
  
 // ── State ─────────────────────────────────────────────────────────────────────
 let map, geocoder, infoWindowOpen = null;
@@ -269,6 +279,7 @@ let pinEntry = '';
 let fetchedDateRange = null;
 let searchQuery = '';
 let editingId = null;
+const activeCrews = new Set(CREW);
  
 // ── PIN logic ─────────────────────────────────────────────────────────────────
 function pinKey(k) {
@@ -355,6 +366,7 @@ function initMap() {
     ]
   });
   geocoder = new google.maps.Geocoder();
+  initCrewButtons();
   const today = new Date();
   const twoMonths = new Date(today); twoMonths.setDate(twoMonths.getDate() + 60);
   document.getElementById('date-from').value = fmt(today);
@@ -426,29 +438,46 @@ function geocodeScheduled() {
 }
 
 // ── Markers ───────────────────────────────────────────────────────────────────
-function makeSVG(label, color) {
+function makeSVG(label, color, crew = []) {
   const s = String(label);
   const fs = s.length > 2 ? '7' : s.length === 2 ? '9' : '11';
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="42" viewBox="0 0 34 42">
-    <path d="M17 2C10.37 2 5 7.37 5 14c0 9.5 12 26 12 26s12-16.5 12-26C29 7.37 23.63 2 17 2z" fill="${color}" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
-    <circle cx="17" cy="14" r="9.5" fill="rgba(255,255,255,0.93)"/>
-    <text x="17" y="18.5" text-anchor="middle" font-family="'DM Mono',monospace" font-size="${fs}" font-weight="700" fill="${color}">${s}</text>
+  const pad = crew.length > 0 ? 13 : 0;
+  const h = 42 + pad;
+  let dots = '';
+  if (crew.length > 0) {
+    crew.forEach((name, i) => {
+      const cx = crew.length === 1 ? 17 : Math.round(5 + i * 24 / (crew.length - 1));
+      dots += `<circle cx="${cx}" cy="6" r="4.5" fill="${CREW_COLORS[name] || '#999'}" stroke="white" stroke-width="1.5"/>`;
+    });
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="${h}" viewBox="0 0 34 ${h}">
+    ${dots}
+    <g transform="translate(0,${pad})">
+      <path d="M17 2C10.37 2 5 7.37 5 14c0 9.5 12 26 12 26s12-16.5 12-26C29 7.37 23.63 2 17 2z" fill="${color}" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+      <circle cx="17" cy="14" r="9.5" fill="rgba(255,255,255,0.93)"/>
+      <text x="17" y="18.5" text-anchor="middle" font-family="'DM Mono',monospace" font-size="${fs}" font-weight="700" fill="${color}">${s}</text>
+    </g>
   </svg>`;
 }
-function makeIcon(label, color) {
+function makeIcon(label, color, crew = []) {
+  const pad = crew.length > 0 ? 13 : 0;
   return {
-    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeSVG(label, color)),
-    scaledSize: new google.maps.Size(34, 42),
-    anchor: new google.maps.Point(17, 42)
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeSVG(label, color, crew)),
+    scaledSize: new google.maps.Size(34, 42 + pad),
+    anchor: new google.maps.Point(17, 42 + pad)
   };
 }
  
 function buildScheduledMarker(job) {
   const color = COLORS[job.type] || COLORS.install;
   const dateStr = job.start === job.end ? fmtDate(job.start) : `${fmtDate(job.start)} – ${fmtDate(job.end)}`;
+  const crew = job.crew || [];
+  const crewChips = crew.length > 0
+    ? `<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">${crew.map(n => `<span style="font-size:10px;font-weight:700;color:${CREW_COLORS[n]||'#555'};background:${CREW_COLORS[n]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[n]||'#999'}44">${n}</span>`).join('')}</div>`
+    : '';
   const marker = new google.maps.Marker({
     position: { lat: job._lat, lng: job._lng }, map,
-    icon: makeIcon('•', color), title: `${job.num} — ${job.title}`, zIndex: 100
+    icon: makeIcon('•', color, crew), title: `${job.num} — ${job.title}`, zIndex: 100
   });
   const iw = new google.maps.InfoWindow({
     content: `<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:3px 0">
@@ -456,6 +485,7 @@ function buildScheduledMarker(job) {
       <div style="font-weight:700;font-size:13px;margin:3px 0;color:#1a1a1a">${job.title}</div>
       <div style="font-size:11px;color:#888;margin-bottom:5px">${job.addr}</div>
       <div style="font-size:11px;font-weight:600;color:${color}">${job.type.toUpperCase()} · ${dateStr}</div>
+      ${crewChips}
     </div>`
   });
   marker.addListener('click', () => {
@@ -507,11 +537,13 @@ function applyFilters() {
   }
   let n = 0;
   scheduledJobs.forEach(job => {
-    const show = activeTypes.has(job.type) && job.start >= from && job.start <= to && job._status === 'ok';
+    const crew = job.crew || [];
+    const crewOk = crew.length === 0 || crew.some(nm => activeCrews.has(nm));
+    const show = activeTypes.has(job.type) && job.start >= from && job.start <= to && job._status === 'ok' && crewOk;
     if (job._marker) {
       if (show) {
         n++; job._visLabel = n;
-        job._marker.setIcon(makeIcon(n, COLORS[job.type] || COLORS.install));
+        job._marker.setIcon(makeIcon(n, COLORS[job.type] || COLORS.install, crew));
         job._marker.setZIndex(n);
         job._marker.setVisible(true);
       } else {
@@ -526,7 +558,11 @@ function applyFilters() {
 function getVisibleScheduled() {
   const from = document.getElementById('date-from').value;
   const to = document.getElementById('date-to').value;
-  return scheduledJobs.filter(j => activeTypes.has(j.type) && j.start >= from && j.start <= to);
+  return scheduledJobs.filter(j => {
+    const crew = j.crew || [];
+    const crewOk = crew.length === 0 || crew.some(nm => activeCrews.has(nm));
+    return activeTypes.has(j.type) && j.start >= from && j.start <= to && crewOk;
+  });
 }
  
 function resetFilters() {
@@ -539,6 +575,8 @@ function resetFilters() {
   document.getElementById('unsched-add').className = 'unsched-add visible';
   searchQuery = '';
   document.getElementById('job-search').value = '';
+  CREW.forEach(n => activeCrews.add(n));
+  updateCrewButtons();
   applyFilters();
 }
  
@@ -587,7 +625,7 @@ function renderList() {
         <div class="job-num">${job.num || '—'}</div>
         <div class="job-title">${job.title}</div>
         <div class="job-addr">${job.addr}</div>
-        <div class="job-meta"><span class="badge ${job.type}">${job.type}</span>${dateStr}</div>
+        <div class="job-meta"><span class="badge ${job.type}">${job.type}</span>${dateStr}${(job.crew||[]).map(n=>`<span class="crew-dot-sm" style="background:${CREW_COLORS[n]||'#999'};margin-left:2px" title="${n}"></span>`).join('')}</div>
         ${errText}
       </div>
     </div>`);
@@ -696,6 +734,34 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && ['u-num', 'u-title', 'u-addr'].includes(document.activeElement?.id)) submitUnschedForm();
   if (e.key === 'Escape' && editingId !== null) cancelEdit();
 });
+
+// ── Crew filters ─────────────────────────────────────────────────────────────
+function initCrewButtons() {
+  const container = document.getElementById('crew-btns');
+  container.innerHTML = CREW.map(name =>
+    `<button class="crew-btn on" id="crew-btn-${name}" onclick="toggleCrew('${name}')" style="--cc:${CREW_COLORS[name]}" title="${name}">
+      <span class="dot"></span>${name}
+    </button>`
+  ).join('');
+}
+
+function toggleCrew(name) {
+  if (activeCrews.has(name)) {
+    if (activeCrews.size === 1) return;
+    activeCrews.delete(name);
+  } else {
+    activeCrews.add(name);
+  }
+  updateCrewButtons();
+  applyFilters();
+}
+
+function updateCrewButtons() {
+  CREW.forEach(name => {
+    const btn = document.getElementById('crew-btn-' + name);
+    if (btn) activeCrews.has(name) ? btn.classList.add('on') : btn.classList.remove('on');
+  });
+}
 
 // ── Geocode retry ─────────────────────────────────────────────────────────────
 function retryGeocodeScheduled(idx) {

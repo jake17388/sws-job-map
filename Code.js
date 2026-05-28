@@ -4,6 +4,14 @@ const INSTALL_CAL_ID = 'summitwestsigns.com_5ehu6it6pfpcg2g9ifpcuv6gd8@group.cal
 const SERVICE_CAL_ID = 'summitwestsigns.com_plamgq5u79k125mvl50ie49fu0@group.calendar.google.com';
  
 const SKIP_KEYWORDS = ['no install','hunter out','johnny out','randy off','jake out','eli out','maintenance','crane service','2018 crane','mother\'s day','memorial day'];
+
+const CREW_NAMES = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
+function normalizeCrew(names) {
+  return names.map(n => {
+    const match = CREW_NAMES.find(k => k.toLowerCase() === n.toLowerCase());
+    return match || n;
+  });
+}
  
 function doGet(e) {
   const action = e.parameter.action;
@@ -73,6 +81,10 @@ function fetchCalendarEvents(calId, type, start, end) {
     if (SKIP_KEYWORDS.some(k => titleLower.includes(k))) return;
     const numMatch = title.match(/\b(\d{5,6})\b/);
     const jobNum = numMatch ? numMatch[1] : '';
+    const crewMatch = title.match(/^\(([^)]+)\)/);
+    const crew = crewMatch
+      ? normalizeCrew(crewMatch[1].split(/[\/,&]/).map(n => n.trim()).filter(n => n))
+      : [];
     let cleanTitle = title
       .replace(/^\([^)]+\)\s*/, '')
       .replace(/\b\d{5,6}\b\s*[-–]?\s*/, '')
@@ -87,6 +99,7 @@ function fetchCalendarEvents(calId, type, start, end) {
       addr: cleanAddr,
       start: formatDate(startDate),
       end: formatDate(endDate),
+      crew,
     });
   });
   return jobs;
