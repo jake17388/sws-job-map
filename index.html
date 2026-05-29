@@ -215,9 +215,10 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
         <div class="filter-label" style="margin-top:10px">Crew</div>
         <div class="crew-btns" id="crew-btns"></div>
         <div class="filter-label" style="margin-top:10px">Date</div>
-        <div class="day-nav">
+        <div class="day-nav" style="position:relative">
           <button class="day-nav-btn" onclick="shiftDay(-1)" title="Previous day">‹</button>
-          <button class="day-nav-label" id="day-nav-label" onclick="goToday()" title="Jump to today">Today</button>
+          <button class="day-nav-label" id="day-nav-label" onclick="openDayPicker()" title="Pick a date">Today</button>
+          <input type="date" id="day-nav-picker" tabindex="-1" style="position:absolute;left:30px;top:0;width:calc(100% - 65px);height:100%;opacity:0;pointer-events:none;" onchange="pickDay(this.value)" />
           <button class="day-nav-btn" onclick="shiftDay(1)" title="Next day">›</button>
         </div>
         <div class="date-row">
@@ -529,6 +530,17 @@ function buildUnschedMarker(job, label) {
 }
  
 // ── Day navigation ────────────────────────────────────────────────────────────
+function openDayPicker() {
+  const picker = document.getElementById('day-nav-picker');
+  picker.value = document.getElementById('date-from').value;
+  picker.showPicker();
+}
+function pickDay(val) {
+  if (!val) return;
+  document.getElementById('date-from').value = val;
+  document.getElementById('date-to').value = val;
+  applyFilters();
+}
 function shiftDay(delta) {
   const from = document.getElementById('date-from').value;
   const d = new Date(from + 'T00:00:00');
