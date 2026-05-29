@@ -539,7 +539,7 @@ function applyFilters() {
   scheduledJobs.forEach(job => {
     const crew = job.crew || [];
     const crewOk = crew.length === 0 || crew.some(nm => activeCrews.has(nm));
-    const show = activeTypes.has(job.type) && job.start >= from && job.start <= to && job._status === 'ok' && crewOk;
+    const show = activeTypes.has(job.type) && job.start <= to && job.end >= from && job._status === 'ok' && crewOk;
     if (job._marker) {
       if (show) {
         n++; job._visLabel = n;
@@ -561,7 +561,7 @@ function getVisibleScheduled() {
   return scheduledJobs.filter(j => {
     const crew = j.crew || [];
     const crewOk = crew.length === 0 || crew.some(nm => activeCrews.has(nm));
-    return activeTypes.has(j.type) && j.start >= from && j.start <= to && crewOk;
+    return activeTypes.has(j.type) && j.start <= to && j.end >= from && crewOk;
   });
 }
  
