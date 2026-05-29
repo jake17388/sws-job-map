@@ -66,6 +66,11 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .type-btn.on .dot { background: rgba(255,255,255,0.6); }
 .type-btn:not(.on) .dot { background: #e0e0e0; }
 .type-btn-unsched { grid-column: 1 / -1; }
+.day-nav { display: flex; gap: 5px; margin-bottom: 5px; }
+.day-nav-btn { flex: 0 0 30px; padding: 5px 0; border: 1px solid #e8e8e8; border-radius: 6px; background: #fafafa; color: #666; font-size: 15px; cursor: pointer; line-height: 1; transition: all 0.1s; font-family: 'DM Sans', sans-serif; }
+.day-nav-btn:hover { border-color: #bbb; background: #f0f0f0; color: #1a1a1a; }
+.day-nav-label { flex: 1; padding: 5px 4px; border: 1px solid #e8e8e8; border-radius: 6px; background: #fafafa; color: #1a1a1a; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center; font-family: 'DM Sans', sans-serif; transition: all 0.1s; }
+.day-nav-label:hover { border-color: #bbb; background: #f0f0f0; }
 .date-row { display: flex; gap: 6px; align-items: center; }
 .date-row input[type=date] { flex: 1; border: 1px solid #e8e8e8; border-radius: 6px; padding: 6px 8px; font-size: 12px; background: #fafafa; outline: none; color: #1a1a1a; font-family: 'DM Sans', sans-serif; }
 .date-row input[type=date]:focus { border-color: #999; background: #fff; }
@@ -209,7 +214,12 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
         </div>
         <div class="filter-label" style="margin-top:10px">Crew</div>
         <div class="crew-btns" id="crew-btns"></div>
-        <div class="filter-label" style="margin-top:10px">Date Range</div>
+        <div class="filter-label" style="margin-top:10px">Date</div>
+        <div class="day-nav">
+          <button class="day-nav-btn" onclick="shiftDay(-1)" title="Previous day">‹</button>
+          <button class="day-nav-label" id="day-nav-label" onclick="goToday()" title="Jump to today">Today</button>
+          <button class="day-nav-btn" onclick="shiftDay(1)" title="Next day">›</button>
+        </div>
         <div class="date-row">
           <input type="date" id="date-from" onchange="applyFilters()" />
           <span class="date-sep">→</span>
@@ -368,9 +378,8 @@ function initMap() {
   geocoder = new google.maps.Geocoder();
   initCrewButtons();
   const today = new Date();
-  const twoMonths = new Date(today); twoMonths.setDate(twoMonths.getDate() + 60);
   document.getElementById('date-from').value = fmt(today);
-  document.getElementById('date-to').value = fmt(twoMonths);
+  document.getElementById('date-to').value = fmt(today);
   loadAll();
 }
  
@@ -519,8 +528,38 @@ function buildUnschedMarker(job, label) {
   job._marker = marker; job._iw = iw;
 }
  
+// ── Day navigation ────────────────────────────────────────────────────────────
+function shiftDay(delta) {
+  const from = document.getElementById('date-from').value;
+  const d = new Date(from + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  const s = fmt(d);
+  document.getElementById('date-from').value = s;
+  document.getElementById('date-to').value = s;
+  applyFilters();
+}
+function goToday() {
+  const s = fmt(new Date());
+  document.getElementById('date-from').value = s;
+  document.getElementById('date-to').value = s;
+  applyFilters();
+}
+function updateDayNav() {
+  const btn = document.getElementById('day-nav-label');
+  if (!btn) return;
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+  const todayStr = fmt(new Date());
+  if (from === to) {
+    btn.textContent = from === todayStr ? 'Today' : fmtDate(from);
+  } else {
+    btn.textContent = `${fmtDate(from)} – ${fmtDate(to)}`;
+  }
+}
+
 // ── Filters ───────────────────────────────────────────────────────────────────
 function applyFilters() {
+  updateDayNav();
   const from = document.getElementById('date-from').value;
   const to = document.getElementById('date-to').value;
   const warn = document.getElementById('date-warn');
@@ -567,9 +606,8 @@ function getVisibleScheduled() {
  
 function resetFilters() {
   const today = new Date();
-  const twoMonths = new Date(today); twoMonths.setDate(twoMonths.getDate() + 60);
   document.getElementById('date-from').value = fmt(today);
-  document.getElementById('date-to').value = fmt(twoMonths);
+  document.getElementById('date-to').value = fmt(today);
   activeTypes.add('install'); activeTypes.add('service'); activeTypes.add('unscheduled');
   updateButtons();
   document.getElementById('unsched-add').className = 'unsched-add visible';
