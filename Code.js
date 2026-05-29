@@ -2,6 +2,7 @@ const SHEET_ID = '1CTh3Fd3zvC0XDLTruuNz7RSLdgpVxy0TtCL9fZ2_9JU';
  
 const INSTALL_CAL_ID = 'summitwestsigns.com_5ehu6it6pfpcg2g9ifpcuv6gd8@group.calendar.google.com';
 const SERVICE_CAL_ID = 'summitwestsigns.com_plamgq5u79k125mvl50ie49fu0@group.calendar.google.com';
+const EXCAV_CAL_ID   = 'c_86ccbe589549562e734ff696a2cebbefc071fe607283d4a7cac31c0c36d1155c@group.calendar.google.com';
  
 const SKIP_KEYWORDS = ['no install','hunter out','johnny out','randy off','jake out','eli out','maintenance','crane service','2018 crane','mother\'s day','memorial day'];
 
@@ -65,7 +66,8 @@ function getJobs(e) {
   }
   const installJobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', start, end);
   const serviceJobs = fetchCalendarEvents(SERVICE_CAL_ID, 'service', start, end);
-  return { jobs: [...installJobs, ...serviceJobs], timestamp: new Date().toISOString(), fetchedFrom: formatDate(start), fetchedTo: formatDate(end) };
+  const excavJobs   = fetchCalendarEvents(EXCAV_CAL_ID,   'excavation', start, end);
+  return { jobs: [...installJobs, ...serviceJobs, ...excavJobs], timestamp: new Date().toISOString(), fetchedFrom: formatDate(start), fetchedTo: formatDate(end) };
 }
  
 function fetchCalendarEvents(calId, type, start, end) {
