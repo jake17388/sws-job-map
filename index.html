@@ -343,7 +343,7 @@ function signOut() {
   scheduledJobs = []; unscheduledJobs = [];
 }
 document.addEventListener('keydown', e => {
-  if (document.getElementById('pin-screen').style.display === 'none') return;
+  if (currentUser) return;
   if (e.key >= '0' && e.key <= '9') pinKey(e.key);
   if (e.key === 'Backspace') pinDel();
 });
