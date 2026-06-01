@@ -413,9 +413,9 @@ function loadJobs() {
   document.getElementById('map-overlay').style.display = 'flex';
   document.getElementById('header-count').textContent = '';
  
-  const from = document.getElementById('date-from').value;
-  const to = document.getElementById('date-to').value;
-  scriptGet(`getJobs&from=${from}&to=${to}`)
+  const fetchFrom = fmt(new Date());
+  const fetchTo = (() => { const d = new Date(); d.setDate(d.getDate() + 60); return fmt(d); })();
+  scriptGet(`getJobs&from=${fetchFrom}&to=${fetchTo}`)
     .then(data => {
       scheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
       scheduledJobs = data.jobs || [];
