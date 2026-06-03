@@ -211,7 +211,7 @@ function refreshCurrentJobs() {
 
   // Build rows array for a single batch write (much faster than appendRow loop)
   const tz = Session.getScriptTimeZone();
-  const rows = allJobs.map(job => {
+  const rows = allJobs.filter(job => job.num).map(job => {
     const p = job.start.split('-');
     const d = new Date(+p[0], +p[1] - 1, +p[2]);
     let dateStr;
