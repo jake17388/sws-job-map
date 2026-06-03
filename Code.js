@@ -25,6 +25,10 @@ function doGet(e) {
     return ContentService.createTextOutput(JSON.stringify(getUnsched()))
       .setMimeType(ContentService.MimeType.JSON);
   }
+  if (action === 'exportSchedule') {
+    return ContentService.createTextOutput(JSON.stringify(exportSchedule()))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
  
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('SWS Job Map')
@@ -184,5 +188,56 @@ function updateUnsched(data) {
     return { success: false, error: e.message };
   } finally {
     lock.releaseLock();
+  }
+}
+// ── Schedule export ───────────────────────────────────────────────────────────
+function exportSchedule() {
+  try {
+    const start = new Date();
+    const end = new Date(start); end.setDate(end.getDate() + 60);
+
+    const allJobs = [
+      ...fetchCalendarEvents(INSTALL_CAL_ID, 'Install', start, end),
+      ...fetchCalendarEvents(SERVICE_CAL_ID, 'Service', start, end),
+      ...fetchCalendarEvents(EXCAV_CAL_ID,   'Excavation', start, end),
+    ];
+    allJobs.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
+
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    let sheet = ss.getSheetByName('Schedule Export');
+    if (!sheet) sheet = ss.insertSheet('Schedule Export');
+    else sheet.clearContents();
+
+    // Header row
+    sheet.appendRow(['Job Number', 'Job Name', 'Date', 'Type', 'Checked']);
+    const hdr = sheet.getRange(1, 1, 1, 5);
+    hdr.setFontWeight('bold').setBackground('#1a4a8a').setFontColor('#ffffff');
+
+    // Data rows
+    allJobs.forEach(job => {
+      const parts = job.start.split('-');
+      const d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+      const dateStr = job.start === job.end
+        ? Utilities.formatDate(d, Session.getScriptTimeZone(), 'MMM d, yyyy')
+        : (function() {
+            const ep = job.end.split('-');
+            const de = new Date(+ep[0], +ep[1] - 1, +ep[2]);
+            return Utilities.formatDate(d, Session.getScriptTimeZone(), 'MMM d') + ' – ' +
+                   Utilities.formatDate(de, Session.getScriptTimeZone(), 'MMM d, yyyy');
+          })();
+      sheet.appendRow([job.num || '', job.title, dateStr, job.type, '']);
+    });
+
+    // Column widths & frozen header
+    sheet.setColumnWidth(1, 100);
+    sheet.setColumnWidth(2, 280);
+    sheet.setColumnWidth(3, 160);
+    sheet.setColumnWidth(4, 100);
+    sheet.setColumnWidth(5, 90);
+    sheet.setFrozenRows(1);
+
+    return { success: true, url: ss.getUrl() + '#gid=' + sheet.getSheetId() };
+  } catch(e) {
+    return { success: false, error: e.message };
   }
 }
