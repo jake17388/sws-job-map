@@ -1,9 +1,9 @@
 const SHEET_ID = '1CTh3Fd3zvC0XDLTruuNz7RSLdgpVxy0TtCL9fZ2_9JU';
- 
+
 const INSTALL_CAL_ID = 'summitwestsigns.com_5ehu6it6pfpcg2g9ifpcuv6gd8@group.calendar.google.com';
 const SERVICE_CAL_ID = 'summitwestsigns.com_plamgq5u79k125mvl50ie49fu0@group.calendar.google.com';
 const EXCAV_CAL_ID   = 'c_86ccbe589549562e734ff696a2cebbefc071fe607283d4a7cac31c0c36d1155c@group.calendar.google.com';
- 
+
 const SKIP_KEYWORDS = ['no install','hunter out','johnny out','randy off','jake out','eli out','maintenance','crane service','2018 crane','mother\'s day','memorial day'];
 
 const CREW_NAMES = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
@@ -13,10 +13,10 @@ function normalizeCrew(names) {
     return match || n;
   });
 }
- 
+
 function doGet(e) {
   const action = e.parameter.action;
- 
+
   if (action === 'getJobs') {
     return ContentService.createTextOutput(JSON.stringify(getJobs(e)))
       .setMimeType(ContentService.MimeType.JSON);
@@ -25,16 +25,12 @@ function doGet(e) {
     return ContentService.createTextOutput(JSON.stringify(getUnsched()))
       .setMimeType(ContentService.MimeType.JSON);
   }
-  if (action === 'exportSchedule') {
-    return ContentService.createTextOutput(JSON.stringify(exportSchedule()))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
- 
+
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('SWS Job Map')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
- 
+
 function doPost(e) {
   const data = JSON.parse(e.postData.contents);
   if (data.action === 'addUnsched') {
@@ -50,7 +46,7 @@ function doPost(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
- 
+
 // ── Calendar jobs ─────────────────────────────────────────────────────────────
 function getJobs(e) {
   const params = (e && e.parameter) || {};
@@ -73,7 +69,7 @@ function getJobs(e) {
   const excavJobs   = fetchCalendarEvents(EXCAV_CAL_ID,   'excavation', start, end);
   return { jobs: [...installJobs, ...serviceJobs, ...excavJobs], timestamp: new Date().toISOString(), fetchedFrom: formatDate(start), fetchedTo: formatDate(end) };
 }
- 
+
 function fetchCalendarEvents(calId, type, start, end) {
   const cal = CalendarApp.getCalendarById(calId);
   if (!cal) return [];
@@ -110,11 +106,11 @@ function fetchCalendarEvents(calId, type, start, end) {
   });
   return jobs;
 }
- 
+
 function formatDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
- 
+
 // ── Unscheduled jobs ──────────────────────────────────────────────────────────
 function getUnsched() {
   const sheet = SpreadsheetApp.openById(SHEET_ID).getActiveSheet();
@@ -130,7 +126,7 @@ function getUnsched() {
   })).filter(j => j.job_num);
   return { jobs };
 }
- 
+
 function addUnsched(data) {
   const lock = LockService.getScriptLock();
   try {
@@ -148,7 +144,7 @@ function addUnsched(data) {
     lock.releaseLock();
   }
 }
- 
+
 function removeUnsched(id) {
   const lock = LockService.getScriptLock();
   try {
@@ -190,54 +186,59 @@ function updateUnsched(data) {
     lock.releaseLock();
   }
 }
-// ── Schedule export ───────────────────────────────────────────────────────────
-function exportSchedule() {
-  try {
-    const start = new Date();
-    const end = new Date(start); end.setDate(end.getDate() + 60);
 
-    const allJobs = [
-      ...fetchCalendarEvents(INSTALL_CAL_ID, 'Install', start, end),
-      ...fetchCalendarEvents(SERVICE_CAL_ID, 'Service', start, end),
-      ...fetchCalendarEvents(EXCAV_CAL_ID,   'Excavation', start, end),
-    ];
-    allJobs.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
+// ── Current Jobs sheet ────────────────────────────────────────────────────────
+function refreshCurrentJobs() {
+  const start = new Date();
+  const end = new Date(start); end.setDate(end.getDate() + 60);
 
-    const ss = SpreadsheetApp.openById(SHEET_ID);
-    let sheet = ss.getSheetByName('Schedule Export');
-    if (!sheet) sheet = ss.insertSheet('Schedule Export');
-    else sheet.clearContents();
+  const allJobs = [
+    ...fetchCalendarEvents(INSTALL_CAL_ID, 'Install', start, end),
+    ...fetchCalendarEvents(SERVICE_CAL_ID, 'Service', start, end),
+    ...fetchCalendarEvents(EXCAV_CAL_ID,   'Excavation', start, end),
+  ];
+  allJobs.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
 
-    // Header row
-    sheet.appendRow(['Job Number', 'Job Name', 'Date', 'Type', 'Checked']);
-    const hdr = sheet.getRange(1, 1, 1, 5);
-    hdr.setFontWeight('bold').setBackground('#1a4a8a').setFontColor('#ffffff');
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName('Current Jobs');
+  if (!sheet) return;
 
-    // Data rows
-    allJobs.forEach(job => {
-      const parts = job.start.split('-');
-      const d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
-      const dateStr = job.start === job.end
-        ? Utilities.formatDate(d, Session.getScriptTimeZone(), 'MMM d, yyyy')
-        : (function() {
-            const ep = job.end.split('-');
-            const de = new Date(+ep[0], +ep[1] - 1, +ep[2]);
-            return Utilities.formatDate(d, Session.getScriptTimeZone(), 'MMM d') + ' – ' +
-                   Utilities.formatDate(de, Session.getScriptTimeZone(), 'MMM d, yyyy');
-          })();
-      sheet.appendRow([job.num || '', job.title, dateStr, job.type, '']);
-    });
+  // Clear existing data rows, keep header
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, 5).clearContent();
 
-    // Column widths & frozen header
-    sheet.setColumnWidth(1, 100);
-    sheet.setColumnWidth(2, 280);
-    sheet.setColumnWidth(3, 160);
-    sheet.setColumnWidth(4, 100);
-    sheet.setColumnWidth(5, 90);
-    sheet.setFrozenRows(1);
+  if (allJobs.length === 0) return;
 
-    return { success: true, url: ss.getUrl() + '#gid=' + sheet.getSheetId() };
-  } catch(e) {
-    return { success: false, error: e.message };
-  }
+  // Build rows array for a single batch write (much faster than appendRow loop)
+  const tz = Session.getScriptTimeZone();
+  const rows = allJobs.map(job => {
+    const p = job.start.split('-');
+    const d = new Date(+p[0], +p[1] - 1, +p[2]);
+    let dateStr;
+    if (job.start === job.end) {
+      dateStr = Utilities.formatDate(d, tz, 'MMM d, yyyy');
+    } else {
+      const ep = job.end.split('-');
+      const de = new Date(+ep[0], +ep[1] - 1, +ep[2]);
+      dateStr = Utilities.formatDate(d, tz, 'MMM d') + ' – ' +
+                Utilities.formatDate(de, tz, 'MMM d, yyyy');
+    }
+    return [job.num || '', job.title, dateStr, job.type, ''];
+  });
+
+  sheet.getRange(2, 1, rows.length, 5).setValues(rows);
+}
+
+// Run once from the Apps Script editor to schedule daily auto-refresh at 6 am.
+function setupDailyTrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'refreshCurrentJobs')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('refreshCurrentJobs')
+    .timeBased()
+    .everyDays(1)
+    .atHour(6)
+    .create();
+  // Populate immediately so the sheet isn't empty after setup
+  refreshCurrentJobs();
 }

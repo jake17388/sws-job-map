@@ -122,9 +122,6 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .loading-state { padding: 40px 14px; text-align: center; color: #ccc; font-size: 13px; }
 .search-input { width: 100%; border: 1px solid #e8e8e8; border-radius: 6px; padding: 7px 10px; font-size: 12px; background: #fafafa; outline: none; color: #1a1a1a; font-family: 'DM Sans', sans-serif; margin-top: 8px; display: block; }
 .search-input:focus { border-color: #999; background: #fff; }
-.btn-export { width: 100%; margin-top: 8px; padding: 7px; border: 1px solid #c8e0c8; border-radius: 6px; background: #f4fbf4; color: #2a6a2a; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 5px; }
-.btn-export:hover { background: #e4f4e4; border-color: #a0c8a0; }
-.btn-export:disabled { opacity: 0.5; cursor: not-allowed; }
 .date-warn { font-size: 11px; color: #8a4a00; background: #fff6ec; border: 1px solid #f0d090; border-radius: 5px; padding: 5px 8px; margin-top: 6px; display: none; }
 .geo-error-text { font-size: 10px; color: #e74c3c; margin-top: 3px; display: flex; align-items: center; gap: 4px; }
 .btn-retry { background: none; border: none; color: #e74c3c; font-size: 13px; cursor: pointer; padding: 0 2px; line-height: 1; }
@@ -237,7 +234,6 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
         <div class="date-warn" id="date-warn">⚠ Dates exceed loaded range — hit Refresh to load</div>
         <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
         <input type="text" id="job-search" class="search-input" placeholder="Search job # or name…" oninput="searchQuery=this.value.trim();renderList()" />
-        <button class="btn-export" id="btn-export" onclick="exportToSheet()">↗ Export schedule to Google Sheet</button>
       </div>
  
       <div class="unsched-add visible" id="unsched-add">
@@ -669,25 +665,6 @@ function resetFilters() {
   applyFilters();
 }
  
-// ── Export ────────────────────────────────────────────────────────────────────
-function exportToSheet() {
-  const btn = document.getElementById('btn-export');
-  btn.disabled = true;
-  btn.textContent = '⏳ Generating…';
-  scriptGet('exportSchedule')
-    .then(data => {
-      if (data.success) {
-        window.open(data.url, '_blank');
-      } else {
-        alert('Export failed: ' + (data.error || 'unknown error'));
-      }
-    })
-    .catch(() => alert('Export failed — check your connection.'))
-    .finally(() => {
-      btn.disabled = false;
-      btn.innerHTML = '↗ Export schedule to Google Sheet';
-    });
-}
 
 // ── Render list ───────────────────────────────────────────────────────────────
 function renderList() {
