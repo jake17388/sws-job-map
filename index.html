@@ -370,6 +370,34 @@ function fmt(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
  
+// ── Home base marker ──────────────────────────────────────────────────────────
+const HOME_ADDRESS = '4049 E Presidio St, Mesa, AZ 85215';
+function makeHomeSVG() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="54" viewBox="0 0 44 54">
+    <path d="M22 2C13.16 2 6 9.16 6 18c0 13 16 34 16 34s16-21 16-34C38 9.16 30.84 2 22 2z" fill="#2447a3"/>
+    <circle cx="22" cy="17" r="11.5" fill="#f5a31c"/>
+  </svg>`;
+}
+function initHomeMarker() {
+  geocoder.geocode({ address: HOME_ADDRESS }, (results, status) => {
+    if (status !== 'OK' || !results[0]) return;
+    const pos = results[0].geometry.location;
+    const icon = {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeHomeSVG()),
+      scaledSize: new google.maps.Size(44, 54),
+      anchor: new google.maps.Point(22, 54)
+    };
+    const marker = new google.maps.Marker({ position: pos, map, icon, title: 'SWS — Home Base', zIndex: 9999 });
+    const iw = new google.maps.InfoWindow({
+      content: `<div style="font-family:'DM Sans',sans-serif;padding:4px 2px;min-width:160px">
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:3px">SWS Home Base</div>
+        <div style="font-size:11px;color:#888">${HOME_ADDRESS}</div>
+      </div>`
+    });
+    marker.addListener('click', () => iw.open(map, marker));
+  });
+}
+
 // ── Map init ──────────────────────────────────────────────────────────────────
 function initMap() {
   if (map) { loadAll(); return; }
@@ -384,6 +412,7 @@ function initMap() {
   });
   geocoder = new google.maps.Geocoder();
   initCrewButtons();
+  initHomeMarker();
   const today = new Date();
   document.getElementById('date-from').value = fmt(today);
   document.getElementById('date-to').value = fmt(today);
