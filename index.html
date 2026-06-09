@@ -499,10 +499,10 @@ function makeSVG(label, color, crew = []) {
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="42" viewBox="0 0 34 42">
     <defs><clipPath id="pc"><path d="M17 2C10.37 2 5 7.37 5 14c0 9.5 12 26 12 26s12-16.5 12-26C29 7.37 23.63 2 17 2z"/></clipPath></defs>
-    <path d="M17 2C10.37 2 5 7.37 5 14c0 9.5 12 26 12 26s12-16.5 12-26C29 7.37 23.63 2 17 2z" fill="${color}" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+    <path d="M17 2C10.37 2 5 7.37 5 14c0 9.5 12 26 12 26s12-16.5 12-26C29 7.37 23.63 2 17 2z" fill="${color}" stroke="rgba(0,0,0,0.35)" stroke-width="1.5"/>
     <g clip-path="url(#pc)">${ring}</g>
-    <circle cx="17" cy="14" r="8.5" fill="rgba(255,255,255,0.95)"/>
-    <text x="17" y="18.5" text-anchor="middle" font-family="'DM Mono',monospace" font-size="${fs}" font-weight="700" fill="${color}">${s}</text>
+    <circle cx="17" cy="14" r="8.5" fill="rgba(255,255,255,0.95)" stroke="rgba(0,0,0,0.12)" stroke-width="0.75"/>
+    <text x="17" y="18.5" text-anchor="middle" font-family="'DM Mono',monospace" font-size="${fs}" font-weight="700" fill="#1a1a1a">${s}</text>
   </svg>`;
 }
 function makeIcon(label, color, crew = []) {
