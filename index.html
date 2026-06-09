@@ -63,7 +63,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .type-btn.on.install { border-color: #1a4a8a; background: #1a4a8a; }
 .type-btn.on.service { border-color: #b84a00; background: #b84a00; }
 .type-btn.on.excavation { border-color: #a07000; background: #a07000; }
-.type-btn.on.unscheduled { border-color: #7a3db5; background: #7a3db5; }
+.type-btn.on.unscheduled { border-color: #9a8400; background: #9a8400; }
 .type-btn.on .dot { background: rgba(255,255,255,0.6); }
 .type-btn:not(.on) .dot { background: #e0e0e0; }
 .day-nav { display: flex; gap: 5px; margin-bottom: 5px; }
@@ -79,18 +79,18 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .filter-reset:hover { color: #888; }
  
 /* ── Add form ── */
-.unsched-add { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; display: none; background: #fdf8ff; }
+.unsched-add { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; display: none; background: #fdfbec; }
 .unsched-add.visible { display: block; }
-.add-form-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #c0a0e0; margin-bottom: 8px; font-family: 'DM Mono', monospace; }
+.add-form-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #b8a030; margin-bottom: 8px; font-family: 'DM Mono', monospace; }
 .input-row { display: flex; gap: 6px; margin-bottom: 6px; }
-.input-row input { border: 1px solid #e8d8f8; border-radius: 6px; padding: 7px 10px; font-size: 12px; background: #fff; outline: none; color: #1a1a1a; font-family: 'DM Sans', sans-serif; }
-.input-row input:focus { border-color: #7a3db5; }
+.input-row input { border: 1px solid #e8e0b8; border-radius: 6px; padding: 7px 10px; font-size: 12px; background: #fff; outline: none; color: #1a1a1a; font-family: 'DM Sans', sans-serif; }
+.input-row input:focus { border-color: #9a8400; }
 .inp-num { width: 90px; flex-shrink: 0; }
 .inp-title { flex: 1; }
-.inp-addr { width: 100%; border: 1px solid #e8d8f8; border-radius: 6px; padding: 7px 10px; font-size: 12px; background: #fff; outline: none; color: #1a1a1a; margin-bottom: 6px; display: block; font-family: 'DM Sans', sans-serif; }
-.inp-addr:focus { border-color: #7a3db5; }
-.btn-add { width: 100%; padding: 8px; border: none; border-radius: 6px; background: #7a3db5; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s; font-family: 'DM Sans', sans-serif; }
-.btn-add:hover { background: #6331a0; }
+.inp-addr { width: 100%; border: 1px solid #e8e0b8; border-radius: 6px; padding: 7px 10px; font-size: 12px; background: #fff; outline: none; color: #1a1a1a; margin-bottom: 6px; display: block; font-family: 'DM Sans', sans-serif; }
+.inp-addr:focus { border-color: #9a8400; }
+.btn-add { width: 100%; padding: 8px; border: none; border-radius: 6px; background: #9a8400; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s; font-family: 'DM Sans', sans-serif; }
+.btn-add:hover { background: #7d6c00; }
 .btn-add:disabled { background: #ccc; cursor: not-allowed; }
  
 /* ── Job list ── */
@@ -102,7 +102,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .pin-badge.install { background: #1a4a8a; }
 .pin-badge.service { background: #b84a00; }
 .pin-badge.excavation { background: #a07000; }
-.pin-badge.unscheduled { background: #7a3db5; }
+.pin-badge.unscheduled { background: #9a8400; }
 .pin-badge.pending { background: #ddd; }
 .pin-badge.error { background: #e74c3c; font-size: 8px; }
 .job-info { flex: 1; min-width: 0; }
@@ -114,7 +114,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .badge.install { background: #dce8f8; color: #1a4a8a; }
 .badge.service { background: #fce8d8; color: #b84a00; }
 .badge.excavation { background: #fef3d0; color: #8a6000; }
-.badge.unscheduled { background: #ede0f8; color: #7a3db5; }
+.badge.unscheduled { background: #fef8d0; color: #7a6400; }
 .added-by { font-size: 9px; color: #ccc; }
 .btn-remove { background: none; border: none; color: #e0e0e0; font-size: 14px; cursor: pointer; padding: 2px 4px; margin-left: auto; flex-shrink: 0; line-height: 1; }
 .btn-remove:hover { color: #e74c3c; }
@@ -126,9 +126,9 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .geo-error-text { font-size: 10px; color: #e74c3c; margin-top: 3px; display: flex; align-items: center; gap: 4px; }
 .btn-retry { background: none; border: none; color: #e74c3c; font-size: 13px; cursor: pointer; padding: 0 2px; line-height: 1; }
 .btn-retry:hover { color: #c0392b; }
-.btn-edit { background: none; border: none; color: #c0a0e0; font-size: 14px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; line-height: 1; }
-.btn-edit:hover { color: #7a3db5; }
-.btn-cancel { width: 100%; padding: 7px; border: 1px solid #e8d8f8; border-radius: 6px; background: #fff; color: #7a3db5; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; margin-bottom: 6px; display: none; }
+.btn-edit { background: none; border: none; color: #c8b040; font-size: 14px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; line-height: 1; }
+.btn-edit:hover { color: #9a8400; }
+.btn-cancel { width: 100%; padding: 7px; border: 1px solid #e8e0b8; border-radius: 6px; background: #fff; color: #9a8400; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; margin-bottom: 6px; display: none; }
 .btn-cancel:hover { background: #f5eeff; }
 .crew-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 4px; }
 .crew-btn { padding: 6px 3px; border: 1.5px solid #e8e8e8; border-radius: 7px; font-size: 11px; font-weight: 600; cursor: pointer; background: #fff; color: #aaa; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 4px; user-select: none; font-family: 'DM Sans', sans-serif; }
@@ -265,7 +265,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
         <div class="legend-row"><div class="legend-dot" style="background:#1a4a8a"></div>Install</div>
         <div class="legend-row"><div class="legend-dot" style="background:#b84a00"></div>Service</div>
         <div class="legend-row"><div class="legend-dot" style="background:#a07000"></div>Excavation</div>
-        <div class="legend-row"><div class="legend-dot" style="background:#7a3db5"></div>Unscheduled</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#9a8400"></div>Unscheduled</div>
       </div>
     </div>
   </div>
@@ -281,7 +281,7 @@ const PINS = {
   '4567': 'Ryan Chapman',
 };
  
-const COLORS = { install:'#1a4a8a', service:'#b84a00', excavation:'#a07000', unscheduled:'#7a3db5' };
+const COLORS = { install:'#1a4a8a', service:'#b84a00', excavation:'#a07000', unscheduled:'#9a8400' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API limit reached', OVER_QUERY_LIMIT:'Rate limited', REQUEST_DENIED:'API key error', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
 const CREW = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
