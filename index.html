@@ -262,10 +262,10 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
         <button class="map-btn" onclick="fitVisible()">⊡ Fit all</button>
       </div>
       <div class="legend">
-        <div class="legend-row"><div class="legend-dot" style="background:#3aad6e"></div>Install</div>
-        <div class="legend-row"><div class="legend-dot" style="background:#4169E1"></div>Service</div>
-        <div class="legend-row"><div class="legend-dot" style="background:#FFBF00"></div>Excavation</div>
-        <div class="legend-row"><div class="legend-dot" style="background:#DC143C"></div>Unscheduled</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#3a4a5c;color:#fff;font-size:7px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace">I</div>Install</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#3a4a5c;color:#fff;font-size:7px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace">S</div>Service</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#3a4a5c;color:#fff;font-size:7px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace">E</div>Excavation</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#DC143C;color:#fff;font-size:7px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace">U</div>Unscheduled</div>
       </div>
     </div>
   </div>
@@ -283,6 +283,8 @@ const PINS = {
 };
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
+const SCHED_PIN = '#3a4a5c';
+const TYPE_INIT = { install:'I', service:'S', excavation:'E' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API limit reached', OVER_QUERY_LIMIT:'Rate limited', REQUEST_DENIED:'API key error', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
 const CREW = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
@@ -486,7 +488,7 @@ function geocodeScheduled() {
 // ── Markers ───────────────────────────────────────────────────────────────────
 function makeSVG(label, color, crew = []) {
   const s = String(label);
-  const fs = s.length > 2 ? '7' : s.length === 2 ? '9' : '11';
+  const fs = s.length >= 4 ? '6.5' : s.length === 3 ? '8' : s.length === 2 ? '9.5' : '11';
   // Refined shape: larger circular head (~60% of height), smooth tail taper
   const body = "M17 3C24.73 3 31 9.27 31 17C31 23.5 28 28.5 22.8 31.6C21.5 34.5 19 40.5 17 45C15 40.5 12.5 34.5 11.2 31.6C6 28.5 3 23.5 3 17C3 9.27 9.27 3 17 3Z";
   let ring = '';
@@ -527,7 +529,7 @@ function makeIcon(label, color, crew = []) {
 }
  
 function buildScheduledMarker(job) {
-  const color = COLORS[job.type] || COLORS.install;
+  const color = SCHED_PIN;
   const dateStr = job.start === job.end ? fmtDate(job.start) : `${fmtDate(job.start)} – ${fmtDate(job.end)}`;
   const crew = job.crew || [];
   const crewChips = crew.length > 0
@@ -642,7 +644,7 @@ function applyFilters() {
     if (job._marker) {
       if (show) {
         n++; job._visLabel = n;
-        job._marker.setIcon(makeIcon(n, COLORS[job.type] || COLORS.install, crew));
+        job._marker.setIcon(makeIcon(`${n}-${TYPE_INIT[job.type]||'J'}`, SCHED_PIN, crew));
         job._marker.setZIndex(n);
         job._marker.setVisible(true);
       } else {
