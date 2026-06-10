@@ -204,18 +204,10 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
       <div class="filters">
         <div class="filter-label">Job Type</div>
         <div class="type-btns">
-          <button class="type-btn install on" id="btn-install" onclick="toggleType('install')">
-            <span class="dot"></span>Install
-          </button>
-          <button class="type-btn service on" id="btn-service" onclick="toggleType('service')">
-            <span class="dot"></span>Service
-          </button>
-          <button class="type-btn excavation on" id="btn-excavation" onclick="toggleType('excavation')">
-            <span class="dot"></span>Excavation
-          </button>
-          <button class="type-btn unscheduled on" id="btn-unscheduled" onclick="toggleType('unscheduled')">
-            <span class="dot"></span>Unscheduled
-          </button>
+          <button class="type-btn install on" id="btn-install" onclick="toggleType('install')">Install</button>
+          <button class="type-btn service on" id="btn-service" onclick="toggleType('service')">Service</button>
+          <button class="type-btn excavation on" id="btn-excavation" onclick="toggleType('excavation')">Excavation</button>
+          <button class="type-btn unscheduled on" id="btn-unscheduled" onclick="toggleType('unscheduled')">Unscheduled</button>
         </div>
         <div class="filter-label" style="margin-top:10px">Crew</div>
         <div class="crew-btns" id="crew-btns"></div>
@@ -288,7 +280,7 @@ const TYPE_INIT = { install:'I', service:'S', excavation:'E' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API limit reached', OVER_QUERY_LIMIT:'Rate limited', REQUEST_DENIED:'API key error', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
 const CREW = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
-const CREW_COLORS = { Johnny:'#FF6B6B', Jonathan:'#8A2BE2', Randy:'#008080', Eli:'#CC5500', Jerry:'#DCAE96', Jake:'#1a1a1a' };
+const CREW_COLORS = { Johnny:'#C0392B', Jonathan:'#7D3C98', Randy:'#148F77', Eli:'#D4AC0D', Jerry:'#2471A3', Jake:'#2C3E50' };
  
 // ── State ─────────────────────────────────────────────────────────────────────
 let map, geocoder, infoWindowOpen = null;
@@ -726,7 +718,8 @@ function renderList() {
         <div class="job-num">${job.num || '—'}</div>
         <div class="job-title">${job.title}</div>
         <div class="job-addr">${job.addr}</div>
-        <div class="job-meta"><span class="badge ${job.type}">${job.type}</span>${dateStr}${(job.crew||[]).map(n=>`<span class="crew-dot-sm" style="background:${CREW_COLORS[n]||'#999'};margin-left:2px" title="${n}"></span>`).join('')}</div>
+        <div class="job-meta"><span class="badge ${job.type}">${job.type}</span>${dateStr}</div>
+        ${(job.crew||[]).length>0?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${(job.crew||[]).map(n=>`<span style="font-size:10px;font-weight:700;color:${CREW_COLORS[n]||'#555'};background:${CREW_COLORS[n]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[n]||'#999'}55">${n}</span>`).join('')}</div>`:''}
         ${errText}
       </div>
     </div>`);
@@ -846,7 +839,7 @@ function initCrewButtons() {
   container.innerHTML = CREW.map(name => {
     const cc = CREW_COLORS[name], ct = crewTextColor(cc);
     return `<button class="crew-btn on" id="crew-btn-${name}" onclick="toggleCrew('${name}')" style="--cc:${cc};--ct:${ct}" title="${name}">
-      <span class="dot"></span>${name}
+      ${name}
     </button>`;
   }).join('');
 }
