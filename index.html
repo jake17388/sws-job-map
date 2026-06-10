@@ -60,7 +60,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .type-btn { padding: 8px 4px; border: 1.5px solid #e8e8e8; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; background: #fff; color: #aaa; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 5px; user-select: none; font-family: 'DM Sans', sans-serif; }
 .type-btn .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; transition: all 0.15s; }
 .type-btn.on { color: #fff; }
-.type-btn.on.install { border-color: #50C878; background: #50C878; color: #1a1a1a; }
+.type-btn.on.install { border-color: #3aad6e; background: #3aad6e; color: #1a1a1a; }
 .type-btn.on.service { border-color: #4169E1; background: #4169E1; }
 .type-btn.on.excavation { border-color: #FFBF00; background: #FFBF00; color: #1a1a1a; }
 .type-btn.on.unscheduled { border-color: #DC143C; background: #DC143C; }
@@ -99,7 +99,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .job-item:hover { background: #fafafa; }
 .job-item.highlighted { background: #eef3ff; }
 .pin-badge { width: 26px; height: 26px; border-radius: 50%; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; color: #fff; font-family: 'DM Mono', monospace; }
-.pin-badge.install { background: #50C878; color: #1a1a1a; }
+.pin-badge.install { background: #3aad6e; color: #1a1a1a; }
 .pin-badge.service { background: #4169E1; }
 .pin-badge.excavation { background: #FFBF00; color: #1a1a1a; }
 .pin-badge.unscheduled { background: #DC143C; }
@@ -262,7 +262,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
         <button class="map-btn" onclick="fitVisible()">⊡ Fit all</button>
       </div>
       <div class="legend">
-        <div class="legend-row"><div class="legend-dot" style="background:#50C878"></div>Install</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#3aad6e"></div>Install</div>
         <div class="legend-row"><div class="legend-dot" style="background:#4169E1"></div>Service</div>
         <div class="legend-row"><div class="legend-dot" style="background:#FFBF00"></div>Excavation</div>
         <div class="legend-row"><div class="legend-dot" style="background:#DC143C"></div>Unscheduled</div>
@@ -281,7 +281,7 @@ const PINS = {
   '4567': 'Ryan Chapman',
 };
  
-const COLORS = { install:'#50C878', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
+const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API limit reached', OVER_QUERY_LIMIT:'Rate limited', REQUEST_DENIED:'API key error', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
 const CREW = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
