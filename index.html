@@ -57,15 +57,9 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .filters { padding: 12px 14px 10px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }
 .filter-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #bbb; margin-bottom: 7px; font-family: 'DM Mono', monospace; }
 .type-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
-.type-btn { padding: 8px 4px; border: 1.5px solid #e8e8e8; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; background: #fff; color: #aaa; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 5px; user-select: none; font-family: 'DM Sans', sans-serif; }
-.type-btn .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; transition: all 0.15s; }
-.type-btn.on { color: #fff; }
-.type-btn.on.install { border-color: #3aad6e; background: #3aad6e; color: #1a1a1a; }
-.type-btn.on.service { border-color: #4169E1; background: #4169E1; }
-.type-btn.on.excavation { border-color: #FFBF00; background: #FFBF00; color: #1a1a1a; }
-.type-btn.on.unscheduled { border-color: #DC143C; background: #DC143C; }
-.type-btn.on .dot { background: rgba(255,255,255,0.6); }
-.type-btn:not(.on) .dot { background: #e0e0e0; }
+.type-btn { padding: 9px 6px; border: 1.5px solid #e2e2e2; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; background: #fff; color: #aaa; transition: all 0.15s; display: flex; align-items: center; justify-content: center; user-select: none; font-family: 'DM Sans', sans-serif; letter-spacing: 0.01em; }
+.type-btn:hover:not(.on) { background: #f5f5f5; color: #555; border-color: #ccc; }
+.type-btn.on { background: #1e2a38; color: #fff; border-color: #1e2a38; box-shadow: 0 1px 4px rgba(0,0,0,0.18); }
 .day-nav { display: flex; gap: 5px; margin-bottom: 5px; }
 .day-nav-btn { flex: 0 0 30px; padding: 5px 0; border: 1px solid #e8e8e8; border-radius: 6px; background: #fafafa; color: #666; font-size: 15px; cursor: pointer; line-height: 1; transition: all 0.1s; font-family: 'DM Sans', sans-serif; }
 .day-nav-btn:hover { border-color: #bbb; background: #f0f0f0; color: #1a1a1a; }
@@ -280,7 +274,7 @@ const TYPE_INIT = { install:'I', service:'S', excavation:'E' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API limit reached', OVER_QUERY_LIMIT:'Rate limited', REQUEST_DENIED:'API key error', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
 const CREW = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
-const CREW_COLORS = { Johnny:'#E53935', Jonathan:'#7B1FA2', Randy:'#00897B', Eli:'#F57C00', Jerry:'#7CB342', Jake:'#111111' };
+const CREW_COLORS = { Johnny:'#E53935', Jonathan:'#4169E1', Randy:'#3aad6e', Eli:'#5E35B1', Jerry:'#FFBF00', Jake:'#111111' };
  
 // ── State ─────────────────────────────────────────────────────────────────────
 let map, geocoder, infoWindowOpen = null;
