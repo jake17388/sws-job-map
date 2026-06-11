@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'Code.gs'
+      - 'Code.js'
       - 'appsscript.json'
 
 jobs:
