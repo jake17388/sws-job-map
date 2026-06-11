@@ -26,3 +26,8 @@ jobs:
 
       - name: Push to Apps Script
         run: clasp push --force
+
+      # clasp push only updates source; the live /exec URL serves a versioned
+      # deployment that must be re-pointed at a new version each time
+      - name: Deploy new version to live web app
+        run: clasp deploy -i AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P -d "CI deploy ${GITHUB_SHA::7}"

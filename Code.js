@@ -14,37 +14,126 @@ function normalizeCrew(names) {
   });
 }
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
+// Active PINs live in Script Properties. They are seeded once from DEFAULT_PINS
+// (these defaults are already public in git history — rotate to new PINs by
+// editing setPins() in the Apps Script editor, running it, then undoing the
+// edit so the new PINs never land in this public repo).
+const TOKEN_TTL_MS = 30 * 24 * 3600 * 1000; // sessions last 30 days
+const MAX_PIN_FAILS = 10;                   // then logins lock for 10 minutes
+
+const DEFAULT_PINS = {
+  '2580': 'Jake Banks',
+  '4567': 'Ryan Chapman',
+  '6789': 'Monica',
+};
+
+// To change PINs: paste the new set here, run this once from the Apps Script
+// editor, then undo the edit so real PINs never land in git.
+function setPins() {
+  PropertiesService.getScriptProperties()
+    .setProperty('PINS', JSON.stringify(DEFAULT_PINS));
+}
+
+function getPins() {
+  const props = PropertiesService.getScriptProperties();
+  let pins = props.getProperty('PINS');
+  if (!pins) {
+    pins = JSON.stringify(DEFAULT_PINS);
+    props.setProperty('PINS', pins);
+  }
+  return JSON.parse(pins);
+}
+
+function getAuthSecret() {
+  const props = PropertiesService.getScriptProperties();
+  let secret = props.getProperty('AUTH_SECRET');
+  if (!secret) {
+    secret = Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty('AUTH_SECRET', secret);
+  }
+  return secret;
+}
+
+function signPayload(payload) {
+  const sig = Utilities.computeHmacSha256Signature(payload, getAuthSecret());
+  return Utilities.base64EncodeWebSafe(sig);
+}
+
+function makeToken(user) {
+  const payload = Utilities.base64EncodeWebSafe(
+    JSON.stringify({ u: user, e: Date.now() + TOKEN_TTL_MS }));
+  return payload + '.' + signPayload(payload);
+}
+
+// Returns the user name for a valid unexpired token, else null
+function verifyToken(token) {
+  if (!token) return null;
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return null;
+  if (signPayload(parts[0]) !== parts[1]) return null;
+  let data;
+  try {
+    data = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString());
+  } catch (err) { return null; }
+  if (!data || !data.u || !data.e || data.e < Date.now()) return null;
+  return data.u;
+}
+
+function checkPin(pin) {
+  const cache = CacheService.getScriptCache();
+  const fails = +(cache.get('pin_fails') || 0);
+  if (fails >= MAX_PIN_FAILS) return { ok: false, locked: true };
+  const user = getPins()[String(pin)];
+  if (!user) {
+    cache.put('pin_fails', String(fails + 1), 600);
+    return { ok: false };
+  }
+  return { ok: true, user: user, token: makeToken(user) };
+}
+
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+const UNAUTHORIZED = { error: 'unauthorized' };
+
+// ── Routing ───────────────────────────────────────────────────────────────────
 function doGet(e) {
   const action = e.parameter.action;
 
-  if (action === 'getJobs') {
-    return ContentService.createTextOutput(JSON.stringify(getJobs(e)))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-  if (action === 'getUnsched') {
-    return ContentService.createTextOutput(JSON.stringify(getUnsched()))
-      .setMimeType(ContentService.MimeType.JSON);
+  if (action === 'getJobs' || action === 'getUnsched') {
+    if (!verifyToken(e.parameter.token)) return json(UNAUTHORIZED);
+    return json(action === 'getJobs' ? getJobs(e) : getUnsched());
   }
 
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('SWS Job Map')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  // The app itself is hosted on GitHub Pages, not here
+  return ContentService.createTextOutput(
+    'SWS Job Map: https://jake17388.github.io/sws-job-map/');
 }
 
 function doPost(e) {
   const data = JSON.parse(e.postData.contents);
+
+  if (data.action === 'login') {
+    return json(checkPin(data.pin));
+  }
+
+  const user = verifyToken(data.token);
+  if (!user) return json(UNAUTHORIZED);
+
   if (data.action === 'addUnsched') {
-    return ContentService.createTextOutput(JSON.stringify(addUnsched(data)))
-      .setMimeType(ContentService.MimeType.JSON);
+    data.added_by = user; // trust the token, not the client-supplied name
+    return json(addUnsched(data));
   }
   if (data.action === 'removeUnsched') {
-    return ContentService.createTextOutput(JSON.stringify(removeUnsched(data.id)))
-      .setMimeType(ContentService.MimeType.JSON);
+    return json(removeUnsched(data.id));
   }
   if (data.action === 'updateUnsched') {
-    return ContentService.createTextOutput(JSON.stringify(updateUnsched(data)))
-      .setMimeType(ContentService.MimeType.JSON);
+    return json(updateUnsched(data));
   }
+  return json({ error: 'unknown action' });
 }
 
 // ── Calendar jobs ─────────────────────────────────────────────────────────────

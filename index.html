@@ -262,12 +262,6 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 // Your Apps Script deployment URL — update this if you redeploy
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
  
-const PINS = {
-  '2580': 'Jake Banks',
-  '4567': 'Ryan Chapman',
-  '6789': 'Monica',
-};
- 
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#3a4a5c';
 const TYPE_INIT = { install:'I', service:'S', excavation:'E' };
@@ -282,6 +276,9 @@ let scheduledJobs = [], unscheduledJobs = [];
 const activeTypes = new Set(['install','service','excavation','unscheduled']);
 let currentUser = null;
 let pinEntry = '';
+let pinBusy = false;
+const AUTH_KEY = 'sws_auth_v1';
+let auth = readCache(AUTH_KEY) || null; // { token, user } — validated server-side
 let fetchedDateRange = null;
 let searchQuery = '';
 let editingId = null;
@@ -343,12 +340,13 @@ function scheduleRender() {
 
 // ── PIN logic ─────────────────────────────────────────────────────────────────
 function pinKey(k) {
-  if (pinEntry.length >= 4) return;
+  if (pinBusy || pinEntry.length >= 4) return;
   pinEntry += k;
   updateDots();
   if (pinEntry.length === 4) submitPin();
 }
 function pinDel() {
+  if (pinBusy) return;
   pinEntry = pinEntry.slice(0, -1);
   updateDots();
   document.getElementById('pin-error').textContent = '';
@@ -363,20 +361,40 @@ function updateDots(state) {
   }
 }
 function submitPin() {
-  const user = PINS[pinEntry];
-  if (user) {
-    currentUser = user;
-    document.getElementById('pin-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'flex';
-    document.getElementById('user-badge').textContent = currentUser;
-    initMap();
-  } else {
-    updateDots('error');
-    document.getElementById('pin-error').textContent = 'Incorrect PIN. Try again.';
-    setTimeout(() => { pinEntry = ''; updateDots(); document.getElementById('pin-error').textContent = ''; }, 1200);
-  }
+  pinBusy = true;
+  document.getElementById('pin-error').textContent = 'Verifying…';
+  scriptPost({ action: 'login', pin: pinEntry })
+    .then(res => {
+      pinBusy = false;
+      if (res && res.ok) {
+        auth = { token: res.token, user: res.user };
+        writeCache(AUTH_KEY, auth);
+        pinEntry = '';
+        document.getElementById('pin-error').textContent = '';
+        enterApp();
+      } else {
+        pinFailed(res && res.locked
+          ? 'Too many attempts. Try again in 10 minutes.'
+          : 'Incorrect PIN. Try again.');
+      }
+    })
+    .catch(() => { pinBusy = false; pinFailed('Connection error. Try again.'); });
+}
+function pinFailed(msg) {
+  updateDots('error');
+  document.getElementById('pin-error').textContent = msg;
+  setTimeout(() => { pinEntry = ''; updateDots(); document.getElementById('pin-error').textContent = ''; }, 1500);
+}
+function enterApp() {
+  currentUser = auth.user;
+  document.getElementById('pin-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('user-badge').textContent = currentUser;
+  requestMap();
 }
 function signOut() {
+  localStorage.removeItem(AUTH_KEY);
+  auth = null;
   currentUser = null; pinEntry = '';
   updateDots();
   document.getElementById('pin-screen').style.display = 'flex';
@@ -393,14 +411,26 @@ document.addEventListener('keydown', e => {
  
 // ── API calls to Apps Script ──────────────────────────────────────────────────
 function scriptGet(action) {
-  return fetch(`${SCRIPT_URL}?action=${action}`)
-    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  const token = encodeURIComponent(auth ? auth.token : '');
+  return fetch(`${SCRIPT_URL}?action=${action}&token=${token}`)
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(checkAuthError);
 }
 function scriptPost(body) {
+  const payload = body.action === 'login' ? body : { ...body, token: auth ? auth.token : '' };
   return fetch(SCRIPT_URL, {
     method: 'POST',
-    body: JSON.stringify(body),
-  }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+    body: JSON.stringify(payload),
+  }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(checkAuthError);
+}
+function checkAuthError(data) {
+  if (data && data.error === 'unauthorized') {
+    signOut(); // token expired or revoked — back to the PIN screen
+    document.getElementById('pin-error').textContent = 'Session expired — enter your PIN.';
+    throw new Error('unauthorized');
+  }
+  return data;
 }
  
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -439,6 +469,12 @@ function initHomeMarker() {
 }
 
 // ── Map init ──────────────────────────────────────────────────────────────────
+// With a saved session, enterApp() can run before the async Maps script is
+// ready — queue the init until the loader's callback fires
+let mapsLoaded = false, mapWanted = false;
+function mapsReady() { mapsLoaded = true; if (mapWanted) initMap(); }
+function requestMap() { if (mapsLoaded) initMap(); else mapWanted = true; }
+
 function initMap() {
   if (map) { loadAll(); return; }
   map = new google.maps.Map(document.getElementById('map'), {
@@ -1013,7 +1049,12 @@ function saveUnschedEdit() {
     .then(() => { cancelEdit(); loadUnscheduled(); })
     .catch(() => { btn.disabled = false; btn.textContent = 'Save Changes'; alert('Failed to save. Try again.'); });
 }
+
+// ── Auto-login ────────────────────────────────────────────────────────────────
+// Saved session skips the PIN screen; the token is validated server-side on
+// the first fetch and an expired one bounces back to the PIN screen
+if (auth && auth.token) enterApp();
 </script>
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBxzLeU1u-5AAmb-J_wAC2-QT-wf2-qiXQ&loading=async&callback=Function.prototype" async defer></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBxzLeU1u-5AAmb-J_wAC2-QT-wf2-qiXQ&loading=async&callback=mapsReady" async defer></script>
 </body>
 </html
