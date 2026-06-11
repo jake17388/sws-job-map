@@ -286,7 +286,61 @@ let fetchedDateRange = null;
 let searchQuery = '';
 let editingId = null;
 const activeCrews = new Set(CREW);
- 
+
+// ── Local caches (geocode results + last-session data) ───────────────────────
+const GEO_CACHE_KEY = 'sws_geo_cache_v1';
+const JOBS_CACHE_KEY = 'sws_jobs_cache_v1';
+const UNSCHED_CACHE_KEY = 'sws_unsched_cache_v1';
+const GEO_CACHE_MAX_AGE = 90 * 24 * 3600 * 1000;  // addresses rarely move
+const DATA_CACHE_MAX_AGE = 24 * 3600 * 1000;      // jobs change daily
+
+function readCache(key, maxAge) {
+  try {
+    const wrap = JSON.parse(localStorage.getItem(key));
+    if (!wrap || (maxAge && Date.now() - wrap.at > maxAge)) return null;
+    return wrap.data;
+  } catch (e) { return null; }
+}
+function writeCache(key, data) {
+  try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), data })); }
+  catch (e) { /* quota exceeded or storage blocked — caching is best-effort */ }
+}
+
+const geoCache = (() => {
+  const stored = readCache(GEO_CACHE_KEY) || {};
+  const cutoff = Date.now() - GEO_CACHE_MAX_AGE;
+  const fresh = {};
+  Object.keys(stored).forEach(k => { if ((stored[k].t || 0) > cutoff) fresh[k] = stored[k]; });
+  return fresh;
+})();
+function geoKey(addr) { return String(addr).trim().toLowerCase().replace(/\s+/g, ' '); }
+function geoCacheGet(addr) { return addr ? geoCache[geoKey(addr)] : null; }
+function geoCacheSet(addr, lat, lng) {
+  geoCache[geoKey(addr)] = { lat, lng, t: Date.now() };
+  writeCache(GEO_CACHE_KEY, geoCache);
+}
+
+// Cache-first geocode: cached addresses resolve synchronously with no API call
+function geocodeAddress(addr, cb) {
+  const hit = geoCacheGet(addr);
+  if (hit) { cb(true, hit.lat, hit.lng, null); return; }
+  geocoder.geocode({ address: addr }, (results, status) => {
+    if (status === 'OK' && results[0]) {
+      const lat = results[0].geometry.location.lat();
+      const lng = results[0].geometry.location.lng();
+      geoCacheSet(addr, lat, lng);
+      cb(true, lat, lng, null);
+    } else cb(false, null, null, status);
+  });
+}
+
+// Coalesce per-geocode re-renders into at most ~5 list/map refreshes per second
+let renderTimer = null;
+function scheduleRender() {
+  if (renderTimer) return;
+  renderTimer = setTimeout(() => { renderTimer = null; applyFilters(); }, 200);
+}
+
 // ── PIN logic ─────────────────────────────────────────────────────────────────
 function pinKey(k) {
   if (pinEntry.length >= 4) return;
@@ -361,6 +415,7 @@ function fmt(d) {
  
 // ── Home base marker ──────────────────────────────────────────────────────────
 const HOME_ADDRESS = '4049 E Presidio St, Mesa, AZ 85215';
+const HOME_COORDS = { lat: 33.4722424, lng: -111.7427657 }; // fixed — never re-geocode
 function makeHomeSVG() {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="54" viewBox="0 0 44 54">
     <path d="M22 2C13.16 2 6 9.16 6 18c0 13 16 34 16 34s16-21 16-34C38 9.16 30.84 2 22 2z" fill="#2447a3"/>
@@ -368,23 +423,19 @@ function makeHomeSVG() {
   </svg>`;
 }
 function initHomeMarker() {
-  geocoder.geocode({ address: HOME_ADDRESS }, (results, status) => {
-    if (status !== 'OK' || !results[0]) return;
-    const pos = results[0].geometry.location;
-    const icon = {
-      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeHomeSVG()),
-      scaledSize: new google.maps.Size(44, 54),
-      anchor: new google.maps.Point(22, 54)
-    };
-    const marker = new google.maps.Marker({ position: pos, map, icon, title: 'SWS — Home Base', zIndex: 9999 });
-    const iw = new google.maps.InfoWindow({
-      content: `<div style="font-family:'DM Sans',sans-serif;padding:4px 2px;min-width:160px">
-        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:3px">SWS Home Base</div>
-        <div style="font-size:11px;color:#888">${HOME_ADDRESS}</div>
-      </div>`
-    });
-    marker.addListener('click', () => iw.open(map, marker));
+  const icon = {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeHomeSVG()),
+    scaledSize: new google.maps.Size(44, 54),
+    anchor: new google.maps.Point(22, 54)
+  };
+  const marker = new google.maps.Marker({ position: HOME_COORDS, map, icon, title: 'SWS — Home Base', zIndex: 9999 });
+  const iw = new google.maps.InfoWindow({
+    content: `<div style="font-family:'DM Sans',sans-serif;padding:4px 2px;min-width:160px">
+      <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:3px">SWS Home Base</div>
+      <div style="font-size:11px;color:#888">${HOME_ADDRESS}</div>
+    </div>`
   });
+  marker.addListener('click', () => iw.open(map, marker));
 }
 
 // ── Map init ──────────────────────────────────────────────────────────────────
@@ -408,7 +459,20 @@ function initMap() {
   loadAll();
 }
  
-function loadAll() { loadJobs(); loadUnscheduled(); }
+// On first load, paint last session's data from localStorage immediately,
+// then fetch fresh data in the background (Apps Script cold start can take 3-8s)
+let cacheHydrated = false;
+function loadAll() {
+  if (!cacheHydrated) {
+    cacheHydrated = true;
+    const jobsData = readCache(JOBS_CACHE_KEY, DATA_CACHE_MAX_AGE);
+    if (jobsData && jobsData.jobs && jobsData.jobs.length) applyJobsData(jobsData, true);
+    const unschedData = readCache(UNSCHED_CACHE_KEY, DATA_CACHE_MAX_AGE);
+    if (unschedData && unschedData.jobs && unschedData.jobs.length) applyUnschedData(unschedData);
+  }
+  loadJobs();
+  loadUnscheduled();
+}
  
 // ── Toggle ────────────────────────────────────────────────────────────────────
 function toggleType(type) {
@@ -427,48 +491,62 @@ function updateButtons() {
  
 // ── Load scheduled jobs ───────────────────────────────────────────────────────
 function loadJobs() {
-  document.getElementById('job-list').innerHTML = '<div class="loading-state">Fetching calendar...</div>';
-  document.getElementById('map-overlay').style.display = 'flex';
-  document.getElementById('header-count').textContent = '';
- 
+  if (!scheduledJobs.length) {
+    document.getElementById('job-list').innerHTML = '<div class="loading-state">Fetching calendar...</div>';
+    document.getElementById('map-overlay').style.display = 'flex';
+    document.getElementById('header-count').textContent = '';
+  }
+
   const fetchFrom = fmt(new Date());
   const fetchTo = (() => { const d = new Date(); d.setDate(d.getDate() + 60); return fmt(d); })();
   scriptGet(`getJobs&from=${fetchFrom}&to=${fetchTo}`)
     .then(data => {
-      scheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
-      scheduledJobs = data.jobs || [];
-      scheduledJobs.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
-      scheduledJobs.forEach(j => { j._status = 'pending'; j._marker = null; j._iw = null; });
-      fetchedDateRange = { from: data.fetchedFrom || from, to: data.fetchedTo || to };
-      const ts = new Date(data.timestamp);
-      document.getElementById('last-updated').textContent = `Updated ${ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-      document.getElementById('map-overlay').style.display = 'none';
-      renderList();
-      geocodeScheduled();
+      writeCache(JOBS_CACHE_KEY, data);
+      applyJobsData(data, false);
     })
     .catch(() => {
+      if (scheduledJobs.length) return; // cached data already on screen — keep it
       document.getElementById('job-list').innerHTML = '<div class="no-results">Failed to load calendar.<br>Try refreshing.</div>';
       document.getElementById('map-overlay').style.display = 'none';
     });
+}
+
+function applyJobsData(data, fromCache) {
+  scheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
+  scheduledJobs = data.jobs || [];
+  scheduledJobs.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
+  scheduledJobs.forEach(j => { j._status = 'pending'; j._marker = null; j._iw = null; });
+  fetchedDateRange = { from: data.fetchedFrom, to: data.fetchedTo };
+  const ts = new Date(data.timestamp);
+  document.getElementById('last-updated').textContent =
+    `Updated ${ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${fromCache ? ' (cached)' : ''}`;
+  document.getElementById('map-overlay').style.display = 'none';
+  renderList();
+  geocodeScheduled();
 }
  
 function geocodeScheduled() {
   let delay = 0;
   scheduledJobs.forEach(job => {
+    if (!job.addr) { job._status = 'error'; return; }
+    const hit = geoCacheGet(job.addr);
+    if (hit) {
+      job._lat = hit.lat; job._lng = hit.lng; job._status = 'ok';
+      buildScheduledMarker(job);
+      return;
+    }
     setTimeout(() => {
-      if (!job.addr) { job._status = 'error'; renderList(); return; }
-      geocoder.geocode({ address: job.addr }, (results, status) => {
-        if (status === 'OK') {
-          job._lat = results[0].geometry.location.lat();
-          job._lng = results[0].geometry.location.lng();
-          job._status = 'ok';
+      geocodeAddress(job.addr, (ok, lat, lng, status) => {
+        if (ok) {
+          job._lat = lat; job._lng = lng; job._status = 'ok';
           buildScheduledMarker(job);
         } else { job._status = 'error'; job._geoError = status; }
-        renderList(); updateCount();
+        scheduleRender();
       });
     }, delay);
     delay += 120;
   });
+  scheduleRender();
 }
 
 // ── Markers ───────────────────────────────────────────────────────────────────
@@ -540,7 +618,7 @@ function buildScheduledMarker(job) {
     highlightItem('sched-' + scheduledJobs.indexOf(job));
   });
   job._marker = marker; job._iw = iw;
-  applyFilters();
+  scheduleRender();
 }
  
 function buildUnschedMarker(job, label) {
@@ -734,31 +812,41 @@ function focusJob(idx) {
 function loadUnscheduled() {
   scriptGet('getUnsched')
     .then(data => {
-      unscheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
-      unscheduledJobs = data.jobs || [];
-      unscheduledJobs.forEach(j => { j._status = 'pending'; j._marker = null; j._iw = null; });
-      renderList();
-      geocodeUnscheduled();
+      writeCache(UNSCHED_CACHE_KEY, data);
+      applyUnschedData(data);
     })
     .catch(err => console.error('Failed to load unscheduled:', err));
+}
+
+function applyUnschedData(data) {
+  unscheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
+  unscheduledJobs = data.jobs || [];
+  unscheduledJobs.forEach(j => { j._status = 'pending'; j._marker = null; j._iw = null; });
+  renderList();
+  geocodeUnscheduled();
 }
  
 function geocodeUnscheduled() {
   let delay = 0;
   unscheduledJobs.forEach((job, i) => {
+    const hit = geoCacheGet(job.address);
+    if (hit) {
+      job._lat = hit.lat; job._lng = hit.lng; job._status = 'ok';
+      buildUnschedMarker(job, 'U' + (i + 1));
+      return;
+    }
     setTimeout(() => {
-      geocoder.geocode({ address: job.address }, (results, status) => {
-        if (status === 'OK') {
-          job._lat = results[0].geometry.location.lat();
-          job._lng = results[0].geometry.location.lng();
-          job._status = 'ok';
+      geocodeAddress(job.address, (ok, lat, lng, status) => {
+        if (ok) {
+          job._lat = lat; job._lng = lng; job._status = 'ok';
           buildUnschedMarker(job, 'U' + (i + 1));
         } else { job._status = 'error'; job._geoError = status; }
-        renderList(); updateCount();
+        scheduleRender();
       });
     }, delay);
     delay += 120;
   });
+  scheduleRender();
 }
  
 function addUnscheduled() {
@@ -862,11 +950,9 @@ function retryGeocodeScheduled(idx) {
   if (!job) return;
   job._status = 'pending'; job._geoError = null;
   renderList();
-  geocoder.geocode({ address: job.addr }, (results, status) => {
-    if (status === 'OK') {
-      job._lat = results[0].geometry.location.lat();
-      job._lng = results[0].geometry.location.lng();
-      job._status = 'ok';
+  geocodeAddress(job.addr, (ok, lat, lng, status) => {
+    if (ok) {
+      job._lat = lat; job._lng = lng; job._status = 'ok';
       buildScheduledMarker(job);
     } else { job._status = 'error'; job._geoError = status; }
     renderList(); updateCount();
@@ -878,11 +964,9 @@ function retryGeocodeUnsched(id) {
   if (!job) return;
   job._status = 'pending'; job._geoError = null;
   renderList();
-  geocoder.geocode({ address: job.address }, (results, status) => {
-    if (status === 'OK') {
-      job._lat = results[0].geometry.location.lat();
-      job._lng = results[0].geometry.location.lng();
-      job._status = 'ok';
+  geocodeAddress(job.address, (ok, lat, lng, status) => {
+    if (ok) {
+      job._lat = lat; job._lng = lng; job._status = 'ok';
       buildUnschedMarker(job, 'U' + (unscheduledJobs.indexOf(job) + 1));
     } else { job._status = 'error'; job._geoError = status; }
     renderList(); updateCount();
