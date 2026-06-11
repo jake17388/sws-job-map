@@ -266,6 +266,7 @@ const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', uns
 const SCHED_PIN = '#3a4a5c';
 const TYPE_INIT = { install:'I', service:'S', excavation:'E' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API limit reached', OVER_QUERY_LIMIT:'Rate limited', REQUEST_DENIED:'API key error', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
 const CREW = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
 const CREW_COLORS = { Johnny:'#E53935', Jonathan:'#5B9CF6', Randy:'#3aad6e', Eli:'#5E35B1', Jerry:'#FFBF00', Jake:'#111111' };
@@ -436,8 +437,9 @@ function checkAuthError(data) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtDate(d) {
   if (!d) return '';
-  const [, m, day] = d.split('-');
-  return `${MONTHS[+m - 1]} ${+day}`;
+  const [y, m, day] = d.split('-');
+  const dow = DAYS[new Date(+y, +m - 1, +day).getDay()];
+  return `${dow} ${MONTHS[+m - 1]} ${+day}`;
 }
 function fmt(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
