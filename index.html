@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SWS Job Map</title>
 <link rel="icon" type="image/png" href="favicon.png" />
 <link rel="manifest" href="manifest.json" />
@@ -11,6 +11,16 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="SWS Jobs" />
 <meta name="theme-color" content="#1a1a1a" />
+<!-- iOS splash screens (shown briefly while launching from the home screen) -->
+<link rel="apple-touch-startup-image" href="splash/splash-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="splash/splash-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="splash/splash-1206x2622.png" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="splash/splash-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="splash/splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="splash/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="splash/splash-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="splash/splash-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)">
+<link rel="apple-touch-startup-image" href="splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap');
  
@@ -150,6 +160,129 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .map-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; z-index: 20; font-size: 14px; color: #aaa; }
 .spinner { width: 30px; height: 30px; border: 3px solid #e8e8e8; border-top-color: #4169E1; border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Tap feedback (native-app-style instant response instead of a delayed/sticky hover) ── */
+button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
+.job-item:active { background: #f0f0f0; }
+.type-btn:active { transform: scale(0.97); }
+.crew-btn:active { transform: scale(0.96); }
+.hdr-btn:active { background: #3a3a3a; }
+.hdr-btn.danger:active { background: #2a1010; color: #e74c3c; }
+.map-btn:active { background: #ececec; }
+.day-nav-btn:active, .day-nav-label:active { background: #e8e8e8; }
+.btn-add:active:not(:disabled) { background: #9c0c28; }
+.filter-reset:active { color: #888; }
+.btn-edit:active, .btn-remove:active, .btn-retry:active { color: #DC143C; }
+
+/* ── Pull-to-refresh indicator ── */
+.pull-indicator { height: 0; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 6px; color: #999; font-size: 11px; font-family: 'DM Sans', sans-serif; transition: height 0.18s ease; }
+.pull-indicator-icon { display: inline-block; transition: transform 0.18s ease; }
+.pull-indicator.armed .pull-indicator-icon { transform: rotate(180deg); }
+.pull-indicator.spinning .pull-indicator-icon { animation: spin 0.7s linear infinite; }
+
+/* ── Filters accordion toggle (mobile only — desktop keeps filters always open) ── */
+.filters-toggle { display: none; }
+.filters-dot { width: 6px; height: 6px; border-radius: 50%; background: #DC143C; display: none; }
+.filters-toggle .chevron { margin-left: auto; color: #bbb; transition: transform 0.15s; font-size: 11px; }
+.filters-toggle.open .chevron { transform: rotate(180deg); }
+
+/* ── Mobile view tabs (List / Map) ── */
+.mobile-tabs { display: none; }
+
+/* ── FAB + add-job modal + job detail card + backdrop ── */
+.fab-add { display: none; }
+.modal-backdrop { display: none; }
+.modal-close { display: none; }
+.modal-handle { display: none; }
+.job-card { display: none; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Mobile layout (phones / narrow viewports)
+   ════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  header { padding-top: calc(11px + env(safe-area-inset-top)); flex-wrap: wrap; gap: 4px; }
+  #header-right { gap: 8px; }
+  #last-updated { display: none; }
+
+  .mobile-tabs {
+    display: flex; flex-shrink: 0; background: #fff; border-bottom: 1px solid #e8e8e8; padding: 6px 10px; gap: 6px;
+  }
+  .mobile-tab {
+    flex: 1; min-height: 40px; border: 1.5px solid #e2e2e2; border-radius: 8px; background: #fff; color: #888;
+    font-size: 13px; font-weight: 600; font-family: 'DM Sans', sans-serif; display: flex; align-items: center;
+    justify-content: center; gap: 6px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-tab.on { background: #2447a3; color: #fff; border-color: #2447a3; }
+  .mobile-tab:active { opacity: 0.8; }
+  .mobile-tab-badge { font-size: 10px; font-weight: 700; background: rgba(255,255,255,0.25); border-radius: 10px; padding: 1px 6px; }
+  .mobile-tab:not(.on) .mobile-tab-badge { background: #eee; color: #999; }
+
+  .main { position: relative; }
+  .sidebar, .map-container { position: absolute; inset: 0; width: 100%; }
+  .main.mobile-view-list .map-container { visibility: hidden; pointer-events: none; }
+  .main.mobile-view-map .sidebar { visibility: hidden; pointer-events: none; }
+
+  /* Filters collapse behind a single toggle row to give the list room */
+  .filters-toggle {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 8px 2px;
+    border: none; background: none; font-size: 12px; font-weight: 600; color: #555; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; -webkit-tap-highlight-color: transparent;
+  }
+  .filters-toggle.has-active .filters-dot { display: block; }
+  #filters-collapsible { display: none; }
+  #filters-collapsible.open { display: block; padding-top: 4px; }
+
+  /* Add-unscheduled-job becomes a bottom sheet modal opened via the FAB */
+  .unsched-add {
+    display: none !important; position: fixed; left: 0; right: 0; bottom: 0; z-index: 560;
+    border-radius: 16px 16px 0 0; padding: 0 16px calc(16px + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.25); max-height: 80vh; overflow-y: auto; border-bottom: none;
+  }
+  .unsched-add.modal-open { display: block !important; }
+  .modal-handle { display: block; width: 36px; height: 4px; background: #e0c0c5; border-radius: 2px; margin: 10px auto 6px; }
+  .modal-close {
+    display: flex; align-items: center; justify-content: center; position: absolute; top: 8px; right: 8px;
+    width: 32px; height: 32px; border-radius: 50%; border: none; background: rgba(0,0,0,0.06); color: #888;
+    font-size: 15px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 550;
+  }
+  body.add-modal-open .modal-backdrop { display: block; }
+  body.add-modal-open .fab-add { display: none; }
+
+  .fab-add {
+    display: flex; align-items: center; justify-content: center; position: fixed; right: 16px;
+    bottom: calc(20px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 50%;
+    background: #DC143C; color: #fff; font-size: 26px; line-height: 1; border: none; z-index: 300;
+    box-shadow: 0 4px 16px rgba(220,20,60,0.4); cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .fab-add:active { transform: scale(0.92); background: #b01030; }
+
+  /* Job detail bottom sheet — replaces the tiny Google InfoWindow on touch */
+  .job-card {
+    display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 400; background: #fff;
+    border-radius: 16px 16px 0 0; padding: 0 18px calc(16px + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.25); max-height: 60vh; overflow-y: auto;
+    transform: translateY(110%); transition: transform 0.22s ease;
+  }
+  .job-card.open { transform: translateY(0); }
+  .job-card-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .job-card-actions button {
+    flex: 1; padding: 9px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; -webkit-tap-highlight-color: transparent; border: 1px solid #e8e8e8; background: #fff;
+  }
+  .job-card-actions .danger { color: #e74c3c; border-color: #f5d0d0; }
+
+  /* Touch target sizing */
+  .btn-edit, .btn-remove, .btn-retry { min-width: 36px; min-height: 36px; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+  .type-btn, .crew-btn { min-height: 44px; }
+  .day-nav-btn { flex: 0 0 40px; min-height: 40px; }
+  .day-nav-label { min-height: 40px; display: flex; align-items: center; justify-content: center; }
+  .hdr-btn { padding: 7px 12px; }
+
+  .job-list { padding-bottom: 84px; }
+}
 </style>
 </head>
 <body>
@@ -198,37 +331,49 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
       <button class="hdr-btn danger" onclick="signOut()">Sign out</button>
     </div>
   </header>
- 
-  <div class="main">
+
+  <div class="mobile-tabs">
+    <button class="mobile-tab on" data-view="list" onclick="setMobileView('list')">☰ List <span class="mobile-tab-badge" id="mobile-tab-badge"></span></button>
+    <button class="mobile-tab" data-view="map" onclick="setMobileView('map')">⊡ Map</button>
+  </div>
+
+  <div class="main mobile-view-list">
     <div class="sidebar">
       <div class="filters">
-        <div class="filter-label">Job Type</div>
-        <div class="type-btns">
-          <button class="type-btn install on" id="btn-install" onclick="toggleType('install')">Install</button>
-          <button class="type-btn service on" id="btn-service" onclick="toggleType('service')">Service</button>
-          <button class="type-btn excavation on" id="btn-excavation" onclick="toggleType('excavation')">Excavation</button>
-          <button class="type-btn unscheduled on" id="btn-unscheduled" onclick="toggleType('unscheduled')">Unscheduled</button>
+        <button class="filters-toggle" id="filters-toggle" onclick="toggleFiltersPanel()">
+          ⚙ Filters <span class="filters-dot"></span> <span class="chevron">⌄</span>
+        </button>
+        <div id="filters-collapsible">
+          <div class="filter-label">Job Type</div>
+          <div class="type-btns">
+            <button class="type-btn install on" id="btn-install" onclick="toggleType('install')">Install</button>
+            <button class="type-btn service on" id="btn-service" onclick="toggleType('service')">Service</button>
+            <button class="type-btn excavation on" id="btn-excavation" onclick="toggleType('excavation')">Excavation</button>
+            <button class="type-btn unscheduled on" id="btn-unscheduled" onclick="toggleType('unscheduled')">Unscheduled</button>
+          </div>
+          <div class="filter-label" style="margin-top:10px">Crew</div>
+          <div class="crew-btns" id="crew-btns"></div>
+          <div class="filter-label" style="margin-top:10px">Date</div>
+          <div class="day-nav" style="position:relative">
+            <button class="day-nav-btn" onclick="shiftDay(-1)" title="Previous day">‹</button>
+            <button class="day-nav-label" id="day-nav-label" onclick="openDayPicker()" title="Pick a date">Today</button>
+            <input type="date" id="day-nav-picker" tabindex="-1" style="position:absolute;left:30px;top:0;width:calc(100% - 65px);height:100%;opacity:0;pointer-events:none;" onchange="pickDay(this.value)" />
+            <button class="day-nav-btn" onclick="shiftDay(1)" title="Next day">›</button>
+          </div>
+          <div class="date-row">
+            <input type="date" id="date-from" onchange="applyFilters()" />
+            <span class="date-sep">→</span>
+            <input type="date" id="date-to" onchange="applyFilters()" />
+          </div>
+          <div class="date-warn" id="date-warn">⚠ Dates exceed loaded range — hit Refresh to load</div>
+          <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
         </div>
-        <div class="filter-label" style="margin-top:10px">Crew</div>
-        <div class="crew-btns" id="crew-btns"></div>
-        <div class="filter-label" style="margin-top:10px">Date</div>
-        <div class="day-nav" style="position:relative">
-          <button class="day-nav-btn" onclick="shiftDay(-1)" title="Previous day">‹</button>
-          <button class="day-nav-label" id="day-nav-label" onclick="openDayPicker()" title="Pick a date">Today</button>
-          <input type="date" id="day-nav-picker" tabindex="-1" style="position:absolute;left:30px;top:0;width:calc(100% - 65px);height:100%;opacity:0;pointer-events:none;" onchange="pickDay(this.value)" />
-          <button class="day-nav-btn" onclick="shiftDay(1)" title="Next day">›</button>
-        </div>
-        <div class="date-row">
-          <input type="date" id="date-from" onchange="applyFilters()" />
-          <span class="date-sep">→</span>
-          <input type="date" id="date-to" onchange="applyFilters()" />
-        </div>
-        <div class="date-warn" id="date-warn">⚠ Dates exceed loaded range — hit Refresh to load</div>
-        <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
         <input type="text" id="job-search" class="search-input" placeholder="Search job # or name…" oninput="searchQuery=this.value.trim();renderList()" />
       </div>
- 
+
       <div class="unsched-add visible" id="unsched-add">
+        <div class="modal-handle"></div>
+        <button class="modal-close" onclick="closeAddModal()" title="Close">✕</button>
         <div class="add-form-label">Add Unscheduled Job</div>
         <div class="input-row">
           <input class="inp-num" id="u-num" type="text" placeholder="Job #" />
@@ -238,12 +383,15 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
         <button class="btn-cancel" id="cancel-edit-btn" onclick="cancelEdit()">✕ Cancel edit</button>
         <button class="btn-add" id="add-btn" onclick="submitUnschedForm()">+ Add to map</button>
       </div>
- 
+
+      <div class="pull-indicator" id="pull-indicator">
+        <span class="pull-indicator-icon">↻</span><span>Pull to refresh</span>
+      </div>
       <div class="job-list" id="job-list">
         <div class="loading-state">Loading calendar...</div>
       </div>
     </div>
- 
+
     <div class="map-container">
       <div id="map"></div>
       <div class="map-overlay" id="map-overlay">
@@ -254,6 +402,15 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
         <button class="map-btn" onclick="fitVisible()">⊡ Fit all</button>
       </div>
     </div>
+  </div>
+
+  <button class="fab-add" id="fab-add" onclick="openAddModal()" title="Add unscheduled job">+</button>
+  <div class="modal-backdrop" id="modal-backdrop" onclick="closeAddModal()"></div>
+
+  <div class="job-card" id="job-card">
+    <div class="modal-handle"></div>
+    <button class="modal-close" onclick="closeJobCard()" title="Close">✕</button>
+    <div id="job-card-body"></div>
   </div>
 </div>
  
@@ -337,6 +494,55 @@ let renderTimer = null;
 function scheduleRender() {
   if (renderTimer) return;
   renderTimer = setTimeout(() => { renderTimer = null; applyFilters(); }, 200);
+}
+
+// ── Mobile layout: List/Map tabs, filters accordion, add-job modal, job card ──
+function isMobile() { return window.matchMedia('(max-width: 768px)').matches; }
+
+function setMobileView(view) {
+  const main = document.querySelector('.main');
+  if (!main) return;
+  main.classList.remove('mobile-view-list', 'mobile-view-map');
+  main.classList.add('mobile-view-' + view);
+  document.querySelectorAll('.mobile-tab').forEach(b => b.classList.toggle('on', b.dataset.view === view));
+  if (view !== 'map') closeJobCard();
+  if (view === 'map' && map) {
+    const c = map.getCenter();
+    google.maps.event.trigger(map, 'resize');
+    if (c) map.setCenter(c);
+  }
+}
+
+function toggleFiltersPanel() {
+  document.getElementById('filters-collapsible').classList.toggle('open');
+  document.getElementById('filters-toggle').classList.toggle('open');
+}
+function updateFiltersDot() {
+  const toggle = document.getElementById('filters-toggle');
+  if (!toggle) return;
+  const today = fmt(new Date());
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+  const nonDefault = from !== today || to !== today || activeTypes.size < 4 || activeCrews.size < CREW.length;
+  toggle.classList.toggle('has-active', nonDefault);
+}
+
+function openAddModal() {
+  document.body.classList.add('add-modal-open');
+  document.getElementById('unsched-add').classList.add('modal-open');
+}
+function closeAddModal() {
+  document.body.classList.remove('add-modal-open');
+  document.getElementById('unsched-add').classList.remove('modal-open');
+  if (editingId !== null) cancelEdit();
+}
+
+function openJobCard(html) {
+  document.getElementById('job-card-body').innerHTML = html;
+  document.getElementById('job-card').classList.add('open');
+}
+function closeJobCard() {
+  document.getElementById('job-card').classList.remove('open');
 }
 
 // ── PIN logic ─────────────────────────────────────────────────────────────────
@@ -508,8 +714,7 @@ function loadAll() {
     const unschedData = readCache(UNSCHED_CACHE_KEY, DATA_CACHE_MAX_AGE);
     if (unschedData && unschedData.jobs && unschedData.jobs.length) applyUnschedData(unschedData);
   }
-  loadJobs();
-  loadUnscheduled();
+  return Promise.all([loadJobs(), loadUnscheduled()]);
 }
  
 // ── Toggle ────────────────────────────────────────────────────────────────────
@@ -517,7 +722,7 @@ function toggleType(type) {
   if (activeTypes.has(type)) { if (activeTypes.size === 1) return; activeTypes.delete(type); }
   else activeTypes.add(type);
   updateButtons();
-  document.getElementById('unsched-add').className = 'unsched-add' + (activeTypes.has('unscheduled') ? ' visible' : '');
+  document.getElementById('unsched-add').classList.toggle('visible', activeTypes.has('unscheduled'));
   applyFilters();
 }
 function updateButtons() {
@@ -537,7 +742,7 @@ function loadJobs() {
 
   const fetchFrom = fmt(new Date());
   const fetchTo = (() => { const d = new Date(); d.setDate(d.getDate() + 60); return fmt(d); })();
-  scriptGet(`getJobs&from=${fetchFrom}&to=${fetchTo}`)
+  return scriptGet(`getJobs&from=${fetchFrom}&to=${fetchTo}`)
     .then(data => {
       writeCache(JOBS_CACHE_KEY, data);
       applyJobsData(data, false);
@@ -630,52 +835,72 @@ function makeIcon(label, color, crew = [], textColor = '#1a1a1a') {
   };
 }
  
-function buildScheduledMarker(job) {
-  const color = SCHED_PIN;
+// Shared content builders — feed both the desktop InfoWindow and the
+// mobile bottom-sheet job card so they never drift apart.
+function scheduledCardHTML(job) {
   const dateStr = job.start === job.end ? fmtDate(job.start) : `${fmtDate(job.start)} – ${fmtDate(job.end)}`;
   const crew = job.crew || [];
   const crewChips = crew.length > 0
     ? `<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">${crew.map(n => `<span style="font-size:10px;font-weight:700;color:${CREW_COLORS[n]||'#555'};background:${CREW_COLORS[n]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[n]||'#999'}44">${n}</span>`).join('')}</div>`
     : '';
+  return `<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:3px 0">
+    <div style="font-size:10px;color:#aaa;font-weight:700;letter-spacing:.05em;font-family:'DM Mono',monospace">${job.num}</div>
+    <div style="font-weight:700;font-size:13px;margin:3px 0;color:#1a1a1a">${job.title}</div>
+    <div style="font-size:11px;color:#888;margin-bottom:5px">${job.addr}</div>
+    <div style="font-size:11px;font-weight:600;color:${SCHED_PIN}">${job.type.toUpperCase()} · ${dateStr}</div>
+    ${crewChips}
+  </div>`;
+}
+function unschedCardHTML(job) {
+  return `<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:3px 0">
+    <div style="font-size:10px;color:#aaa;font-weight:700;letter-spacing:.05em;font-family:'DM Mono',monospace">${job.job_num}</div>
+    <div style="font-weight:700;font-size:13px;margin:3px 0;color:#1a1a1a">${job.title}</div>
+    <div style="font-size:11px;color:#888;margin-bottom:5px">${job.address}</div>
+    <div style="font-size:11px;font-weight:600;color:${COLORS.unscheduled}">UNSCHEDULED · Added by ${job.added_by || 'Unknown'}</div>
+    <div class="job-card-actions">
+      <button onclick="closeJobCard();editUnsched('${job.id}')">✎ Edit</button>
+      <button class="danger" onclick="closeJobCard();removeUnsched('${job.id}')">✕ Remove</button>
+    </div>
+  </div>`;
+}
+
+function buildScheduledMarker(job) {
+  const color = SCHED_PIN;
+  const crew = job.crew || [];
   const marker = new google.maps.Marker({
     position: { lat: job._lat, lng: job._lng }, map,
     icon: makeIcon('•', color, crew, COLORS[job.type] || COLORS.install), title: `${job.num} — ${job.title}`, zIndex: 100
   });
-  const iw = new google.maps.InfoWindow({
-    content: `<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:3px 0">
-      <div style="font-size:10px;color:#aaa;font-weight:700;letter-spacing:.05em;font-family:'DM Mono',monospace">${job.num}</div>
-      <div style="font-weight:700;font-size:13px;margin:3px 0;color:#1a1a1a">${job.title}</div>
-      <div style="font-size:11px;color:#888;margin-bottom:5px">${job.addr}</div>
-      <div style="font-size:11px;font-weight:600;color:${color}">${job.type.toUpperCase()} · ${dateStr}</div>
-      ${crewChips}
-    </div>`
-  });
+  const iw = new google.maps.InfoWindow({ content: scheduledCardHTML(job) });
   marker.addListener('click', () => {
-    if (infoWindowOpen) infoWindowOpen.close();
-    iw.open(map, marker); infoWindowOpen = iw;
+    if (isMobile()) {
+      setMobileView('map');
+      openJobCard(scheduledCardHTML(job));
+    } else {
+      if (infoWindowOpen) infoWindowOpen.close();
+      iw.open(map, marker); infoWindowOpen = iw;
+    }
     highlightItem('sched-' + scheduledJobs.indexOf(job));
   });
   job._marker = marker; job._iw = iw;
   scheduleRender();
 }
- 
+
 function buildUnschedMarker(job, label) {
   const color = COLORS.unscheduled;
   const marker = new google.maps.Marker({
     position: { lat: job._lat, lng: job._lng }, map,
     icon: makeIcon(label, color), title: `${job.job_num} — ${job.title}`, zIndex: 200
   });
-  const iw = new google.maps.InfoWindow({
-    content: `<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:3px 0">
-      <div style="font-size:10px;color:#aaa;font-weight:700;letter-spacing:.05em;font-family:'DM Mono',monospace">${job.job_num}</div>
-      <div style="font-weight:700;font-size:13px;margin:3px 0;color:#1a1a1a">${job.title}</div>
-      <div style="font-size:11px;color:#888;margin-bottom:5px">${job.address}</div>
-      <div style="font-size:11px;font-weight:600;color:${color}">UNSCHEDULED · Added by ${job.added_by || 'Unknown'}</div>
-    </div>`
-  });
+  const iw = new google.maps.InfoWindow({ content: unschedCardHTML(job) });
   marker.addListener('click', () => {
-    if (infoWindowOpen) infoWindowOpen.close();
-    iw.open(map, marker); infoWindowOpen = iw;
+    if (isMobile()) {
+      setMobileView('map');
+      openJobCard(unschedCardHTML(job));
+    } else {
+      if (infoWindowOpen) infoWindowOpen.close();
+      iw.open(map, marker); infoWindowOpen = iw;
+    }
     highlightItem('unsched-' + unscheduledJobs.indexOf(job));
   });
   job._marker = marker; job._iw = iw;
@@ -755,9 +980,10 @@ function applyFilters() {
       }
     }
   });
+  updateFiltersDot();
   renderList(); updateCount();
 }
- 
+
 function getVisibleScheduled() {
   const from = document.getElementById('date-from').value;
   const to = document.getElementById('date-to').value;
@@ -774,7 +1000,7 @@ function resetFilters() {
   document.getElementById('date-to').value = fmt(today);
   activeTypes.add('install'); activeTypes.add('service'); activeTypes.add('excavation'); activeTypes.add('unscheduled');
   updateButtons();
-  document.getElementById('unsched-add').className = 'unsched-add visible';
+  document.getElementById('unsched-add').classList.add('visible');
   searchQuery = '';
   document.getElementById('job-search').value = '';
   CREW.forEach(n => activeCrews.add(n));
@@ -841,14 +1067,19 @@ function focusJob(idx) {
   const job = scheduledJobs[idx];
   if (!job._marker || !job._marker.getVisible()) return;
   map.panTo({ lat: job._lat, lng: job._lng }); map.setZoom(14);
-  if (infoWindowOpen) infoWindowOpen.close();
-  job._iw.open(map, job._marker); infoWindowOpen = job._iw;
+  if (isMobile()) {
+    setMobileView('map');
+    openJobCard(scheduledCardHTML(job));
+  } else {
+    if (infoWindowOpen) infoWindowOpen.close();
+    job._iw.open(map, job._marker); infoWindowOpen = job._iw;
+  }
   highlightItem('sched-' + idx);
 }
  
 // ── Unscheduled ───────────────────────────────────────────────────────────────
 function loadUnscheduled() {
-  scriptGet('getUnsched')
+  return scriptGet('getUnsched')
     .then(data => {
       writeCache(UNSCHED_CACHE_KEY, data);
       applyUnschedData(data);
@@ -901,6 +1132,7 @@ function addUnscheduled() {
       document.getElementById('u-addr').value = '';
       btn.disabled = false; btn.textContent = '+ Add to map';
       document.getElementById('u-num').focus();
+      closeAddModal();
       loadUnscheduled();
     })
     .catch(() => { btn.disabled = false; btn.textContent = '+ Add to map'; alert('Failed to save. Try again.'); });
@@ -918,8 +1150,13 @@ function focusUnsched(id) {
   const job = unscheduledJobs.find(j => String(j.id) === String(id));
   if (!job || !job._marker) return;
   map.panTo({ lat: job._lat, lng: job._lng }); map.setZoom(14);
-  if (infoWindowOpen) infoWindowOpen.close();
-  job._iw.open(map, job._marker); infoWindowOpen = job._iw;
+  if (isMobile()) {
+    setMobileView('map');
+    openJobCard(unschedCardHTML(job));
+  } else {
+    if (infoWindowOpen) infoWindowOpen.close();
+    job._iw.open(map, job._marker); infoWindowOpen = job._iw;
+  }
   highlightItem('unsched-' + unscheduledJobs.indexOf(job));
 }
  
@@ -941,6 +1178,8 @@ function updateCount() {
   const unsched = activeTypes.has('unscheduled') ? unscheduledJobs.filter(j => j._status === 'ok').length : 0;
   const total = sched + unsched;
   document.getElementById('header-count').textContent = `${total} job${total !== 1 ? 's' : ''} shown`;
+  const badge = document.getElementById('mobile-tab-badge');
+  if (badge) badge.textContent = total;
 }
  
 document.addEventListener('keydown', e => {
@@ -1026,8 +1265,12 @@ function editUnsched(id) {
   document.getElementById('add-btn').textContent = 'Save Changes';
   document.querySelector('.add-form-label').textContent = 'Edit Unscheduled Job';
   document.getElementById('cancel-edit-btn').style.display = 'block';
-  document.getElementById('unsched-add').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  document.getElementById('u-num').focus();
+  if (isMobile()) {
+    openAddModal();
+  } else {
+    document.getElementById('unsched-add').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document.getElementById('u-num').focus();
+  }
 }
 
 function cancelEdit() {
@@ -1048,9 +1291,48 @@ function saveUnschedEdit() {
   const btn = document.getElementById('add-btn');
   btn.disabled = true; btn.textContent = 'Saving...';
   scriptPost({ action: 'updateUnsched', id: editingId, job_num: num, title: title || num, address: addr })
-    .then(() => { cancelEdit(); loadUnscheduled(); })
+    .then(() => { cancelEdit(); closeAddModal(); loadUnscheduled(); })
     .catch(() => { btn.disabled = false; btn.textContent = 'Save Changes'; alert('Failed to save. Try again.'); });
 }
+
+// ── Pull-to-refresh ──────────────────────────────────────────────────────────
+(function setupPullToRefresh() {
+  const list = document.getElementById('job-list');
+  const indicator = document.getElementById('pull-indicator');
+  const THRESHOLD = 64;
+  let startY = null, pulling = false, refreshing = false;
+
+  list.addEventListener('touchstart', e => {
+    if (refreshing) return;
+    pulling = list.scrollTop <= 0;
+    startY = pulling ? e.touches[0].clientY : null;
+  }, { passive: true });
+
+  list.addEventListener('touchmove', e => {
+    if (!pulling || refreshing) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) { indicator.style.height = '0px'; indicator.classList.remove('armed'); return; }
+    const dist = Math.min(dy * 0.5, 90);
+    indicator.style.height = dist + 'px';
+    indicator.classList.toggle('armed', dist >= THRESHOLD);
+  }, { passive: true });
+
+  list.addEventListener('touchend', () => {
+    if (!pulling || refreshing) { pulling = false; return; }
+    const armed = indicator.classList.contains('armed');
+    pulling = false;
+    if (!armed) { indicator.style.height = '0px'; return; }
+    refreshing = true;
+    indicator.classList.remove('armed');
+    indicator.classList.add('spinning');
+    indicator.style.height = '40px';
+    loadAll().finally(() => {
+      refreshing = false;
+      indicator.classList.remove('spinning');
+      indicator.style.height = '0px';
+    });
+  }, { passive: true });
+})();
 
 // ── Auto-login ────────────────────────────────────────────────────────────────
 // Saved session skips the PIN screen; the token is validated server-side on
