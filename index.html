@@ -245,6 +245,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 .filters-toggle { display: none; }
 .filters-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); display: none; }
 .filters-toggle .chevron { margin-left: auto; color: #bbb; transition: transform 0.15s; font-size: 11px; }
+.filter-icon { flex-shrink: 0; }
 .filters-toggle.open .chevron { transform: rotate(180deg); }
 
 /* ── Mobile view tabs (List / Map) ── */
@@ -433,7 +434,10 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
     <div class="sidebar">
       <div class="filters">
         <button class="filters-toggle" id="filters-toggle" onclick="toggleFiltersPanel()">
-          ⚙ Filters <span class="filters-dot"></span> <span class="chevron">⌄</span>
+          <svg class="filter-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M1.5 2h13l-4.8 6v4.3l-3.4 1.7V8L1.5 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+          Filters <span class="filters-dot"></span> <span class="chevron">⌄</span>
         </button>
         <div id="filters-collapsible">
           <div class="filter-label">Job Type</div>
@@ -513,7 +517,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.06.16.3';
+const APP_VERSION = '2026.06.16.4';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -1050,7 +1054,11 @@ function buildUnschedMarker(job, label) {
 function openDayPicker() {
   const picker = document.getElementById('day-nav-picker');
   picker.value = document.getElementById('date-from').value;
-  picker.showPicker();
+  picker.focus();
+  if (picker.showPicker) {
+    try { picker.showPicker(); return; } catch (e) { /* fall through to click() below */ }
+  }
+  picker.click();
 }
 function pickDay(val) {
   if (!val) return;
