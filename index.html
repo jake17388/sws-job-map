@@ -28,6 +28,7 @@
   --navy: #1e4589;
   --navy-deep: #122d57;
   --gold: #f3b13a;
+  --sidebar-width: 330px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'DM Sans', system-ui, sans-serif; background: #f4f3f0; color: #1a1a1a; height: 100vh; display: flex; flex-direction: column; }
@@ -75,10 +76,11 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .hdr-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
 .hdr-btn.danger { color: #ff8a7a; border-color: rgba(255,255,255,0.16); }
 .hdr-btn.danger:hover { background: rgba(220,20,60,0.25); color: #fff; }
+.settings-btn { font-size: 19px; line-height: 1; padding: 3px 11px; }
  
 /* ── Layout ── */
 .main { display: flex; flex: 1; overflow: hidden; }
-.sidebar { width: 330px; background: #fff; border-right: 1px solid #e8e8e8; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+.sidebar { width: var(--sidebar-width); background: #fff; border-right: 1px solid #e8e8e8; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
  
 /* ── Filters ── */
 .filters { padding: 12px 14px 10px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }
@@ -93,8 +95,8 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .day-nav-label { flex: 1; padding: 5px 4px; border: 1px solid #e8e8e8; border-radius: 6px; background: #fafafa; color: #1a1a1a; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center; font-family: 'DM Sans', sans-serif; transition: all 0.1s; }
 .day-nav-label:hover { border-color: #bbb; background: #f0f0f0; }
 .date-bar {
-  display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
-  padding: 10px 14px; background: #fff; border-bottom: 1px solid #e8e8e8;
+  display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; width: var(--sidebar-width);
+  padding: 10px 14px; background: #fff; border-bottom: 1px solid #e8e8e8; border-right: 1px solid #e8e8e8;
 }
 .date-bar .day-nav { margin-bottom: 0; }
 .date-bar .date-warn { margin-top: 0; }
@@ -253,7 +255,6 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 
 /* ── Filters accordion toggle (mobile only — desktop keeps filters always open) ── */
 .filters-toggle { display: none; }
-.filters-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); display: none; }
 .filters-toggle .chevron { margin-left: auto; color: #bbb; transition: transform 0.15s; font-size: 11px; }
 .filter-icon { flex-shrink: 0; }
 .filters-toggle.open .chevron { transform: rotate(180deg); }
@@ -275,6 +276,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
   .brand-row { padding-top: calc(10px + env(safe-area-inset-top)); }
   .brand-name { font-size: 11px; }
   #last-updated { display: none; }
+  .date-bar { width: 100%; border-right: none; }
 
   .mobile-tabs {
     display: flex; flex-shrink: 0; background: #fff; border-bottom: 1px solid #e8e8e8; padding: 6px 10px; gap: 6px;
@@ -300,7 +302,6 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
     border: none; background: none; font-size: 12px; font-weight: 600; color: #555; cursor: pointer;
     font-family: 'DM Sans', sans-serif; -webkit-tap-highlight-color: transparent;
   }
-  .filters-toggle.has-active .filters-dot { display: block; }
   #filters-collapsible { display: none; }
   #filters-collapsible.open { display: block; padding-top: 4px; }
 
@@ -409,7 +410,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
         <span id="last-updated"></span>
         <span id="header-count"></span>
       </div>
-      <button class="hdr-btn" onclick="openSettings()" title="Settings">⚙</button>
+      <button class="hdr-btn settings-btn" onclick="openSettings()" title="Settings">⚙</button>
     </div>
   </header>
 
@@ -457,7 +458,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
           <svg class="filter-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M1.5 2h13l-4.8 6v4.3l-3.4 1.7V8L1.5 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/>
           </svg>
-          Filters <span class="filters-dot"></span> <span class="chevron">⌄</span>
+          Filters <span class="chevron">⌄</span>
         </button>
         <div id="filters-collapsible">
           <div class="filter-label">Job Type</div>
@@ -537,7 +538,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.06.16.5';
+const APP_VERSION = '2026.06.16.6';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -636,15 +637,6 @@ function setMobileView(view) {
 function toggleFiltersPanel() {
   document.getElementById('filters-collapsible').classList.toggle('open');
   document.getElementById('filters-toggle').classList.toggle('open');
-}
-function updateFiltersDot() {
-  const toggle = document.getElementById('filters-toggle');
-  if (!toggle) return;
-  const today = fmt(new Date());
-  const from = document.getElementById('date-from').value;
-  const to = document.getElementById('date-to').value;
-  const nonDefault = from !== today || to !== today || activeTypes.size < 4 || activeCrews.size < CREW.length;
-  toggle.classList.toggle('has-active', nonDefault);
 }
 
 function openAddModal() {
@@ -1197,7 +1189,6 @@ function applyFilters() {
       }
     }
   });
-  updateFiltersDot();
   renderList(); updateCount();
 }
 
