@@ -109,6 +109,25 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .date-bar .day-nav { margin-bottom: 0; flex: 0 0 auto; }
 .date-bar .day-nav-label { flex: none; width: 64px; }
 .date-bar .date-warn { margin-top: 0; }
+
+/* ── App update banner + version footer ── */
+.update-banner {
+  display: none; align-items: center; justify-content: space-between; gap: 10px;
+  flex-shrink: 0; padding: 8px 14px; background: #fff6ec; border-bottom: 1px solid #f0d090;
+  color: #8a4a00; font-size: 12px; font-family: 'DM Sans', sans-serif;
+}
+.update-banner.show { display: flex; }
+.update-banner button {
+  background: var(--navy); color: #fff; border: none; border-radius: 6px; padding: 5px 11px;
+  font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; flex-shrink: 0;
+}
+.app-footer {
+  flex-shrink: 0; padding: 7px 14px; border-top: 1px solid #f0f0f0; display: flex;
+  align-items: center; justify-content: space-between; font-size: 10px; color: #ccc;
+  font-family: 'DM Mono', monospace;
+}
+.app-footer-check { color: #999; cursor: pointer; text-decoration: underline; }
+.app-footer-check:active { color: #555; }
 .date-sep { font-size: 11px; color: #ccc; }
 .filter-reset { font-size: 11px; color: #ccc; cursor: pointer; text-decoration: underline; margin-top: 6px; display: inline-block; }
 .filter-reset:hover { color: #888; }
@@ -388,6 +407,11 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
     <div class="date-warn" id="date-warn">⚠ Dates exceed loaded range — hit Refresh to load</div>
   </div>
 
+  <div class="update-banner" id="update-banner">
+    <span>🔄 A new version is available</span>
+    <button onclick="applyUpdate()">Update now</button>
+  </div>
+
   <div class="main mobile-view-list">
     <div class="sidebar">
       <div class="filters">
@@ -428,6 +452,10 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
       <div class="job-list" id="job-list">
         <div class="loading-state">Loading calendar...</div>
       </div>
+      <div class="app-footer">
+        <span>v<span id="app-version-text"></span></span>
+        <span class="app-footer-check" id="app-footer-check" onclick="checkForUpdate(true)">Check for updates</span>
+      </div>
     </div>
 
     <div class="map-container">
@@ -456,6 +484,9 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 // ── Config ────────────────────────────────────────────────────────────────────
 // Your Apps Script deployment URL — update this if you redeploy
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
+// Bump this on every deploy — shown in the app footer and used to detect
+// when the installed iOS home-screen app is running stale cached code.
+const APP_VERSION = '2026.06.16.1';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -635,7 +666,40 @@ function enterApp() {
   document.getElementById('pin-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   document.getElementById('user-badge').textContent = currentUser;
-  requestMap();
+  document.getElementById('app-version-text').textContent = APP_VERSION;
+  requestMap(); // loadAll(), called once the map is ready, also checks for an app update
+}
+
+// ── App update check ─────────────────────────────────────────────────────────
+// iOS caches the home-screen PWA shell aggressively and doesn't always refetch
+// on launch, so the app can silently run stale code. version.json is fetched
+// with cache:'no-store' to always hit the network, and a mismatch surfaces a
+// banner the crew can tap to force a fresh load.
+function checkForUpdate(manual) {
+  const checkLink = document.getElementById('app-footer-check');
+  if (manual && checkLink) checkLink.textContent = 'Checking…';
+  fetch('version.json', { cache: 'no-store' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.version && data.version !== APP_VERSION) {
+        document.getElementById('update-banner').classList.add('show');
+        if (manual && checkLink) checkLink.textContent = 'Update available above ↑';
+      } else if (manual && checkLink) {
+        checkLink.textContent = "You're up to date";
+        setTimeout(() => { checkLink.textContent = 'Check for updates'; }, 2500);
+      }
+    })
+    .catch(() => {
+      if (manual && checkLink) {
+        checkLink.textContent = 'Could not check — try again';
+        setTimeout(() => { checkLink.textContent = 'Check for updates'; }, 2500);
+      }
+    });
+}
+function applyUpdate() {
+  const url = new URL(window.location.href);
+  url.searchParams.set('v', Date.now());
+  window.location.href = url.toString();
 }
 function signOut() {
   localStorage.removeItem(AUTH_KEY);
@@ -752,6 +816,7 @@ function loadAll() {
     const unschedData = readCache(UNSCHED_CACHE_KEY, DATA_CACHE_MAX_AGE);
     if (unschedData && unschedData.jobs && unschedData.jobs.length) applyUnschedData(unschedData);
   }
+  checkForUpdate();
   return Promise.all([loadJobs(), loadUnscheduled()]);
 }
  
