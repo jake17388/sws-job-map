@@ -254,10 +254,16 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 .pull-indicator.spinning .pull-indicator-icon { animation: spin 0.7s linear infinite; }
 
 /* ── Filters accordion toggle (mobile only — desktop keeps filters always open) ── */
-.filters-toggle { display: none; }
+.filters-toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 8px 2px;
+  border: none; background: none; font-size: 12px; font-weight: 600; color: #555; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; -webkit-tap-highlight-color: transparent;
+}
 .filters-toggle .chevron { margin-left: auto; color: #bbb; transition: transform 0.15s; font-size: 11px; }
 .filter-icon { flex-shrink: 0; }
 .filters-toggle.open .chevron { transform: rotate(180deg); }
+#filters-collapsible { display: none; }
+#filters-collapsible.open { display: block; padding-top: 4px; }
 
 /* ── Mobile view tabs (List / Map) ── */
 .mobile-tabs { display: none; }
@@ -295,15 +301,6 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
   .sidebar, .map-container { position: absolute; inset: 0; width: 100%; }
   .main.mobile-view-list .map-container { visibility: hidden; pointer-events: none; }
   .main.mobile-view-map .sidebar { visibility: hidden; pointer-events: none; }
-
-  /* Filters collapse behind a single toggle row to give the list room */
-  .filters-toggle {
-    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 8px 2px;
-    border: none; background: none; font-size: 12px; font-weight: 600; color: #555; cursor: pointer;
-    font-family: 'DM Sans', sans-serif; -webkit-tap-highlight-color: transparent;
-  }
-  #filters-collapsible { display: none; }
-  #filters-collapsible.open { display: block; padding-top: 4px; }
 
   /* Add-unscheduled-job becomes a bottom sheet modal opened via the FAB */
   .unsched-add {
@@ -538,7 +535,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.06.16.6';
+const APP_VERSION = '2026.06.16.7';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
