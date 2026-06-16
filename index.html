@@ -92,23 +92,34 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .day-nav-btn:hover { border-color: #bbb; background: #f0f0f0; color: #1a1a1a; }
 .day-nav-label { flex: 1; padding: 5px 4px; border: 1px solid #e8e8e8; border-radius: 6px; background: #fafafa; color: #1a1a1a; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center; font-family: 'DM Sans', sans-serif; transition: all 0.1s; }
 .day-nav-label:hover { border-color: #bbb; background: #f0f0f0; }
-.date-row { display: flex; gap: 6px; align-items: center; }
-.date-row input[type=date] { flex: 1; border: 1px solid #e8e8e8; border-radius: 6px; padding: 6px 8px; font-size: 12px; background: #fafafa; outline: none; color: #1a1a1a; font-family: 'DM Sans', sans-serif; }
-.date-row input[type=date]:focus { border-color: #999; background: #fff; }
 .date-bar {
   display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
   padding: 10px 14px; background: #fff; border-bottom: 1px solid #e8e8e8;
 }
-.date-bar-row {
-  display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
-  overflow-x: auto; scrollbar-width: none;
-}
-.date-bar-row::-webkit-scrollbar { display: none; }
-.date-bar .date-row { flex: 0 0 auto; }
-.date-bar .date-row input[type=date] { flex: none; width: 108px; }
-.date-bar .day-nav { margin-bottom: 0; flex: 0 0 auto; }
-.date-bar .day-nav-label { flex: none; width: 64px; }
+.date-bar .day-nav { margin-bottom: 0; }
 .date-bar .date-warn { margin-top: 0; }
+
+/* ── Calendar popover (range picker for the day-nav label) ── */
+.calendar-panel { max-height: 80vh; overflow-y: auto; }
+.calendar-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.calendar-nav-btn { width: 34px; height: 34px; flex-shrink: 0; border-radius: 8px; border: 1px solid #e8e8e8; background: #fafafa; font-size: 16px; color: #666; cursor: pointer; }
+.calendar-nav-btn:active { background: #eee; }
+.calendar-today-btn { flex: 1; text-align: center; font-size: 12px; font-weight: 600; color: var(--navy); background: none; border: none; cursor: pointer; padding: 6px; font-family: 'DM Sans', sans-serif; }
+.calendar-today-btn:active { opacity: 0.6; }
+.calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 9px; font-weight: 700; color: #bbb; text-transform: uppercase; margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.calendar-day {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: none;
+  background: none; font-size: 12px; color: #1a1a1a; cursor: pointer; font-family: 'DM Sans', sans-serif;
+}
+.calendar-day:active { background: #f0f0f0; }
+.calendar-day.today { font-weight: 700; color: var(--navy); }
+.calendar-day.in-range { background: rgba(30,69,137,0.12); border-radius: 0; }
+.calendar-day.range-start.range-end { border-radius: 8px; }
+.calendar-day.range-start, .calendar-day.range-end { background: var(--navy); color: #fff; font-weight: 700; }
+.calendar-day.range-start:not(.range-end) { border-radius: 8px 0 0 8px; }
+.calendar-day.range-end:not(.range-start) { border-radius: 0 8px 8px 0; }
+.calendar-hint { text-align: center; font-size: 11px; color: #aaa; margin-top: 10px; line-height: 1.4; }
 
 /* ── App update banner + version footer ── */
 .update-banner {
@@ -145,7 +156,6 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .settings-action:active { background: #f5f5f5; }
 .settings-action.danger { color: #DC143C; border-color: #f5d0d0; }
 .settings-action.danger:active { background: #fff0f0; }
-.date-sep { font-size: 11px; color: #ccc; }
 .filter-reset { font-size: 11px; color: #ccc; cursor: pointer; text-decoration: underline; margin-top: 6px; display: inline-block; }
 .filter-reset:hover { color: #888; }
  
@@ -409,20 +419,30 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
   </div>
 
   <div class="date-bar">
-    <div class="date-bar-row">
-      <div class="date-row">
-        <input type="date" id="date-from" onchange="applyFilters()" />
-        <span class="date-sep">→</span>
-        <input type="date" id="date-to" onchange="applyFilters()" />
-      </div>
-      <div class="day-nav" style="position:relative">
-        <button class="day-nav-btn" onclick="shiftDay(-1)" title="Previous day">‹</button>
-        <button class="day-nav-label" id="day-nav-label" onclick="openDayPicker()" title="Pick a date">Today</button>
-        <input type="date" id="day-nav-picker" tabindex="-1" style="position:absolute;left:30px;top:0;width:calc(100% - 65px);height:100%;opacity:0;pointer-events:none;" onchange="pickDay(this.value)" />
-        <button class="day-nav-btn" onclick="shiftDay(1)" title="Next day">›</button>
-      </div>
+    <div class="day-nav">
+      <button class="day-nav-btn" onclick="shiftDay(-1)" title="Previous day">‹</button>
+      <button class="day-nav-label" id="day-nav-label" onclick="openCalendar()" title="Pick a date or range">Today</button>
+      <button class="day-nav-btn" onclick="shiftDay(1)" title="Next day">›</button>
     </div>
+    <input type="date" id="date-from" style="display:none">
+    <input type="date" id="date-to" style="display:none">
     <div class="date-warn" id="date-warn">⚠ Dates exceed loaded range — hit Refresh to load</div>
+  </div>
+
+  <div class="settings-backdrop" id="calendar-backdrop" onclick="closeCalendar()"></div>
+  <div class="settings-panel calendar-panel" id="calendar-panel">
+    <div class="settings-header">
+      <span id="calendar-month-label">Month Year</span>
+      <button class="settings-close-btn" onclick="closeCalendar()" title="Close">✕</button>
+    </div>
+    <div class="calendar-nav">
+      <button class="calendar-nav-btn" onclick="shiftCalendarMonth(-1)" title="Previous month">‹</button>
+      <button class="calendar-today-btn" onclick="jumpCalendarToday()">Jump to today</button>
+      <button class="calendar-nav-btn" onclick="shiftCalendarMonth(1)" title="Next month">›</button>
+    </div>
+    <div class="calendar-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+    <div class="calendar-grid" id="calendar-grid"></div>
+    <div class="calendar-hint" id="calendar-hint">Tap a day to start, tap again to set the range (tap the same day twice for a single day)</div>
   </div>
 
   <div class="update-banner" id="update-banner">
@@ -517,7 +537,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.06.16.4';
+const APP_VERSION = '2026.06.16.5';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -1051,20 +1071,69 @@ function buildUnschedMarker(job, label) {
 }
  
 // ── Day navigation ────────────────────────────────────────────────────────────
-function openDayPicker() {
-  const picker = document.getElementById('day-nav-picker');
-  picker.value = document.getElementById('date-from').value;
-  picker.focus();
-  if (picker.showPicker) {
-    try { picker.showPicker(); return; } catch (e) { /* fall through to click() below */ }
-  }
-  picker.click();
+// Custom range calendar — tap a day to start, tap again to set the range.
+// Tapping the same day twice collapses the range to that single day.
+let calMonth = null, calPickStart = null;
+function openCalendar() {
+  const from = document.getElementById('date-from').value || fmt(new Date());
+  calPickStart = null;
+  const [y, m, d] = from.split('-').map(Number);
+  calMonth = new Date(y, m - 1, d);
+  renderCalendar();
+  document.getElementById('calendar-backdrop').classList.add('show');
+  document.getElementById('calendar-panel').classList.add('show');
 }
-function pickDay(val) {
-  if (!val) return;
-  document.getElementById('date-from').value = val;
-  document.getElementById('date-to').value = val;
+function closeCalendar() {
+  document.getElementById('calendar-backdrop').classList.remove('show');
+  document.getElementById('calendar-panel').classList.remove('show');
+}
+function shiftCalendarMonth(delta) {
+  calMonth.setMonth(calMonth.getMonth() + delta);
+  renderCalendar();
+}
+function jumpCalendarToday() {
+  calMonth = new Date();
+  renderCalendar();
+}
+function renderCalendar() {
+  document.getElementById('calendar-month-label').textContent =
+    calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const from = document.getElementById('date-from').value;
+  const to = document.getElementById('date-to').value;
+  const todayStr = fmt(new Date());
+  const year = calMonth.getFullYear(), month = calMonth.getMonth();
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push('<div></div>');
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = fmt(new Date(year, month, d));
+    const classes = ['calendar-day'];
+    if (dateStr === todayStr) classes.push('today');
+    if (calPickStart) {
+      if (dateStr === calPickStart) classes.push('range-start', 'range-end');
+    } else if (from && to) {
+      if (dateStr === from) classes.push('range-start');
+      if (dateStr === to) classes.push('range-end');
+      if (dateStr > from && dateStr < to) classes.push('in-range');
+    }
+    cells.push(`<button class="${classes.join(' ')}" onclick="pickCalendarDay('${dateStr}')">${d}</button>`);
+  }
+  document.getElementById('calendar-grid').innerHTML = cells.join('');
+}
+function pickCalendarDay(dateStr) {
+  if (!calPickStart) {
+    calPickStart = dateStr;
+    renderCalendar();
+    return;
+  }
+  let from = calPickStart, to = dateStr;
+  if (to < from) { [from, to] = [to, from]; }
+  document.getElementById('date-from').value = from;
+  document.getElementById('date-to').value = to;
+  calPickStart = null;
   applyFilters();
+  closeCalendar();
 }
 function shiftDay(delta) {
   const from = document.getElementById('date-from').value;
