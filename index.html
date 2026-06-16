@@ -24,16 +24,22 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap');
  
+:root {
+  --navy: #1e4589;
+  --navy-deep: #122d57;
+  --gold: #f3b13a;
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'DM Sans', system-ui, sans-serif; background: #f4f3f0; color: #1a1a1a; height: 100vh; display: flex; flex-direction: column; }
- 
+
 /* ── PIN Screen ── */
 #pin-screen {
-  position: fixed; inset: 0; background: #1a1a1a;
+  position: fixed; inset: 0; background: linear-gradient(160deg, var(--navy-deep), #0c1f3d);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   z-index: 1000;
 }
-.pin-logo { font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #555; margin-bottom: 32px; font-family: 'DM Mono', monospace; }
+.pin-brand-mark { width: 56px; height: auto; margin-bottom: 18px; }
+.pin-logo { font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #7d93bd; margin-bottom: 32px; font-family: 'DM Mono', monospace; }
 .pin-logo span { color: #fff; }
 .pin-card { background: #242424; border-radius: 16px; padding: 36px 40px; width: 320px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.4); }
 .pin-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 6px; }
@@ -52,18 +58,23 @@ body { font-family: 'DM Sans', system-ui, sans-serif; background: #f4f3f0; color
  
 /* ── App ── */
 #app { display: none; flex-direction: column; flex: 1; height: 100vh; }
-header { background: #1a1a1a; color: #fff; padding: 11px 20px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
-.header-left { display: flex; align-items: center; gap: 14px; }
-header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; font-family: 'DM Mono', monospace; }
-#user-badge { font-size: 11px; background: #2e2e2e; border: 1px solid #3a3a3a; border-radius: 20px; padding: 3px 10px; color: #aaa; display: flex; align-items: center; gap: 6px; }
-#user-badge::before { content:''; width:7px; height:7px; border-radius:50%; background:#27ae60; flex-shrink:0; }
-#header-right { display: flex; align-items: center; gap: 12px; }
-#header-count { font-size: 12px; color: #666; }
-#last-updated { font-size: 11px; color: #555; }
-.hdr-btn { font-size: 11px; color: #888; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 5px; padding: 4px 10px; cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
-.hdr-btn:hover { background: #333; color: #fff; }
-.hdr-btn.danger { color: #c0392b; border-color: #3a2020; }
-.hdr-btn.danger:hover { background: #2a1010; color: #e74c3c; }
+header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); color: #fff; flex-shrink: 0; display: flex; flex-direction: column; }
+.brand-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 18px 9px; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-mark { width: 28px; height: auto; flex-shrink: 0; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.brand-name { font-size: 12px; font-weight: 700; letter-spacing: 0.03em; color: #fff; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
+.brand-sub { font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); font-family: 'DM Mono', monospace; }
+#user-badge { font-size: 11px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.16); border-radius: 20px; padding: 3px 10px; color: #dbe4f5; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+#user-badge::before { content:''; width:7px; height:7px; border-radius:50%; background:#3ddc84; flex-shrink:0; }
+.toolbar-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 18px; background: rgba(0,0,0,0.18); border-top: 1px solid rgba(255,255,255,0.08); }
+.toolbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+#header-count { font-size: 12px; color: #b9c6e3; white-space: nowrap; }
+#last-updated { font-size: 11px; color: #8d9fc4; white-space: nowrap; }
+.hdr-btn { font-size: 11px; color: #dbe4f5; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16); border-radius: 5px; padding: 4px 10px; cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
+.hdr-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
+.hdr-btn.danger { color: #ff8a7a; border-color: rgba(255,255,255,0.16); }
+.hdr-btn.danger:hover { background: rgba(220,20,60,0.25); color: #fff; }
  
 /* ── Layout ── */
 .main { display: flex; flex: 1; overflow: hidden; }
@@ -75,7 +86,7 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .type-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
 .type-btn { padding: 9px 6px; border: 1.5px solid #e2e2e2; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; background: #fff; color: #aaa; transition: all 0.15s; display: flex; align-items: center; justify-content: center; user-select: none; font-family: 'DM Sans', sans-serif; letter-spacing: 0.01em; }
 .type-btn:hover:not(.on) { background: #f0f4fa; color: #2447a3; border-color: #b8caea; }
-.type-btn.on { background: #2447a3; color: #fff; border-color: #2447a3; box-shadow: 0 1px 5px rgba(36,71,163,0.35); }
+.type-btn.on { background: var(--navy); color: #fff; border-color: var(--navy); box-shadow: 0 1px 5px rgba(30,69,137,0.35); }
 .day-nav { display: flex; gap: 5px; margin-bottom: 5px; }
 .day-nav-btn { flex: 0 0 30px; padding: 5px 0; border: 1px solid #e8e8e8; border-radius: 6px; background: #fafafa; color: #666; font-size: 15px; cursor: pointer; line-height: 1; transition: all 0.1s; font-family: 'DM Sans', sans-serif; }
 .day-nav-btn:hover { border-color: #bbb; background: #f0f0f0; color: #1a1a1a; }
@@ -84,6 +95,13 @@ header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-tran
 .date-row { display: flex; gap: 6px; align-items: center; }
 .date-row input[type=date] { flex: 1; border: 1px solid #e8e8e8; border-radius: 6px; padding: 6px 8px; font-size: 12px; background: #fafafa; outline: none; color: #1a1a1a; font-family: 'DM Sans', sans-serif; }
 .date-row input[type=date]:focus { border-color: #999; background: #fff; }
+.date-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex-shrink: 0;
+  padding: 10px 14px; background: #fff; border-bottom: 1px solid #e8e8e8;
+}
+.date-bar .day-nav { margin-bottom: 0; flex: 0 1 220px; min-width: 160px; }
+.date-bar .date-row { flex: 0 1 220px; min-width: 160px; }
+.date-bar .date-warn { margin-top: 0; flex-basis: 100%; }
 .date-sep { font-size: 11px; color: #ccc; }
 .filter-reset { font-size: 11px; color: #ccc; cursor: pointer; text-decoration: underline; margin-top: 6px; display: inline-block; }
 .filter-reset:hover { color: #888; }
@@ -166,8 +184,8 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 .job-item:active { background: #f0f0f0; }
 .type-btn:active { transform: scale(0.97); }
 .crew-btn:active { transform: scale(0.96); }
-.hdr-btn:active { background: #3a3a3a; }
-.hdr-btn.danger:active { background: #2a1010; color: #e74c3c; }
+.hdr-btn:active { background: rgba(255,255,255,0.22); }
+.hdr-btn.danger:active { background: rgba(220,20,60,0.35); color: #fff; }
 .map-btn:active { background: #ececec; }
 .day-nav-btn:active, .day-nav-label:active { background: #e8e8e8; }
 .btn-add:active:not(:disabled) { background: #9c0c28; }
@@ -182,7 +200,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 
 /* ── Filters accordion toggle (mobile only — desktop keeps filters always open) ── */
 .filters-toggle { display: none; }
-.filters-dot { width: 6px; height: 6px; border-radius: 50%; background: #DC143C; display: none; }
+.filters-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); display: none; }
 .filters-toggle .chevron { margin-left: auto; color: #bbb; transition: transform 0.15s; font-size: 11px; }
 .filters-toggle.open .chevron { transform: rotate(180deg); }
 
@@ -200,8 +218,8 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
    Mobile layout (phones / narrow viewports)
    ════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  header { padding-top: calc(11px + env(safe-area-inset-top)); flex-wrap: wrap; gap: 4px; }
-  #header-right { gap: 8px; }
+  .brand-row { padding-top: calc(10px + env(safe-area-inset-top)); }
+  .brand-name { font-size: 11px; }
   #last-updated { display: none; }
 
   .mobile-tabs {
@@ -212,7 +230,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
     font-size: 13px; font-weight: 600; font-family: 'DM Sans', sans-serif; display: flex; align-items: center;
     justify-content: center; gap: 6px; cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
-  .mobile-tab.on { background: #2447a3; color: #fff; border-color: #2447a3; }
+  .mobile-tab.on { background: var(--navy); color: #fff; border-color: var(--navy); }
   .mobile-tab:active { opacity: 0.8; }
   .mobile-tab-badge { font-size: 10px; font-weight: 700; background: rgba(255,255,255,0.25); border-radius: 10px; padding: 1px 6px; }
   .mobile-tab:not(.on) .mobile-tab-badge { background: #eee; color: #999; }
@@ -289,6 +307,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
  
 <!-- PIN Screen -->
 <div id="pin-screen">
+  <img class="pin-brand-mark" src="brand-mark-160.png" alt="" />
   <div class="pin-logo"><span>SWS</span> Job Map</div>
   <div class="pin-card">
     <div class="pin-title">Enter PIN</div>
@@ -320,14 +339,22 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 <!-- Main App -->
 <div id="app">
   <header>
-    <div class="header-left">
-      <h1>SWS Job Map</h1>
+    <div class="brand-row">
+      <div class="brand">
+        <img class="brand-mark" src="brand-mark-96.png" alt="" />
+        <div class="brand-text">
+          <span class="brand-name">Summit West Signs</span>
+          <span class="brand-sub">Job Map</span>
+        </div>
+      </div>
       <div id="user-badge"></div>
     </div>
-    <div id="header-right">
-      <span id="last-updated"></span>
-      <button class="hdr-btn" onclick="loadAll()">↻ Refresh</button>
-      <span id="header-count"></span>
+    <div class="toolbar-row">
+      <div class="toolbar-left">
+        <button class="hdr-btn" onclick="loadAll()">↻ Refresh</button>
+        <span id="last-updated"></span>
+        <span id="header-count"></span>
+      </div>
       <button class="hdr-btn danger" onclick="signOut()">Sign out</button>
     </div>
   </header>
@@ -335,6 +362,21 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
   <div class="mobile-tabs">
     <button class="mobile-tab on" data-view="list" onclick="setMobileView('list')">☰ List <span class="mobile-tab-badge" id="mobile-tab-badge"></span></button>
     <button class="mobile-tab" data-view="map" onclick="setMobileView('map')">⊡ Map</button>
+  </div>
+
+  <div class="date-bar">
+    <div class="day-nav" style="position:relative">
+      <button class="day-nav-btn" onclick="shiftDay(-1)" title="Previous day">‹</button>
+      <button class="day-nav-label" id="day-nav-label" onclick="openDayPicker()" title="Pick a date">Today</button>
+      <input type="date" id="day-nav-picker" tabindex="-1" style="position:absolute;left:30px;top:0;width:calc(100% - 65px);height:100%;opacity:0;pointer-events:none;" onchange="pickDay(this.value)" />
+      <button class="day-nav-btn" onclick="shiftDay(1)" title="Next day">›</button>
+    </div>
+    <div class="date-row">
+      <input type="date" id="date-from" onchange="applyFilters()" />
+      <span class="date-sep">→</span>
+      <input type="date" id="date-to" onchange="applyFilters()" />
+    </div>
+    <div class="date-warn" id="date-warn">⚠ Dates exceed loaded range — hit Refresh to load</div>
   </div>
 
   <div class="main mobile-view-list">
@@ -353,19 +395,6 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
           </div>
           <div class="filter-label" style="margin-top:10px">Crew</div>
           <div class="crew-btns" id="crew-btns"></div>
-          <div class="filter-label" style="margin-top:10px">Date</div>
-          <div class="day-nav" style="position:relative">
-            <button class="day-nav-btn" onclick="shiftDay(-1)" title="Previous day">‹</button>
-            <button class="day-nav-label" id="day-nav-label" onclick="openDayPicker()" title="Pick a date">Today</button>
-            <input type="date" id="day-nav-picker" tabindex="-1" style="position:absolute;left:30px;top:0;width:calc(100% - 65px);height:100%;opacity:0;pointer-events:none;" onchange="pickDay(this.value)" />
-            <button class="day-nav-btn" onclick="shiftDay(1)" title="Next day">›</button>
-          </div>
-          <div class="date-row">
-            <input type="date" id="date-from" onchange="applyFilters()" />
-            <span class="date-sep">→</span>
-            <input type="date" id="date-to" onchange="applyFilters()" />
-          </div>
-          <div class="date-warn" id="date-warn">⚠ Dates exceed loaded range — hit Refresh to load</div>
           <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
         </div>
         <input type="text" id="job-search" class="search-input" placeholder="Search job # or name…" oninput="searchQuery=this.value.trim();renderList()" />
@@ -420,7 +449,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
-const SCHED_PIN = '#3a4a5c';
+const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
 const TYPE_INIT = { install:'I', service:'S', excavation:'E' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
