@@ -96,12 +96,19 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .date-row input[type=date] { flex: 1; border: 1px solid #e8e8e8; border-radius: 6px; padding: 6px 8px; font-size: 12px; background: #fafafa; outline: none; color: #1a1a1a; font-family: 'DM Sans', sans-serif; }
 .date-row input[type=date]:focus { border-color: #999; background: #fff; }
 .date-bar {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
   padding: 10px 14px; background: #fff; border-bottom: 1px solid #e8e8e8;
 }
-.date-bar .day-nav { margin-bottom: 0; flex: 0 1 220px; min-width: 160px; }
-.date-bar .date-row { flex: 0 1 220px; min-width: 160px; }
-.date-bar .date-warn { margin-top: 0; flex-basis: 100%; }
+.date-bar-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
+  overflow-x: auto; scrollbar-width: none;
+}
+.date-bar-row::-webkit-scrollbar { display: none; }
+.date-bar .date-row { flex: 0 0 auto; }
+.date-bar .date-row input[type=date] { flex: none; width: 108px; }
+.date-bar .day-nav { margin-bottom: 0; flex: 0 0 auto; }
+.date-bar .day-nav-label { flex: none; width: 64px; }
+.date-bar .date-warn { margin-top: 0; }
 .date-sep { font-size: 11px; color: #ccc; }
 .filter-reset { font-size: 11px; color: #ccc; cursor: pointer; text-decoration: underline; margin-top: 6px; display: inline-block; }
 .filter-reset:hover { color: #888; }
@@ -365,16 +372,18 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
   </div>
 
   <div class="date-bar">
-    <div class="day-nav" style="position:relative">
-      <button class="day-nav-btn" onclick="shiftDay(-1)" title="Previous day">‹</button>
-      <button class="day-nav-label" id="day-nav-label" onclick="openDayPicker()" title="Pick a date">Today</button>
-      <input type="date" id="day-nav-picker" tabindex="-1" style="position:absolute;left:30px;top:0;width:calc(100% - 65px);height:100%;opacity:0;pointer-events:none;" onchange="pickDay(this.value)" />
-      <button class="day-nav-btn" onclick="shiftDay(1)" title="Next day">›</button>
-    </div>
-    <div class="date-row">
-      <input type="date" id="date-from" onchange="applyFilters()" />
-      <span class="date-sep">→</span>
-      <input type="date" id="date-to" onchange="applyFilters()" />
+    <div class="date-bar-row">
+      <div class="date-row">
+        <input type="date" id="date-from" onchange="applyFilters()" />
+        <span class="date-sep">→</span>
+        <input type="date" id="date-to" onchange="applyFilters()" />
+      </div>
+      <div class="day-nav" style="position:relative">
+        <button class="day-nav-btn" onclick="shiftDay(-1)" title="Previous day">‹</button>
+        <button class="day-nav-label" id="day-nav-label" onclick="openDayPicker()" title="Pick a date">Today</button>
+        <input type="date" id="day-nav-picker" tabindex="-1" style="position:absolute;left:30px;top:0;width:calc(100% - 65px);height:100%;opacity:0;pointer-events:none;" onchange="pickDay(this.value)" />
+        <button class="day-nav-btn" onclick="shiftDay(1)" title="Next day">›</button>
+      </div>
     </div>
     <div class="date-warn" id="date-warn">⚠ Dates exceed loaded range — hit Refresh to load</div>
   </div>
