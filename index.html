@@ -205,6 +205,14 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .loading-state { padding: 40px 14px; text-align: center; color: #ccc; font-size: 13px; }
 .search-input { width: 100%; border: 1px solid #e8e8e8; border-radius: 6px; padding: 7px 10px; font-size: 12px; background: #fafafa; outline: none; color: #1a1a1a; font-family: 'DM Sans', sans-serif; display: block; }
 .search-input:focus { border-color: #999; background: #fff; }
+.mobile-list-search { display: none; }
+/* Map filter bar (mobile map tab only) */
+.map-filter-bar { display: none; }
+.map-filter-toggle { display: flex; align-items: center; gap: 7px; width: 100%; padding: 10px 14px; background: #fff; border: none; font-size: 13px; font-weight: 600; color: #1a1a1a; cursor: pointer; font-family: 'DM Sans', sans-serif; -webkit-tap-highlight-color: transparent; border-radius: 10px; }
+.map-filter-toggle .chevron { margin-left: auto; color: #bbb; transition: transform 0.15s; font-size: 11px; }
+.map-filter-toggle.open .chevron { transform: rotate(180deg); }
+.map-filter-panel { display: none; padding: 6px 14px 14px; border-top: 1px solid #f0f0f0; }
+.map-filter-panel.open { display: block; }
 .date-warn { font-size: 11px; color: #8a4a00; background: #fff6ec; border: 1px solid #f0d090; border-radius: 5px; padding: 5px 8px; margin-top: 6px; display: none; }
 .geo-error-text { font-size: 10px; color: #e74c3c; margin-top: 3px; display: flex; align-items: center; gap: 4px; }
 .btn-retry { background: none; border: none; color: #e74c3c; font-size: 13px; cursor: pointer; padding: 0 2px; line-height: 1; }
@@ -280,6 +288,12 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
    ════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
   #filters-collapsible .search-input { display: none; }
+  .mobile-list-search { display: block; margin: 0 14px 8px; }
+  .map-filter-bar {
+    display: block; position: absolute; top: 10px; left: 10px; z-index: 50;
+    background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+    max-width: calc(100% - 20px); overflow: hidden;
+  }
   .brand-row { padding-top: calc(10px + env(safe-area-inset-top)); }
   .brand-name { font-size: 11px; }
   #last-updated { display: none; }
@@ -459,7 +473,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
           Filters/Search <span class="chevron">⌄</span>
         </button>
         <div id="filters-collapsible">
-          <input type="text" id="job-search" class="search-input" placeholder="Search job # or name…" oninput="searchQuery=this.value.trim();renderList()" />
+          <input type="text" id="job-search" class="search-input" placeholder="Search job # or name…" oninput="setSearch(this.value)" />
           <div class="filter-label" style="margin-top:10px">Job Type</div>
           <div class="type-btns">
             <button class="type-btn install on" id="btn-install" onclick="toggleType('install')">Install</button>
@@ -472,6 +486,8 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
           <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
         </div>
       </div>
+
+      <input type="text" id="job-search-mobile" class="search-input mobile-list-search" placeholder="Search job # or name…" oninput="setSearch(this.value)" />
 
       <div class="unsched-add visible" id="unsched-add">
         <div class="modal-handle"></div>
@@ -495,6 +511,26 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
     </div>
 
     <div class="map-container">
+      <div class="map-filter-bar" id="map-filter-bar">
+        <button class="map-filter-toggle" id="map-filter-toggle" onclick="toggleMapFilters()">
+          <svg class="filter-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M1.5 2h13l-4.8 6v4.3l-3.4 1.7V8L1.5 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+          Filters <span class="chevron">⌄</span>
+        </button>
+        <div class="map-filter-panel" id="map-filter-panel">
+          <div class="filter-label">Job Type</div>
+          <div class="type-btns">
+            <button class="type-btn install on" id="map-btn-install" onclick="toggleType('install')">Install</button>
+            <button class="type-btn service on" id="map-btn-service" onclick="toggleType('service')">Service</button>
+            <button class="type-btn excavation on" id="map-btn-excavation" onclick="toggleType('excavation')">Excavation</button>
+            <button class="type-btn unscheduled on" id="map-btn-unscheduled" onclick="toggleType('unscheduled')">Unscheduled</button>
+          </div>
+          <div class="filter-label" style="margin-top:10px">Crew</div>
+          <div class="crew-btns" id="map-crew-btns"></div>
+          <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
+        </div>
+      </div>
       <div id="map"></div>
       <div class="map-overlay" id="map-overlay">
         <div class="spinner"></div>
@@ -536,7 +572,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.06.17.3';
+const APP_VERSION = '2026.06.17.4';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -881,9 +917,23 @@ function toggleType(type) {
 }
 function updateButtons() {
   ['install', 'service', 'excavation', 'unscheduled'].forEach(t => {
-    const btn = document.getElementById('btn-' + t);
-    activeTypes.has(t) ? btn.classList.add('on') : btn.classList.remove('on');
+    ['btn-', 'map-btn-'].forEach(prefix => {
+      const btn = document.getElementById(prefix + t);
+      if (btn) activeTypes.has(t) ? btn.classList.add('on') : btn.classList.remove('on');
+    });
   });
+}
+function toggleMapFilters() {
+  document.getElementById('map-filter-panel').classList.toggle('open');
+  document.getElementById('map-filter-toggle').classList.toggle('open');
+}
+function setSearch(val) {
+  searchQuery = val.trim();
+  const d = document.getElementById('job-search');
+  const m = document.getElementById('job-search-mobile');
+  if (d && d !== document.activeElement) d.value = val;
+  if (m && m !== document.activeElement) m.value = val;
+  renderList();
 }
  
 // ── Load scheduled jobs ───────────────────────────────────────────────────────
@@ -1209,6 +1259,8 @@ function resetFilters() {
   document.getElementById('unsched-add').classList.add('visible');
   searchQuery = '';
   document.getElementById('job-search').value = '';
+  const ms = document.getElementById('job-search-mobile');
+  if (ms) ms.value = '';
   CREW.forEach(n => activeCrews.add(n));
   updateCrewButtons();
   applyFilters();
@@ -1400,13 +1452,14 @@ function crewTextColor(hex) {
   return (0.299*r + 0.587*g + 0.114*b) > 140 ? '#1a1a1a' : '#fff';
 }
 function initCrewButtons() {
-  const container = document.getElementById('crew-btns');
-  container.innerHTML = CREW.map(name => {
-    const cc = CREW_COLORS[name], ct = crewTextColor(cc);
-    return `<button class="crew-btn on" id="crew-btn-${name}" onclick="toggleCrew('${name}')" style="--cc:${cc};--ct:${ct}" title="${name}">
-      ${name}
-    </button>`;
-  }).join('');
+  [['crew-btns', 'crew-btn-'], ['map-crew-btns', 'map-crew-btn-']].forEach(([containerId, prefix]) => {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = CREW.map(name => {
+      const cc = CREW_COLORS[name], ct = crewTextColor(cc);
+      return `<button class="crew-btn on" id="${prefix}${name}" onclick="toggleCrew('${name}')" style="--cc:${cc};--ct:${ct}" title="${name}">${name}</button>`;
+    }).join('');
+  });
 }
 
 function toggleCrew(name) {
@@ -1422,8 +1475,10 @@ function toggleCrew(name) {
 
 function updateCrewButtons() {
   CREW.forEach(name => {
-    const btn = document.getElementById('crew-btn-' + name);
-    if (btn) activeCrews.has(name) ? btn.classList.add('on') : btn.classList.remove('on');
+    ['crew-btn-', 'map-crew-btn-'].forEach(prefix => {
+      const btn = document.getElementById(prefix + name);
+      if (btn) activeCrews.has(name) ? btn.classList.add('on') : btn.classList.remove('on');
+    });
   });
 }
 
