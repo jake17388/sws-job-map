@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <title>SWS Job Map</title>
 <link rel="icon" type="image/png" href="favicon.png" />
 <link rel="manifest" href="manifest.json" />
@@ -31,7 +31,7 @@
   --sidebar-width: 330px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'DM Sans', system-ui, sans-serif; background: #f4f3f0; color: #1a1a1a; height: 100vh; display: flex; flex-direction: column; }
+body { font-family: 'DM Sans', system-ui, sans-serif; background: #f4f3f0; color: #1a1a1a; height: 100vh; display: flex; flex-direction: column; touch-action: manipulation; }
 
 /* ── PIN Screen ── */
 #pin-screen {
@@ -155,6 +155,8 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .zoom-btn { width: 28px; height: 28px; border-radius: 8px; border: 1px solid #e8e8e8; background: #fafafa; color: #1a1a1a; font-size: 17px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; font-family: 'DM Sans', sans-serif; }
 .zoom-btn:active { background: #eee; }
 .zoom-label { font-size: 12px; font-weight: 600; color: #1a1a1a; font-family: 'DM Mono', monospace; min-width: 38px; text-align: center; }
+.zoom-reset-btn { padding: 4px 9px; border-radius: 8px; border: 1px solid #e8e8e8; background: #fafafa; color: #888; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+.zoom-reset-btn:active { background: #eee; }
 .settings-action {
   width: 100%; margin-top: 10px; padding: 10px; border-radius: 8px; border: 1px solid #e8e8e8; background: #fff;
   font-size: 13px; font-weight: 600; color: #1a1a1a; cursor: pointer; font-family: 'DM Sans', sans-serif;
@@ -571,6 +573,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
         <button class="zoom-btn" onclick="adjustZoom(-1)">−</button>
         <span class="zoom-label" id="zoom-label">100%</span>
         <button class="zoom-btn" onclick="adjustZoom(1)">+</button>
+        <button class="zoom-reset-btn" onclick="resetZoom()">Reset</button>
       </div>
     </div>
     <button class="settings-action" id="settings-check-link" onclick="checkForUpdate(true)">Check for updates</button>
@@ -584,7 +587,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.06.17.5';
+const APP_VERSION = '2026.06.17.6';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -774,6 +777,10 @@ function applyTextZoom() {
 }
 function adjustZoom(dir) {
   textZoomIdx = Math.max(0, Math.min(ZOOM_STEPS.length - 1, textZoomIdx + dir));
+  applyTextZoom();
+}
+function resetZoom() {
+  textZoomIdx = 2; // 100%
   applyTextZoom();
 }
 
