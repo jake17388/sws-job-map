@@ -151,6 +151,10 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 }
 .settings-close-btn:active { background: rgba(0,0,0,0.12); }
 .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; color: #888; font-family: 'DM Mono', monospace; }
+.zoom-controls { display: flex; align-items: center; gap: 8px; }
+.zoom-btn { width: 28px; height: 28px; border-radius: 8px; border: 1px solid #e8e8e8; background: #fafafa; color: #1a1a1a; font-size: 17px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; font-family: 'DM Sans', sans-serif; }
+.zoom-btn:active { background: #eee; }
+.zoom-label { font-size: 12px; font-weight: 600; color: #1a1a1a; font-family: 'DM Mono', monospace; min-width: 38px; text-align: center; }
 .settings-action {
   width: 100%; margin-top: 10px; padding: 10px; border-radius: 8px; border: 1px solid #e8e8e8; background: #fff;
   font-size: 13px; font-weight: 600; color: #1a1a1a; cursor: pointer; font-family: 'DM Sans', sans-serif;
@@ -561,6 +565,14 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
       <span>Version</span>
       <span id="settings-version-text"></span>
     </div>
+    <div class="settings-row">
+      <span>Text size</span>
+      <div class="zoom-controls">
+        <button class="zoom-btn" onclick="adjustZoom(-1)">−</button>
+        <span class="zoom-label" id="zoom-label">100%</span>
+        <button class="zoom-btn" onclick="adjustZoom(1)">+</button>
+      </div>
+    </div>
     <button class="settings-action" id="settings-check-link" onclick="checkForUpdate(true)">Check for updates</button>
     <button class="settings-action danger" onclick="closeSettings();signOut()">Sign out</button>
   </div>
@@ -572,7 +584,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.06.17.4';
+const APP_VERSION = '2026.06.17.5';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -746,9 +758,29 @@ function enterApp() {
   requestMap(); // loadAll(), called once the map is ready, also checks for an app update
 }
 
+// ── Text zoom ────────────────────────────────────────────────────────────────
+const ZOOM_STEPS = [80, 90, 100, 110, 120, 130, 140];
+let textZoomIdx = 2; // default 100%
+function initTextZoom() {
+  const saved = localStorage.getItem('sws_text_zoom');
+  if (saved !== null) textZoomIdx = Math.max(0, Math.min(ZOOM_STEPS.length - 1, +saved));
+  applyTextZoom();
+}
+function applyTextZoom() {
+  document.getElementById('job-list').style.zoom = ZOOM_STEPS[textZoomIdx] / 100;
+  const label = document.getElementById('zoom-label');
+  if (label) label.textContent = ZOOM_STEPS[textZoomIdx] + '%';
+  localStorage.setItem('sws_text_zoom', textZoomIdx);
+}
+function adjustZoom(dir) {
+  textZoomIdx = Math.max(0, Math.min(ZOOM_STEPS.length - 1, textZoomIdx + dir));
+  applyTextZoom();
+}
+
 // ── Settings panel ───────────────────────────────────────────────────────────
 function openSettings() {
   document.getElementById('settings-version-text').textContent = APP_VERSION;
+  document.getElementById('zoom-label').textContent = ZOOM_STEPS[textZoomIdx] + '%';
   document.getElementById('settings-backdrop').classList.add('show');
   document.getElementById('settings-panel').classList.add('show');
 }
@@ -885,6 +917,7 @@ function initMap() {
   });
   geocoder = new google.maps.Geocoder();
   initCrewButtons();
+  initTextZoom();
   initHomeMarker();
   const today = new Date();
   document.getElementById('date-from').value = fmt(today);
