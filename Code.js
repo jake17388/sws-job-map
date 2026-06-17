@@ -25,7 +25,8 @@ const MAX_PIN_FAILS = 10;                   // then logins lock for 10 minutes
 const DEFAULT_PINS = {
   '2580': 'Jake Banks',
   '4567': 'Ryan Chapman',
-  '6789': 'Monica',
+  '6789': 'Monica White',
+  '6543': 'Anders Nordstrom',
 };
 
 // To change PINs: paste the new set here, run this once from the Apps Script
@@ -33,6 +34,16 @@ const DEFAULT_PINS = {
 function setPins() {
   PropertiesService.getScriptProperties()
     .setProperty('PINS', JSON.stringify(DEFAULT_PINS));
+}
+
+// Admin helper for onboarding a new user without touching the other live
+// PINs. Takes the PIN/name as arguments rather than a hardcoded value, so
+// it's safe to keep in source — see addPinRunner() below for how to invoke
+// it from the Apps Script editor (which can't pass arguments to Run).
+function addPin(pin, user) {
+  const pins = getPins();
+  pins[String(pin)] = user;
+  PropertiesService.getScriptProperties().setProperty('PINS', JSON.stringify(pins));
 }
 
 function getPins() {
