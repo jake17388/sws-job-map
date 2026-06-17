@@ -203,7 +203,7 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .btn-remove:hover { color: #e74c3c; }
 .no-results { padding: 40px 14px; text-align: center; color: #ccc; font-size: 13px; }
 .loading-state { padding: 40px 14px; text-align: center; color: #ccc; font-size: 13px; }
-.search-input { width: 100%; border: 1px solid #e8e8e8; border-radius: 6px; padding: 7px 10px; font-size: 12px; background: #fafafa; outline: none; color: #1a1a1a; font-family: 'DM Sans', sans-serif; margin-top: 8px; display: block; }
+.search-input { width: 100%; border: 1px solid #e8e8e8; border-radius: 6px; padding: 7px 10px; font-size: 12px; background: #fafafa; outline: none; color: #1a1a1a; font-family: 'DM Sans', sans-serif; display: block; }
 .search-input:focus { border-color: #999; background: #fff; }
 .date-warn { font-size: 11px; color: #8a4a00; background: #fff6ec; border: 1px solid #f0d090; border-radius: 5px; padding: 5px 8px; margin-top: 6px; display: none; }
 .geo-error-text { font-size: 10px; color: #e74c3c; margin-top: 3px; display: flex; align-items: center; gap: 4px; }
@@ -455,10 +455,11 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
           <svg class="filter-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M1.5 2h13l-4.8 6v4.3l-3.4 1.7V8L1.5 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/>
           </svg>
-          Filters <span class="chevron">⌄</span>
+          Filters/Search <span class="chevron">⌄</span>
         </button>
         <div id="filters-collapsible">
-          <div class="filter-label">Job Type</div>
+          <input type="text" id="job-search" class="search-input" placeholder="Search job # or name…" oninput="searchQuery=this.value.trim();renderList()" />
+          <div class="filter-label" style="margin-top:10px">Job Type</div>
           <div class="type-btns">
             <button class="type-btn install on" id="btn-install" onclick="toggleType('install')">Install</button>
             <button class="type-btn service on" id="btn-service" onclick="toggleType('service')">Service</button>
@@ -469,7 +470,6 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
           <div class="crew-btns" id="crew-btns"></div>
           <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
         </div>
-        <input type="text" id="job-search" class="search-input" placeholder="Search job # or name…" oninput="searchQuery=this.value.trim();renderList()" />
       </div>
 
       <div class="unsched-add visible" id="unsched-add">
@@ -535,7 +535,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.06.17.1';
+const APP_VERSION = '2026.06.17.2';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
