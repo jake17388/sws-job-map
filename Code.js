@@ -400,16 +400,24 @@ function scLogin_() {
   var cookies = Object.assign({}, initCookies, scParseCookies_(loginResp));
   if (!cookies['_vts2_session']) { Logger.log('SC: login failed — check credentials'); return null; }
 
-  // Visit the live overview page so Rails writes account context into the session cookie.
-  // Vehicle detail pages require this context to render beyond the 14K app shell.
-  var liveResp = UrlFetchApp.fetch(SC_BASE + '/accounts/' + SC_ACCT + '/live', {
-    headers: { Cookie: scCookieStr_(cookies), 'Accept': 'text/html, application/xhtml+xml' },
-    muteHttpExceptions: true, followRedirects: false,
-  });
-  var liveCookies = scParseCookies_(liveResp);
-  if (liveCookies['_vts2_session']) {
-    cookies['_vts2_session'] = liveCookies['_vts2_session'];
-    Logger.log('SC: session updated after live-page warm-up');
+  // Visit the live overview page (following redirects manually) so Rails writes account context
+  // into the encrypted session cookie. Vehicle detail pages require this to render beyond the shell.
+  var warmUrl = SC_BASE + '/accounts/' + SC_ACCT + '/live';
+  for (var hop = 0; hop < 5; hop++) {
+    var liveResp = UrlFetchApp.fetch(warmUrl, {
+      headers: { Cookie: scCookieStr_(cookies), 'Accept': 'text/html, application/xhtml+xml' },
+      muteHttpExceptions: true, followRedirects: false,
+    });
+    var liveCode = liveResp.getResponseCode();
+    var liveCookies = scParseCookies_(liveResp);
+    if (liveCookies['_vts2_session']) {
+      cookies['_vts2_session'] = liveCookies['_vts2_session'];
+      Logger.log('SC: session updated at warm-up hop ' + hop);
+    }
+    if (liveCode < 300 || liveCode >= 400) break;
+    var loc = liveResp.getAllHeaders()['Location'] || liveResp.getAllHeaders()['location'] || '';
+    if (!loc) break;
+    warmUrl = loc.startsWith('http') ? loc : SC_BASE + loc;
   }
 
   const session = scCookieStr_(cookies);
@@ -469,31 +477,36 @@ function debugSurecamVehiclePage() {
 
   var deviceId = 'e6c84a15-6a26-4f5a-9f27-494dc3a15f9a'; // 2016 FLATBED
 
-  // Step 1: visit the live overview page to warm up account context in the session cookie.
-  // Rails may write current_account_id / live_access into the encrypted session on this visit,
-  // and the vehicle detail page may require that context to render beyond the app shell.
-  var warmOpts = {
-    headers: { Cookie: session, 'Accept': 'text/html, application/xhtml+xml' },
-    muteHttpExceptions: true, followRedirects: false,
-  };
-  var warmResp = UrlFetchApp.fetch(SC_BASE + '/accounts/' + SC_ACCT + '/live', warmOpts);
-  Logger.log('Live overview code: ' + warmResp.getResponseCode() + '  length: ' + warmResp.getContentText().length);
-
-  // Capture updated session cookie from warm-up response, if any.
-  var warmCookies = scParseCookies_(warmResp);
-  if (warmCookies['_vts2_session']) {
-    Logger.log('Session cookie updated after live-page visit ✓');
-    // Rebuild the session string with the refreshed cookie value.
-    var existing = {};
-    session.split('; ').forEach(function(pair) {
-      var eq = pair.indexOf('='); if (eq > 0) existing[pair.slice(0, eq)] = pair.slice(eq + 1);
+  // Step 1: manually follow the live overview redirect chain, capturing session cookies at each hop.
+  // The 302 from /live redirects to the actual page; we need the cookies from that final response.
+  var warmUrl = SC_BASE + '/accounts/' + SC_ACCT + '/live';
+  var maxHops = 5;
+  for (var hop = 0; hop < maxHops; hop++) {
+    var warmResp = UrlFetchApp.fetch(warmUrl, {
+      headers: { Cookie: session, 'Accept': 'text/html, application/xhtml+xml' },
+      muteHttpExceptions: true, followRedirects: false,
     });
-    Object.assign(existing, warmCookies);
-    session = Object.keys(existing).map(function(k) { return k + '=' + existing[k]; }).join('; ');
-    Logger.log('Updated session length: ' + session.length);
-  } else {
-    Logger.log('No session cookie update from live-page visit');
+    var code = warmResp.getResponseCode();
+    var warmLen = warmResp.getContentText().length;
+    var location = warmResp.getAllHeaders()['Location'] || warmResp.getAllHeaders()['location'] || '';
+    Logger.log('Warm hop ' + hop + ': ' + code + '  len=' + warmLen + '  loc=' + location);
+
+    // Merge any updated session cookie.
+    var hopCookies = scParseCookies_(warmResp);
+    if (hopCookies['_vts2_session']) {
+      var existing = {};
+      session.split('; ').forEach(function(pair) {
+        var eq = pair.indexOf('='); if (eq > 0) existing[pair.slice(0, eq)] = pair.slice(eq + 1);
+      });
+      Object.assign(existing, hopCookies);
+      session = Object.keys(existing).map(function(k) { return k + '=' + existing[k]; }).join('; ');
+      Logger.log('  → session updated, now ' + session.length + ' chars');
+    }
+
+    if (code < 300 || code >= 400 || !location) break; // done redirecting
+    warmUrl = location.startsWith('http') ? location : SC_BASE + location;
   }
+  Logger.log('Warm-up complete. Final session length: ' + session.length);
 
   // Step 2: fetch the vehicle detail page with the (possibly updated) session.
   var opts = { headers: { Cookie: session, 'Turbo-Frame': 'live_device', 'Accept': 'text/html, application/xhtml+xml' }, muteHttpExceptions: true, followRedirects: true };
