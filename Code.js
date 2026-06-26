@@ -456,8 +456,8 @@ function debugSurecamVehiclePage() {
 
   var deviceId = 'e6c84a15-6a26-4f5a-9f27-494dc3a15f9a'; // 2016 FLATBED
 
-  var opts = { headers: { Cookie: session, 'Turbo-Frame': 'live_device' }, muteHttpExceptions: true, followRedirects: true };
-  var resp = UrlFetchApp.fetch(SC_BASE + '/accounts/' + SC_ACCT + '/live/' + deviceId, opts);
+  var opts = { headers: { Cookie: session, 'Turbo-Frame': 'live_device', 'Accept': 'text/html, application/xhtml+xml' }, muteHttpExceptions: true, followRedirects: true };
+  var resp = UrlFetchApp.fetch(SC_BASE + '/accounts/' + SC_ACCT + '/live/' + deviceId + '?sort_view=lastConnected', opts);
   var html = resp.getContentText();
   Logger.log('Response code: ' + resp.getResponseCode());
   Logger.log('HTML length: ' + html.length + (html.length < 50000 ? ' ← TOO SHORT: probably got login redirect' : ' ✓'));
@@ -483,12 +483,20 @@ function debugSurecamVehiclePage() {
 }
 
 function scParseVehicle_(deviceId, session) {
-  // Request with Turbo-Frame header to get the populated frame content.
+  // Replicate the exact request Turbo Drive sends when clicking a vehicle in the sidebar:
+  //   URL includes ?sort_view=lastConnected (triggers full server render, not app shell)
+  //   Accept: text/html, application/xhtml+xml  (Turbo's default)
+  //   Turbo-Frame: live_device
   var opts = {
-    headers: { Cookie: session, 'Turbo-Frame': 'live_device' },
+    headers: {
+      Cookie: session,
+      'Turbo-Frame': 'live_device',
+      'Accept': 'text/html, application/xhtml+xml',
+    },
     muteHttpExceptions: true, followRedirects: true,
   };
-  var html = UrlFetchApp.fetch(SC_BASE + '/accounts/' + SC_ACCT + '/live/' + deviceId, opts).getContentText();
+  var url = SC_BASE + '/accounts/' + SC_ACCT + '/live/' + deviceId + '?sort_view=lastConnected';
+  var html = UrlFetchApp.fetch(url, opts).getContentText();
 
   // Vehicle name — class varies; try leading-5 first, then any font-semibold heading
   var name = (
