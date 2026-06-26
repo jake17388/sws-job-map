@@ -397,8 +397,21 @@ function scLogin_() {
     muteHttpExceptions: true, followRedirects: false,
   });
 
-  const cookies = Object.assign({}, initCookies, scParseCookies_(loginResp));
+  var cookies = Object.assign({}, initCookies, scParseCookies_(loginResp));
   if (!cookies['_vts2_session']) { Logger.log('SC: login failed — check credentials'); return null; }
+
+  // Visit the live overview page so Rails writes account context into the session cookie.
+  // Vehicle detail pages require this context to render beyond the 14K app shell.
+  var liveResp = UrlFetchApp.fetch(SC_BASE + '/accounts/' + SC_ACCT + '/live', {
+    headers: { Cookie: scCookieStr_(cookies), 'Accept': 'text/html, application/xhtml+xml' },
+    muteHttpExceptions: true, followRedirects: false,
+  });
+  var liveCookies = scParseCookies_(liveResp);
+  if (liveCookies['_vts2_session']) {
+    cookies['_vts2_session'] = liveCookies['_vts2_session'];
+    Logger.log('SC: session updated after live-page warm-up');
+  }
+
   const session = scCookieStr_(cookies);
   CacheService.getScriptCache().put('sc_session', session, 7000); // ~2hr
   return session;
@@ -456,29 +469,47 @@ function debugSurecamVehiclePage() {
 
   var deviceId = 'e6c84a15-6a26-4f5a-9f27-494dc3a15f9a'; // 2016 FLATBED
 
+  // Step 1: visit the live overview page to warm up account context in the session cookie.
+  // Rails may write current_account_id / live_access into the encrypted session on this visit,
+  // and the vehicle detail page may require that context to render beyond the app shell.
+  var warmOpts = {
+    headers: { Cookie: session, 'Accept': 'text/html, application/xhtml+xml' },
+    muteHttpExceptions: true, followRedirects: false,
+  };
+  var warmResp = UrlFetchApp.fetch(SC_BASE + '/accounts/' + SC_ACCT + '/live', warmOpts);
+  Logger.log('Live overview code: ' + warmResp.getResponseCode() + '  length: ' + warmResp.getContentText().length);
+
+  // Capture updated session cookie from warm-up response, if any.
+  var warmCookies = scParseCookies_(warmResp);
+  if (warmCookies['_vts2_session']) {
+    Logger.log('Session cookie updated after live-page visit ✓');
+    // Rebuild the session string with the refreshed cookie value.
+    var existing = {};
+    session.split('; ').forEach(function(pair) {
+      var eq = pair.indexOf('='); if (eq > 0) existing[pair.slice(0, eq)] = pair.slice(eq + 1);
+    });
+    Object.assign(existing, warmCookies);
+    session = Object.keys(existing).map(function(k) { return k + '=' + existing[k]; }).join('; ');
+    Logger.log('Updated session length: ' + session.length);
+  } else {
+    Logger.log('No session cookie update from live-page visit');
+  }
+
+  // Step 2: fetch the vehicle detail page with the (possibly updated) session.
   var opts = { headers: { Cookie: session, 'Turbo-Frame': 'live_device', 'Accept': 'text/html, application/xhtml+xml' }, muteHttpExceptions: true, followRedirects: true };
   var resp = UrlFetchApp.fetch(SC_BASE + '/accounts/' + SC_ACCT + '/live/' + deviceId + '?sort_view=lastConnected', opts);
   var html = resp.getContentText();
-  Logger.log('Response code: ' + resp.getResponseCode());
-  Logger.log('HTML length: ' + html.length + (html.length < 50000 ? ' ← TOO SHORT: probably got login redirect' : ' ✓'));
-  Logger.log('Has data-serial: '        + /data-serial/.test(html));
-  Logger.log('Has data-status: '        + /data-status/.test(html));
-  Logger.log('Has font-semibold: '      + /font-semibold/.test(html));
-  Logger.log('Has ml-1 truncate: '      + /ml-1 truncate/.test(html));
-  Logger.log('Has login form: '         + /sign_in|new_user_session/.test(html));
-  Logger.log('First 500 chars: ' + html.substring(0, 500).replace(/\s+/g, ' '));
+  Logger.log('Detail response code: ' + resp.getResponseCode());
+  Logger.log('Detail HTML length: ' + html.length + (html.length < 50000 ? ' ← TOO SHORT (still app shell)' : ' ✓ FULL PAGE'));
 
   if (html.length > 50000) {
-    // Attempt parsing with the same regexes as scParseVehicle_
     var name    = ((html.match(/font-semibold leading-5[^"]*">\s*([^<\n]+?)\s*</) || [])[1] ||
                    (html.match(/font-semibold leading-6[^"]*">\s*([^<\n]+?)\s*</) || [])[1] || deviceId).trim();
     var serial  = (html.match(/data-serial="(\d+)"/) || [])[1] || '(none)';
     var status  = (html.match(/data-status="([^"]+)"/) || [])[1] || '(none)';
     var address = (html.match(/class="(?:ml-1 truncate|truncate ml-1)"[^>]*data-tippy-content="([^"]+)"/) || [])[1] || '(none)';
-    Logger.log('→ Parsed name: '    + name);
-    Logger.log('→ Parsed serial: '  + serial);
-    Logger.log('→ Parsed status: '  + status);
-    Logger.log('→ Parsed address: ' + address);
+    Logger.log('→ name: ' + name + '  serial: ' + serial + '  status: ' + status);
+    Logger.log('→ address: ' + address);
   }
 }
 
