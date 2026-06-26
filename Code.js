@@ -448,14 +448,62 @@ function scDiscoverIds_(session) {
   return fallback;
 }
 
+// Run from the Apps Script editor to verify the vehicle page fetch and address parsing.
+function debugSurecamVehiclePage() {
+  var session = scSession_();
+  Logger.log('Session present: ' + !!session + (session ? ' (' + session.length + ' chars)' : ''));
+  if (!session) { Logger.log('→ Run setSurecamCredentials() first'); return; }
+
+  var deviceId = 'e6c84a15-6a26-4f5a-9f27-494dc3a15f9a'; // 2016 FLATBED
+
+  var opts = { headers: { Cookie: session, 'Turbo-Frame': 'live_device' }, muteHttpExceptions: true, followRedirects: true };
+  var resp = UrlFetchApp.fetch(SC_BASE + '/accounts/' + SC_ACCT + '/live/' + deviceId, opts);
+  var html = resp.getContentText();
+  Logger.log('Response code: ' + resp.getResponseCode());
+  Logger.log('HTML length: ' + html.length + (html.length < 50000 ? ' ← TOO SHORT: probably got login redirect' : ' ✓'));
+  Logger.log('Has data-serial: '        + /data-serial/.test(html));
+  Logger.log('Has data-status: '        + /data-status/.test(html));
+  Logger.log('Has font-semibold: '      + /font-semibold/.test(html));
+  Logger.log('Has ml-1 truncate: '      + /ml-1 truncate/.test(html));
+  Logger.log('Has login form: '         + /sign_in|new_user_session/.test(html));
+  Logger.log('First 500 chars: ' + html.substring(0, 500).replace(/\s+/g, ' '));
+
+  if (html.length > 50000) {
+    // Attempt parsing with the same regexes as scParseVehicle_
+    var name    = ((html.match(/font-semibold leading-5[^"]*">\s*([^<\n]+?)\s*</) || [])[1] ||
+                   (html.match(/font-semibold leading-6[^"]*">\s*([^<\n]+?)\s*</) || [])[1] || deviceId).trim();
+    var serial  = (html.match(/data-serial="(\d+)"/) || [])[1] || '(none)';
+    var status  = (html.match(/data-status="([^"]+)"/) || [])[1] || '(none)';
+    var address = (html.match(/class="(?:ml-1 truncate|truncate ml-1)"[^>]*data-tippy-content="([^"]+)"/) || [])[1] || '(none)';
+    Logger.log('→ Parsed name: '    + name);
+    Logger.log('→ Parsed serial: '  + serial);
+    Logger.log('→ Parsed status: '  + status);
+    Logger.log('→ Parsed address: ' + address);
+  }
+}
+
 function scParseVehicle_(deviceId, session) {
-  const html = scFetch_('/accounts/' + SC_ACCT + '/live/' + deviceId, session).getContentText();
-  const name   = ((html.match(/font-semibold leading-6[^"]*">\s*([^<\n]+?)\s*</) || [])[1] || deviceId).trim();
-  const serial = (html.match(/data-serial="(\d+)"/) || [])[1] || '';
-  const status = (html.match(/data-status="([^"]+)"/) || [])[1] || 'unknown';
-  // Address is in the location pin paragraph's tippy tooltip
-  const locPara = html.match(/<p class="py-1 flex items-center">([\s\S]*?)<\/p>/);
-  const address = locPara ? ((locPara[1].match(/data-tippy-content="([^"]+)"/) || [])[1] || '') : '';
+  // Request with Turbo-Frame header to get the populated frame content.
+  var opts = {
+    headers: { Cookie: session, 'Turbo-Frame': 'live_device' },
+    muteHttpExceptions: true, followRedirects: true,
+  };
+  var html = UrlFetchApp.fetch(SC_BASE + '/accounts/' + SC_ACCT + '/live/' + deviceId, opts).getContentText();
+
+  // Vehicle name — class varies; try leading-5 first, then any font-semibold heading
+  var name = (
+    (html.match(/font-semibold leading-5[^"]*">\s*([^<\n]+?)\s*</) || [])[1] ||
+    (html.match(/font-semibold leading-6[^"]*">\s*([^<\n]+?)\s*</) || [])[1] ||
+    (html.match(/class="[^"]*font-semibold[^"]*"[^>]*>\s*([A-Z0-9 ]{3,40})\s*</) || [])[1] ||
+    deviceId
+  ).trim();
+
+  var serial  = (html.match(/data-serial="(\d+)"/) || [])[1] || '';
+  var status  = (html.match(/data-status="([^"]+)"/) || [])[1] || 'unknown';
+  // The current-location address is in the first <span class="ml-1 truncate"> with a tippy,
+  // which sits after the map-pin SVG. Matching generically on data-tippy-content picks up the
+  // status-description tooltip instead (wrong element, same attribute name).
+  var address = (html.match(/class="(?:ml-1 truncate|truncate ml-1)"[^>]*data-tippy-content="([^"]+)"/) || [])[1] || '';
   return { name: name, serial: serial, status: status, address: address, deviceId: deviceId };
 }
 
