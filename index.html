@@ -157,6 +157,8 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .zoom-label { font-size: 12px; font-weight: 600; color: #1a1a1a; font-family: 'DM Mono', monospace; min-width: 38px; text-align: center; }
 .zoom-reset-btn { padding: 4px 9px; border-radius: 8px; border: 1px solid #e8e8e8; background: #fafafa; color: #888; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
 .zoom-reset-btn:active { background: #eee; }
+.truck-toggle-btn { padding: 4px 10px; border-radius: 20px; border: 1px solid #ddd; background: #f5f5f5; color: #888; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+.truck-toggle-btn.on { background: #1e4589; border-color: #1e4589; color: #fff; }
 .settings-action {
   width: 100%; margin-top: 10px; padding: 10px; border-radius: 8px; border: 1px solid #e8e8e8; background: #fff;
   font-size: 13px; font-weight: 600; color: #1a1a1a; cursor: pointer; font-family: 'DM Sans', sans-serif;
@@ -489,6 +491,8 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
           </div>
           <div class="filter-label" style="margin-top:10px">Crew</div>
           <div class="crew-btns" id="crew-btns"></div>
+          <div class="filter-label" style="margin-top:10px">Trucks</div>
+          <div><button class="truck-toggle-btn on" id="btn-trucks" onclick="toggleTrucks()">SureCam Live</button></div>
           <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
         </div>
       </div>
@@ -534,6 +538,8 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
           </div>
           <div class="filter-label" style="margin-top:10px">Crew</div>
           <div class="crew-btns" id="map-crew-btns"></div>
+          <div class="filter-label" style="margin-top:10px">Trucks</div>
+          <div><button class="truck-toggle-btn on" id="map-btn-trucks" onclick="toggleTrucks()">SureCam Live</button></div>
           <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
         </div>
       </div>
@@ -587,7 +593,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.06.17.6';
+const APP_VERSION = '2026.06.17.7';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -904,6 +910,75 @@ function initHomeMarker() {
   marker.addListener('click', () => iw.open(map, marker));
 }
 
+// ── SureCam vehicle markers ───────────────────────────────────────────────────
+let vehicleMarkers = [];
+let showVehicles = true;
+let vehicleInfoWindow = null;
+
+function truckIcon_(status) {
+  const fill = { normal: '#16a34a', idling: '#d97706', park_mode: '#6b7280' }[status] || '#9ca3af';
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 34 34'><circle cx='17' cy='17' r='15' fill='${fill}' stroke='#fff' stroke-width='2.5'/><path d='M8 13h11v9H8zm11 0h5l3 3.5V22h-8z' fill='#fff'/><circle cx='11.5' cy='22' r='2' fill='${fill}' stroke='#fff' stroke-width='1.5'/><circle cx='23.5' cy='22' r='2' fill='${fill}' stroke='#fff' stroke-width='1.5'/></svg>`;
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(34, 34),
+    anchor: new google.maps.Point(17, 17),
+  };
+}
+
+function truckInfoHtml_(v) {
+  const label = { normal: 'Driving', idling: 'Idle', park_mode: 'Parked', unknown: 'Unknown' }[v.status] || v.status;
+  const dot = { normal: '#16a34a', idling: '#d97706', park_mode: '#9ca3af' }[v.status] || '#9ca3af';
+  const updated = v.updatedAt ? new Date(v.updatedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+  return `<div style="font-family:'DM Sans',sans-serif;padding:4px 2px;min-width:190px">
+    <div style="font-weight:700;font-size:13px;margin-bottom:5px">${v.name}</div>
+    <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
+      <span style="width:7px;height:7px;border-radius:50%;background:${dot};display:inline-block;flex-shrink:0"></span>
+      <span style="font-size:12px;color:#444">${label}</span>
+    </div>
+    ${v.address ? `<div style="font-size:11px;color:#777;margin-bottom:4px">${v.address}</div>` : ''}
+    ${updated ? `<div style="font-size:10px;color:#bbb">Updated ${updated}</div>` : ''}
+  </div>`;
+}
+
+function renderVehicleMarkers(vehicles) {
+  vehicleMarkers.forEach(m => m.setMap(null));
+  vehicleMarkers = [];
+  if (!showVehicles || !map) return;
+  vehicles.forEach(v => {
+    if (!v.lat || !v.lng) return;
+    const marker = new google.maps.Marker({
+      position: { lat: v.lat, lng: v.lng },
+      map,
+      icon: truckIcon_(v.status),
+      title: v.name,
+      zIndex: 500,
+    });
+    marker.addListener('click', () => {
+      if (vehicleInfoWindow) vehicleInfoWindow.close();
+      vehicleInfoWindow = new google.maps.InfoWindow({ content: truckInfoHtml_(v) });
+      vehicleInfoWindow.open(map, marker);
+    });
+    vehicleMarkers.push(marker);
+  });
+}
+
+function fetchVehicles() {
+  if (!auth) return;
+  scriptGet('getVehicles')
+    .then(data => { if (data && data.vehicles) renderVehicleMarkers(data.vehicles); })
+    .catch(() => {});
+}
+
+function toggleTrucks() {
+  showVehicles = !showVehicles;
+  ['btn-trucks', 'map-btn-trucks'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('on', showVehicles);
+  });
+  if (showVehicles) fetchVehicles();
+  else { vehicleMarkers.forEach(m => m.setMap(null)); vehicleMarkers = []; }
+}
+
 // ── Map init ──────────────────────────────────────────────────────────────────
 // With a saved session, enterApp() can run before the async Maps script is
 // ready — queue the init until the loader's callback fires
@@ -930,6 +1005,8 @@ function initMap() {
   document.getElementById('date-from').value = fmt(today);
   document.getElementById('date-to').value = fmt(today);
   loadAll();
+  fetchVehicles();
+  setInterval(fetchVehicles, 5 * 60 * 1000);
 }
  
 // On first load, paint last session's data from localStorage immediately,

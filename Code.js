@@ -4,7 +4,7 @@ const INSTALL_CAL_ID = 'summitwestsigns.com_5ehu6it6pfpcg2g9ifpcuv6gd8@group.cal
 const SERVICE_CAL_ID = 'summitwestsigns.com_plamgq5u79k125mvl50ie49fu0@group.calendar.google.com';
 const EXCAV_CAL_ID   = 'c_86ccbe589549562e734ff696a2cebbefc071fe607283d4a7cac31c0c36d1155c@group.calendar.google.com';
 
-const SKIP_KEYWORDS = ['no install','hunter out','johnny out','randy off','jake out','eli out','maintenance','crane service','2018 crane','mother\'s day','memorial day'];
+const SKIP_KEYWORDS = ['no install','hunter out','johnny out','randy off','jake out','eli out','crane service','2018 crane','mother\'s day','memorial day'];
 
 const CREW_NAMES = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
 function normalizeCrew(names) {
@@ -117,6 +117,12 @@ function doGet(e) {
   if (action === 'getJobs' || action === 'getUnsched') {
     if (!verifyToken(e.parameter.token)) return json(UNAUTHORIZED);
     return json(action === 'getJobs' ? getJobs(e) : getUnsched());
+  }
+
+  if (action === 'getVehicles') {
+    if (!verifyToken(e.parameter.token)) return json(UNAUTHORIZED);
+    const cached = CacheService.getScriptCache().get('sc_vehicles');
+    return json({ vehicles: cached ? JSON.parse(cached) : [] });
   }
 
   // The app itself is hosted on GitHub Pages, not here
@@ -329,6 +335,294 @@ function refreshCurrentJobs() {
   sheet.getRange(2, 1, rows.length, 5).setValues(rows);
 }
 
+// ── SureCam Integration ───────────────────────────────────────────────────────
+// Credentials live in Script Properties. Run setSurecamCreds() once from the
+// Apps Script editor with your real email/password, then undo the edit so
+// credentials never land in this public repo.
+const SC_BASE = 'https://install.surecam.com';
+const SC_ACCT = '01127';
+
+function setSurecamCreds() {
+  PropertiesService.getScriptProperties().setProperties({
+    SC_EMAIL: 'YOUR_SURECAM_EMAIL',
+    SC_PASS:  'YOUR_SURECAM_PASSWORD',
+  });
+}
+
+// Run once to store device IDs. Re-run if you add or remove trucks.
+// UUIDs come from data-live-device-details-src attributes on the SureCam live page.
+function setSurecamDeviceIds() {
+  var ids = [
+    '33bb8790-2acc-4ae5-9729-c6435152cf6f', // 2025 Double Bucket
+    'e6c84a15-6a26-4f5a-9f27-494dc3a15f9a', // 2016 FLATBED
+    'cbb1eae7-8270-4ded-ab87-910281b5800d', // 2018 BIG CRANE
+    'e7305eeb-b034-4ca6-bc39-44a34e7baea8', // 2023 SEQUOIA
+    '7e29173d-2aff-4040-a217-77d82213f48a', // 2018 YUKON
+    'e7ee6ba9-1f74-4a76-b318-fae044c8a818', // 2019 SINGLE BUCKET
+    '8b9bbd1f-e903-4354-a79c-738493f69028', // 2023 GMC 3500
+    '0f74b5cc-b7e8-41d6-a5fc-6daa201b138a', // 2023 SINGLE BUCKET
+    '58dc9b5b-ada3-4085-a2f5-08baebe7d97c', // 2022 CRV
+    '5e2c8f15-7b50-404a-baf3-538a2f51f301', // 2022 SMALL CRANE
+    '3812774d-22d0-4a8e-9e35-22e277fa29f5', // 2015 DOUBLE BUCKET
+    'f7c3efd5-e9b7-40ec-80c7-99534c8b3117', // 2005 SILVERADO
+  ];
+  PropertiesService.getScriptProperties().setProperty('SC_DEVICE_IDS', JSON.stringify(ids));
+  Logger.log('SC: stored ' + ids.length + ' device IDs');
+}
+
+function scLogin_() {
+  const props = PropertiesService.getScriptProperties();
+  const email = props.getProperty('SC_EMAIL');
+  const pass  = props.getProperty('SC_PASS');
+  if (!email || !pass) return null; // not configured — skip silently
+
+  // Fetch login page for CSRF token
+  const pageResp = UrlFetchApp.fetch(SC_BASE + '/users/sign_in', {
+    muteHttpExceptions: true, followRedirects: false,
+  });
+  const html = pageResp.getContentText();
+  const csrf = (html.match(/name="authenticity_token"[^>]*value="([^"]+)"/) || [])[1];
+  if (!csrf) { Logger.log('SC: no CSRF on login page — wrong URL or already authenticated'); return null; }
+
+  const initCookies = scParseCookies_(pageResp);
+  const loginResp = UrlFetchApp.fetch(SC_BASE + '/users/sign_in', {
+    method: 'post',
+    payload: 'authenticity_token=' + encodeURIComponent(csrf) +
+             '&user%5Bemail%5D=' + encodeURIComponent(email) +
+             '&user%5Bpassword%5D=' + encodeURIComponent(pass),
+    headers: {
+      Cookie: scCookieStr_(initCookies),
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    muteHttpExceptions: true, followRedirects: false,
+  });
+
+  const cookies = Object.assign({}, initCookies, scParseCookies_(loginResp));
+  if (!cookies['_vts2_session']) { Logger.log('SC: login failed — check credentials'); return null; }
+  const session = scCookieStr_(cookies);
+  CacheService.getScriptCache().put('sc_session', session, 7000); // ~2hr
+  return session;
+}
+
+function scSession_() {
+  return CacheService.getScriptCache().get('sc_session') || scLogin_();
+}
+
+function scParseCookies_(resp) {
+  const raw = resp.getAllHeaders()['Set-Cookie'] || [];
+  const arr = Array.isArray(raw) ? raw : [raw];
+  const out = {};
+  arr.forEach(function(c) {
+    const m = c.match(/^([^=]+)=([^;]*)/);
+    if (m) out[m[1].trim()] = m[2].trim();
+  });
+  return out;
+}
+
+function scCookieStr_(obj) {
+  return Object.keys(obj).map(function(k) { return k + '=' + obj[k]; }).join('; ');
+}
+
+function scFetch_(path, session) {
+  return UrlFetchApp.fetch(SC_BASE + path, {
+    headers: { Cookie: session },
+    muteHttpExceptions: true, followRedirects: true,
+  });
+}
+
+function scDiscoverIds_(session) {
+  // Primary: read IDs stored by setSurecamDeviceIds() in Script Properties.
+  var stored = PropertiesService.getScriptProperties().getProperty('SC_DEVICE_IDS');
+  if (stored) {
+    var ids = JSON.parse(stored);
+    Logger.log('SC: ' + ids.length + ' device IDs from Script Properties');
+    return ids;
+  }
+  // Fallback: attempt live-page scrape (only works if SureCam ever embeds IDs in server HTML).
+  var html = scFetch_('/accounts/' + SC_ACCT + '/live', session).getContentText();
+  var seen = {}, fallback = [];
+  var re = /\/accounts\/\d+\/live\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/g;
+  var m;
+  while ((m = re.exec(html)) !== null) { if (!seen[m[1]]) { seen[m[1]] = true; fallback.push(m[1]); } }
+  if (!fallback.length) Logger.log('SC: no vehicle IDs found — run setSurecamDeviceIds() once');
+  return fallback;
+}
+
+function scParseVehicle_(deviceId, session) {
+  const html = scFetch_('/accounts/' + SC_ACCT + '/live/' + deviceId, session).getContentText();
+  const name   = ((html.match(/font-semibold leading-6[^"]*">\s*([^<\n]+?)\s*</) || [])[1] || deviceId).trim();
+  const serial = (html.match(/data-serial="(\d+)"/) || [])[1] || '';
+  const status = (html.match(/data-status="([^"]+)"/) || [])[1] || 'unknown';
+  // Address is in the location pin paragraph's tippy tooltip
+  const locPara = html.match(/<p class="py-1 flex items-center">([\s\S]*?)<\/p>/);
+  const address = locPara ? ((locPara[1].match(/data-tippy-content="([^"]+)"/) || [])[1] || '') : '';
+  return { name: name, serial: serial, status: status, address: address, deviceId: deviceId };
+}
+
+function scGeocode_(address) {
+  if (!address) return null;
+  const props = PropertiesService.getScriptProperties();
+  let cache = {};
+  try { cache = JSON.parse(props.getProperty('SC_GEO') || '{}'); } catch(e) {}
+  if (cache[address]) return cache[address];
+  try {
+    const r = Maps.newGeocoder().geocode(address);
+    const loc = r.results && r.results[0] && r.results[0].geometry && r.results[0].geometry.location;
+    if (loc) {
+      cache[address] = { lat: loc.lat, lng: loc.lng };
+      const keys = Object.keys(cache);
+      if (keys.length > 300) delete cache[keys[0]]; // keep under control
+      props.setProperty('SC_GEO', JSON.stringify(cache));
+      return cache[address];
+    }
+  } catch(e) { Logger.log('SC geocode error for "' + address + '": ' + e.message); }
+  return null;
+}
+
+// Called by the 5-minute time trigger. Safe to call manually too.
+function cacheSurecamVehicles() {
+  const session = scSession_();
+  if (!session) return; // credentials not yet configured
+
+  try {
+    const ids = scDiscoverIds_(session);
+    if (!ids.length) { Logger.log('SC: no vehicle IDs found on live page'); return; }
+
+    const vehicles = [];
+    ids.forEach(function(id) {
+      try {
+        const v = scParseVehicle_(id, session);
+        const pos = scGeocode_(v.address);
+        vehicles.push({
+          name: v.name, serial: v.serial, status: v.status,
+          address: v.address, deviceId: v.deviceId,
+          lat: pos ? pos.lat : null,
+          lng: pos ? pos.lng : null,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch(e) {
+        Logger.log('SC vehicle error ' + id + ': ' + e.message);
+      }
+    });
+
+    if (vehicles.length) {
+      CacheService.getScriptCache().put('sc_vehicles', JSON.stringify(vehicles), 400);
+    }
+  } catch(e) {
+    Logger.log('cacheSurecamVehicles: ' + e.message);
+    CacheService.getScriptCache().remove('sc_session'); // force re-login next time
+  }
+}
+
+// Run from the Apps Script editor to find which API endpoint returns vehicle/device data.
+function debugSurecamApi() {
+  var session = scSession_();
+  if (!session) { Logger.log('No session'); return; }
+
+  var cookie = scCookieStr_(session);
+
+  function probe(path, acceptHeader) {
+    var opts = {
+      headers: { 'Cookie': cookie },
+      followRedirects: true,
+      muteHttpExceptions: true
+    };
+    if (acceptHeader) opts.headers['Accept'] = acceptHeader;
+    try {
+      var resp = UrlFetchApp.fetch(SC_BASE + path, opts);
+      var code = resp.getResponseCode();
+      var body = resp.getContentText().substring(0, 250).replace(/\s+/g, ' ');
+      Logger.log(path + ' → ' + code + ' | ' + body);
+    } catch(e) {
+      Logger.log(path + ' → ERROR: ' + e.message);
+    }
+  }
+
+  probe('/accounts/' + SC_ACCT + '/vehicles.json');
+  probe('/accounts/' + SC_ACCT + '/vehicle_devices.json');
+  probe('/accounts/' + SC_ACCT + '/devices.json');
+  probe('/accounts/' + SC_ACCT + '/live.json');
+  probe('/accounts/' + SC_ACCT + '/live/vehicles.json');
+  probe('/accounts/' + SC_ACCT + '/live', 'application/json');
+  probe('/api/v1/accounts/' + SC_ACCT + '/vehicles');
+  probe('/api/v1/accounts/' + SC_ACCT + '/devices');
+}
+
+// Run from the Apps Script editor to find device UUIDs via trip detail pages.
+function debugSurecamTrips() {
+  var session = scSession_();
+  if (!session) { Logger.log('No session'); return; }
+
+  // Get trips list and pull out trip UUIDs
+  var tripsHtml = scFetch_('/accounts/' + SC_ACCT + '/trips', session).getContentText();
+  var tripIds = (tripsHtml.match(/href="\/accounts\/\d+\/trips\/([0-9a-f-]{36})"/g) || [])
+    .map(function(m) { return m.match(/([0-9a-f-]{36})/)[1]; });
+  Logger.log('Trip IDs found on trips page: ' + tripIds.length);
+
+  if (!tripIds.length) {
+    // Log a page preview so we can see the structure
+    Logger.log('Trips page preview: ' + tripsHtml.substring(0, 600).replace(/\s+/g, ' '));
+    return;
+  }
+
+  // Fetch the first 3 trip detail pages and look for /live/{device_uuid} links
+  var deviceIds = {};
+  tripIds.slice(0, 6).forEach(function(tid) {
+    var html = scFetch_('/accounts/' + SC_ACCT + '/trips/' + tid, session).getContentText();
+    var matches = html.match(/\/accounts\/\d+\/live\/([0-9a-f-]{36})/g) || [];
+    matches.forEach(function(m) {
+      var uuid = m.match(/([0-9a-f-]{36})/)[1];
+      deviceIds[uuid] = true;
+    });
+  });
+
+  var found = Object.keys(deviceIds);
+  Logger.log('Device UUIDs found via trip pages: ' + found.length + ' — ' + found.join(', '));
+}
+
+// Run from the Apps Script editor to diagnose why vehicle IDs aren't being found.
+function debugSurecam() {
+  var session = scSession_();
+  if (!session) { Logger.log('No session — run setSurecamCreds first'); return; }
+
+  // Main live page
+  var liveResp = scFetch_('/accounts/' + SC_ACCT + '/live', session);
+  var liveHtml = liveResp.getContentText();
+  Logger.log('Live page response code: ' + liveResp.getResponseCode());
+  Logger.log('Live page length: ' + liveHtml.length + ' chars');
+
+  // Turbo frames that might load the vehicle list
+  var frames = liveHtml.match(/<turbo-frame[^>]+src="([^"]+)"/g) || [];
+  Logger.log('Turbo frames with src: ' + (frames.length ? frames.join(' | ') : 'none'));
+
+  // /live/{uuid} links in the page
+  var liveLinks = liveHtml.match(/\/accounts\/\d+\/live\/[0-9a-f-]{36}/g) || [];
+  Logger.log('Vehicle links on live page: ' + liveLinks.length + (liveLinks.length ? ' — ' + liveLinks.slice(0, 3).join(', ') : ''));
+
+  // Health page often has all devices listed
+  var healthHtml = scFetch_('/accounts/' + SC_ACCT + '/health', session).getContentText();
+  var healthLinks = healthHtml.match(/\/accounts\/\d+\/live\/[0-9a-f-]{36}/g) || [];
+  Logger.log('Health page vehicle links: ' + healthLinks.length + (healthLinks.length ? ' — ' + healthLinks.slice(0, 3).join(', ') : ''));
+
+  // Trips page
+  var tripsHtml = scFetch_('/accounts/' + SC_ACCT + '/trips', session).getContentText();
+  var tripsLinks = tripsHtml.match(/\/accounts\/\d+\/live\/[0-9a-f-]{36}/g) || [];
+  Logger.log('Trips page vehicle links: ' + tripsLinks.length + (tripsLinks.length ? ' — ' + tripsLinks.slice(0, 3).join(', ') : ''));
+
+  // First 400 chars of live page (confirms auth worked)
+  Logger.log('Live page start: ' + liveHtml.substring(0, 400).replace(/\s+/g, ' '));
+}
+
+// Run once from the Apps Script editor to set up the 5-minute refresh trigger.
+function setupVehicleTrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter(function(t) { return t.getHandlerFunction() === 'cacheSurecamVehicles'; })
+    .forEach(function(t) { ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('cacheSurecamVehicles').timeBased().everyMinutes(5).create();
+  cacheSurecamVehicles(); // populate immediately
+}
+
+// ── Current Jobs sheet ────────────────────────────────────────────────────────
 // Run once from the Apps Script editor to schedule daily auto-refresh at 6 am.
 function setupDailyTrigger() {
   ScriptApp.getProjectTriggers()
