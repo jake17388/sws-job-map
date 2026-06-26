@@ -397,32 +397,60 @@ function scLogin_() {
     muteHttpExceptions: true, followRedirects: false,
   });
 
-  var cookies = Object.assign({}, initCookies, scParseCookies_(loginResp));
-  if (!cookies['_vts2_session']) { Logger.log('SC: login failed — check credentials'); return null; }
+  var loginCode = loginResp.getResponseCode();
+  var loginLoc  = loginResp.getAllHeaders()['Location'] || loginResp.getAllHeaders()['location'] || '';
+  Logger.log('SC: POST /users/sign_in → ' + loginCode + ' ' + loginLoc);
 
-  // Visit the live overview page (following redirects manually) so Rails writes account context
-  // into the encrypted session cookie. Vehicle detail pages require this to render beyond the shell.
-  var warmUrl = SC_BASE + '/accounts/' + SC_ACCT + '/live';
-  for (var hop = 0; hop < 5; hop++) {
-    var liveResp = UrlFetchApp.fetch(warmUrl, {
-      headers: { Cookie: scCookieStr_(cookies), 'Accept': 'text/html, application/xhtml+xml' },
-      muteHttpExceptions: true, followRedirects: false,
-    });
-    var liveCode = liveResp.getResponseCode();
-    var liveCookies = scParseCookies_(liveResp);
-    if (liveCookies['_vts2_session']) {
-      cookies['_vts2_session'] = liveCookies['_vts2_session'];
-      Logger.log('SC: session updated at warm-up hop ' + hop);
-    }
-    if (liveCode < 300 || liveCode >= 400) break;
-    var loc = liveResp.getAllHeaders()['Location'] || liveResp.getAllHeaders()['location'] || '';
-    if (!loc) break;
-    warmUrl = loc.startsWith('http') ? loc : SC_BASE + loc;
+  // A successful Devise login returns 302 to the app (not back to sign_in or /login).
+  if (loginCode !== 302 || /sign_in|\/login/.test(loginLoc)) {
+    Logger.log('SC: login failed (code=' + loginCode + ' loc=' + loginLoc + ') — check SC_EMAIL/SC_PASS in Script Properties');
+    return null;
   }
+
+  var cookies = Object.assign({}, initCookies, scParseCookies_(loginResp));
+  if (!cookies['_vts2_session']) { Logger.log('SC: login failed — no session cookie'); return null; }
 
   const session = scCookieStr_(cookies);
   CacheService.getScriptCache().put('sc_session', session, 7000); // ~2hr
   return session;
+}
+
+// Run this to diagnose login failures without touching the cached session.
+function debugScLogin() {
+  var props = PropertiesService.getScriptProperties();
+  Logger.log('SC_EMAIL set: ' + !!props.getProperty('SC_EMAIL'));
+  Logger.log('SC_PASS set:  ' + !!props.getProperty('SC_PASS'));
+
+  var pageResp = UrlFetchApp.fetch(SC_BASE + '/users/sign_in', { muteHttpExceptions: true, followRedirects: false });
+  Logger.log('GET /users/sign_in → ' + pageResp.getResponseCode() + '  len=' + pageResp.getContentText().length);
+  var csrf = (pageResp.getContentText().match(/name="authenticity_token"[^>]*value="([^"]+)"/) || [])[1];
+  Logger.log('CSRF found: ' + !!csrf);
+
+  if (!csrf) { Logger.log('→ Login page did not return CSRF — the route may have changed'); return; }
+
+  var initCookies = scParseCookies_(pageResp);
+  var email = props.getProperty('SC_EMAIL') || '';
+  var pass  = props.getProperty('SC_PASS')  || '';
+  var loginResp = UrlFetchApp.fetch(SC_BASE + '/users/sign_in', {
+    method: 'post',
+    payload: 'authenticity_token=' + encodeURIComponent(csrf) +
+             '&user%5Bemail%5D=' + encodeURIComponent(email) +
+             '&user%5Bpassword%5D=' + encodeURIComponent(pass),
+    headers: { Cookie: scCookieStr_(initCookies), 'Content-Type': 'application/x-www-form-urlencoded' },
+    muteHttpExceptions: true, followRedirects: false,
+  });
+  var loginCode = loginResp.getResponseCode();
+  var loginLoc  = loginResp.getAllHeaders()['Location'] || loginResp.getAllHeaders()['location'] || '(none)';
+  var hasSess   = !!scParseCookies_(loginResp)['_vts2_session'];
+  Logger.log('POST /users/sign_in → ' + loginCode + '  Location: ' + loginLoc);
+  Logger.log('_vts2_session in response: ' + hasSess);
+
+  if (loginCode === 302 && !/sign_in|\/login/.test(loginLoc)) {
+    Logger.log('✓ Login SUCCEEDED — redirected to: ' + loginLoc);
+  } else {
+    Logger.log('✗ Login FAILED — redirected back to login page');
+    Logger.log('  → Check SC_EMAIL and SC_PASS values in Script Properties');
+  }
 }
 
 function scSession_() {
