@@ -336,133 +336,92 @@ function refreshCurrentJobs() {
 }
 
 // ── SureCam Integration ───────────────────────────────────────────────────────
-// Credentials live in Script Properties. Run setSurecamCreds() once from the
-// Apps Script editor with your real email/password, then undo the edit so
-// credentials never land in this public repo.
-const SC_BASE = 'https://install.surecam.com';
+// Auth: form POST to /login using SC_EMAIL + SC_PASS from Script Properties.
+// Data: per-device Turbo Frame requests → parse coordinates + status from HTML.
+// Trigger: cacheSurecamVehicles() every 5 min via setupVehicleTrigger().
+const SC_BASE = 'https://view.surecam.com';
 const SC_ACCT = '01127';
+const SC_NAMES = {
+  '33bb8790-2acc-4ae5-9729-c6435152cf6f': '2025 Double Bucket',
+  'e6c84a15-6a26-4f5a-9f27-494dc3a15f9a': '2016 Flatbed',
+  'cbb1eae7-8270-4ded-ab87-910281b5800d': '2018 Big Crane',
+  'e7ee6ba9-1f74-4a76-b318-fae044c8a818': '2019 Single Bucket',
+  '0f74b5cc-b7e8-41d6-a5fc-6daa201b138a': '2023 Single Bucket',
+  '5e2c8f15-7b50-404a-baf3-538a2f51f301': '2022 Small Crane',
+  '3812774d-22d0-4a8e-9e35-22e277fa29f5': '2015 Double Bucket',
+};
 
 function setSurecamCreds() {
-  PropertiesService.getScriptProperties().setProperties({
-    SC_EMAIL: 'YOUR_SURECAM_EMAIL',
-    SC_PASS:  'YOUR_SURECAM_PASSWORD',
-  });
+  var email = 'YOUR_SURECAM_EMAIL'; // ← replace, run once, then undo this edit
+  var pass  = 'YOUR_SURECAM_PASSWORD';
+  if (!email || email === 'YOUR_SURECAM_EMAIL' || !pass || pass === 'YOUR_SURECAM_PASSWORD') {
+    Logger.log('Replace placeholder values before running.');
+    return;
+  }
+  PropertiesService.getScriptProperties().setProperties({ SC_EMAIL: email, SC_PASS: pass });
+  CacheService.getScriptCache().remove('sc_session');
+  Logger.log('Credentials stored. Run debugSurecamVehicle() to test.');
 }
 
-// Run once to store device IDs. Re-run if you add or remove trucks.
-// UUIDs come from data-live-device-details-src attributes on the SureCam live page.
 function setSurecamDeviceIds() {
   var ids = [
     '33bb8790-2acc-4ae5-9729-c6435152cf6f', // 2025 Double Bucket
     'e6c84a15-6a26-4f5a-9f27-494dc3a15f9a', // 2016 FLATBED
     'cbb1eae7-8270-4ded-ab87-910281b5800d', // 2018 BIG CRANE
-    'e7305eeb-b034-4ca6-bc39-44a34e7baea8', // 2023 SEQUOIA
-    '7e29173d-2aff-4040-a217-77d82213f48a', // 2018 YUKON
     'e7ee6ba9-1f74-4a76-b318-fae044c8a818', // 2019 SINGLE BUCKET
-    '8b9bbd1f-e903-4354-a79c-738493f69028', // 2023 GMC 3500
     '0f74b5cc-b7e8-41d6-a5fc-6daa201b138a', // 2023 SINGLE BUCKET
-    '58dc9b5b-ada3-4085-a2f5-08baebe7d97c', // 2022 CRV
     '5e2c8f15-7b50-404a-baf3-538a2f51f301', // 2022 SMALL CRANE
     '3812774d-22d0-4a8e-9e35-22e277fa29f5', // 2015 DOUBLE BUCKET
-    'f7c3efd5-e9b7-40ec-80c7-99534c8b3117', // 2005 SILVERADO
   ];
   PropertiesService.getScriptProperties().setProperty('SC_DEVICE_IDS', JSON.stringify(ids));
-  Logger.log('SC: stored ' + ids.length + ' device IDs');
+  Logger.log('Stored ' + ids.length + ' device IDs.');
 }
 
-function scLogin_() {
-  const props = PropertiesService.getScriptProperties();
-  const email = props.getProperty('SC_EMAIL');
-  const pass  = props.getProperty('SC_PASS');
-  if (!email || !pass) return null; // not configured — skip silently
+// ─── Auth ────────────────────────────────────────────────────────────────────
 
-  // Fetch login page for CSRF token
-  const pageResp = UrlFetchApp.fetch(SC_BASE + '/users/sign_in', {
-    muteHttpExceptions: true, followRedirects: false,
-  });
-  const html = pageResp.getContentText();
-  const csrf = (html.match(/name="authenticity_token"[^>]*value="([^"]+)"/) || [])[1];
-  if (!csrf) { Logger.log('SC: no CSRF on login page — wrong URL or already authenticated'); return null; }
-
-  const initCookies = scParseCookies_(pageResp);
-  const loginResp = UrlFetchApp.fetch(SC_BASE + '/users/sign_in', {
-    method: 'post',
-    payload: 'authenticity_token=' + encodeURIComponent(csrf) +
-             '&user%5Bemail%5D=' + encodeURIComponent(email) +
-             '&user%5Bpassword%5D=' + encodeURIComponent(pass),
-    headers: {
-      Cookie: scCookieStr_(initCookies),
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    muteHttpExceptions: true, followRedirects: false,
-  });
-
-  var loginCode = loginResp.getResponseCode();
-  var loginLoc  = loginResp.getAllHeaders()['Location'] || loginResp.getAllHeaders()['location'] || '';
-  Logger.log('SC: POST /users/sign_in → ' + loginCode + ' ' + loginLoc);
-
-  // A successful Devise login returns 302 to the app (not back to sign_in or /login).
-  if (loginCode !== 302 || /sign_in|\/login/.test(loginLoc)) {
-    Logger.log('SC: login failed (code=' + loginCode + ' loc=' + loginLoc + ') — check SC_EMAIL/SC_PASS in Script Properties');
-    return null;
+// Paste your _vts2_session VALUE here (just the value, not "name=value"),
+// found in Chrome DevTools → Application → Cookies → view.surecam.com → _vts2_session
+// Then run this function once. Good for ~2–4 weeks.
+function setScSession() {
+  var rawValue = 'PASTE_SESSION_VALUE_HERE';
+  if (!rawValue || rawValue === 'PASTE_SESSION_VALUE_HERE') {
+    Logger.log('Paste your _vts2_session cookie value above, then run this function.');
+    return;
   }
-
-  var cookies = Object.assign({}, initCookies, scParseCookies_(loginResp));
-  if (!cookies['_vts2_session']) { Logger.log('SC: login failed — no session cookie'); return null; }
-
-  const session = scCookieStr_(cookies);
-  CacheService.getScriptCache().put('sc_session', session, 7000); // ~2hr
-  return session;
-}
-
-// Run this to diagnose login failures without touching the cached session.
-function debugScLogin() {
-  var props = PropertiesService.getScriptProperties();
-  Logger.log('SC_EMAIL set: ' + !!props.getProperty('SC_EMAIL'));
-  Logger.log('SC_PASS set:  ' + !!props.getProperty('SC_PASS'));
-
-  var pageResp = UrlFetchApp.fetch(SC_BASE + '/users/sign_in', { muteHttpExceptions: true, followRedirects: false });
-  Logger.log('GET /users/sign_in → ' + pageResp.getResponseCode() + '  len=' + pageResp.getContentText().length);
-  var csrf = (pageResp.getContentText().match(/name="authenticity_token"[^>]*value="([^"]+)"/) || [])[1];
-  Logger.log('CSRF found: ' + !!csrf);
-
-  if (!csrf) { Logger.log('→ Login page did not return CSRF — the route may have changed'); return; }
-
-  var initCookies = scParseCookies_(pageResp);
-  var email = props.getProperty('SC_EMAIL') || '';
-  var pass  = props.getProperty('SC_PASS')  || '';
-  var loginResp = UrlFetchApp.fetch(SC_BASE + '/users/sign_in', {
-    method: 'post',
-    payload: 'authenticity_token=' + encodeURIComponent(csrf) +
-             '&user%5Bemail%5D=' + encodeURIComponent(email) +
-             '&user%5Bpassword%5D=' + encodeURIComponent(pass),
-    headers: { Cookie: scCookieStr_(initCookies), 'Content-Type': 'application/x-www-form-urlencoded' },
-    muteHttpExceptions: true, followRedirects: false,
-  });
-  var loginCode = loginResp.getResponseCode();
-  var loginLoc  = loginResp.getAllHeaders()['Location'] || loginResp.getAllHeaders()['location'] || '(none)';
-  var hasSess   = !!scParseCookies_(loginResp)['_vts2_session'];
-  Logger.log('POST /users/sign_in → ' + loginCode + '  Location: ' + loginLoc);
-  Logger.log('_vts2_session in response: ' + hasSess);
-
-  if (loginCode === 302 && !/sign_in|\/login/.test(loginLoc)) {
-    Logger.log('✓ Login SUCCEEDED — redirected to: ' + loginLoc);
-  } else {
-    Logger.log('✗ Login FAILED — redirected back to login page');
-    Logger.log('  → Check SC_EMAIL and SC_PASS values in Script Properties');
-  }
+  PropertiesService.getScriptProperties().setProperty('SC_SESSION', rawValue);
+  CacheService.getScriptCache().put('sc_session', '_vts2_session=' + rawValue, 7000);
+  Logger.log('Session stored. Run debugSurecamVehicle() to verify.');
 }
 
 function scSession_() {
-  return CacheService.getScriptCache().get('sc_session') || scLogin_();
+  var cached = CacheService.getScriptCache().get('sc_session');
+  if (cached) return cached;
+  // Fallback: manually-stored session (from setScSession())
+  var manual = PropertiesService.getScriptProperties().getProperty('SC_SESSION');
+  if (manual) {
+    var session = '_vts2_session=' + manual;
+    CacheService.getScriptCache().put('sc_session', session, 7000);
+    return session;
+  }
+  return null;
 }
 
+// Kept for reference — SureCam uses Auth0 OAuth (browser-redirect flow) so
+// programmatic login from Apps Script cannot complete authentication.
+function scLogin_() {
+  Logger.log('SC: programmatic login not available (Auth0 OAuth requires browser redirect). Run setScSession() instead.');
+  return null;
+}
+
+
+// ─── Cookie helpers ──────────────────────────────────────────────────────────
+
 function scParseCookies_(resp) {
-  const raw = resp.getAllHeaders()['Set-Cookie'] || [];
-  const arr = Array.isArray(raw) ? raw : [raw];
-  const out = {};
+  var raw = resp.getAllHeaders()['Set-Cookie'] || [];
+  var arr = Array.isArray(raw) ? raw : [raw];
+  var out = {};
   arr.forEach(function(c) {
-    const m = c.match(/^([^=]+)=([^;]*)/);
+    var m = c.match(/^([^=]+)=([^;]*)/);
     if (m) out[m[1].trim()] = m[2].trim();
   });
   return out;
@@ -472,273 +431,254 @@ function scCookieStr_(obj) {
   return Object.keys(obj).map(function(k) { return k + '=' + obj[k]; }).join('; ');
 }
 
-function scFetch_(path, session) {
-  return UrlFetchApp.fetch(SC_BASE + path, {
-    headers: { Cookie: session },
-    muteHttpExceptions: true, followRedirects: true,
-  });
+function scExtractSession_(resp) {
+  var c = scParseCookies_(resp);
+  return c['_vts2_session'] ? '_vts2_session=' + c['_vts2_session'] : null;
 }
 
-function scDiscoverIds_(session) {
-  // Primary: read IDs stored by setSurecamDeviceIds() in Script Properties.
-  var stored = PropertiesService.getScriptProperties().getProperty('SC_DEVICE_IDS');
-  if (stored) {
-    var ids = JSON.parse(stored);
-    Logger.log('SC: ' + ids.length + ' device IDs from Script Properties');
-    return ids;
-  }
-  // Fallback: attempt live-page scrape (only works if SureCam ever embeds IDs in server HTML).
-  var html = scFetch_('/accounts/' + SC_ACCT + '/live', session).getContentText();
-  var seen = {}, fallback = [];
-  var re = /\/accounts\/\d+\/live\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/g;
-  var m;
-  while ((m = re.exec(html)) !== null) { if (!seen[m[1]]) { seen[m[1]] = true; fallback.push(m[1]); } }
-  if (!fallback.length) Logger.log('SC: no vehicle IDs found — run setSurecamDeviceIds() once');
-  return fallback;
-}
+// ─── Vehicle data ────────────────────────────────────────────────────────────
 
-// Run from the Apps Script editor to verify the vehicle page fetch and address parsing.
-function debugSurecamVehiclePage() {
+// Called every 5 minutes by the time-based trigger created by setupVehicleTrigger().
+function cacheSurecamVehicles() {
   var session = scSession_();
-  Logger.log('Session present: ' + !!session + (session ? ' (' + session.length + ' chars)' : ''));
-  if (!session) { Logger.log('→ Run setSurecamCredentials() first'); return; }
+  if (!session) { Logger.log('SC: no session'); return; }
 
-  var deviceId = 'e6c84a15-6a26-4f5a-9f27-494dc3a15f9a'; // 2016 FLATBED
+  var ids = [];
+  try { ids = JSON.parse(PropertiesService.getScriptProperties().getProperty('SC_DEVICE_IDS') || '[]'); } catch(e) {}
+  if (!ids.length) { Logger.log('SC: no device IDs — run setSurecamDeviceIds() first'); return; }
 
-  // Step 1: manually follow the live overview redirect chain, capturing session cookies at each hop.
-  // The 302 from /live redirects to the actual page; we need the cookies from that final response.
-  var warmUrl = SC_BASE + '/accounts/' + SC_ACCT + '/live';
-  var maxHops = 5;
-  for (var hop = 0; hop < maxHops; hop++) {
-    var warmResp = UrlFetchApp.fetch(warmUrl, {
-      headers: { Cookie: session, 'Accept': 'text/html, application/xhtml+xml' },
-      muteHttpExceptions: true, followRedirects: false,
-    });
-    var code = warmResp.getResponseCode();
-    var warmLen = warmResp.getContentText().length;
-    var location = warmResp.getAllHeaders()['Location'] || warmResp.getAllHeaders()['location'] || '';
-    Logger.log('Warm hop ' + hop + ': ' + code + '  len=' + warmLen + '  loc=' + location);
+  var vehicles = [];
+  ids.forEach(function(id) {
+    try {
+      var v = scParseVehicle_(id, session);
+      if (v) vehicles.push(v);
+    } catch(e) { Logger.log('SC ' + id.substring(0, 8) + ': ' + e.message); }
+  });
 
-    // Merge any updated session cookie.
-    var hopCookies = scParseCookies_(warmResp);
-    if (hopCookies['_vts2_session']) {
-      var existing = {};
-      session.split('; ').forEach(function(pair) {
-        var eq = pair.indexOf('='); if (eq > 0) existing[pair.slice(0, eq)] = pair.slice(eq + 1);
-      });
-      Object.assign(existing, hopCookies);
-      session = Object.keys(existing).map(function(k) { return k + '=' + existing[k]; }).join('; ');
-      Logger.log('  → session updated, now ' + session.length + ' chars');
-    }
+  vehicles.forEach(function(v) {
+    if (SC_NAMES[v.deviceId]) v.name = SC_NAMES[v.deviceId];
+  });
 
-    if (code < 300 || code >= 400 || !location) break; // done redirecting
-    warmUrl = location.startsWith('http') ? location : SC_BASE + location;
-  }
-  Logger.log('Warm-up complete. Final session length: ' + session.length);
-
-  // Step 2: fetch the vehicle detail page with the (possibly updated) session.
-  var opts = { headers: { Cookie: session, 'Turbo-Frame': 'live_device', 'Accept': 'text/html, application/xhtml+xml' }, muteHttpExceptions: true, followRedirects: true };
-  var resp = UrlFetchApp.fetch(SC_BASE + '/accounts/' + SC_ACCT + '/live/' + deviceId + '?sort_view=lastConnected', opts);
-  var html = resp.getContentText();
-  Logger.log('Detail response code: ' + resp.getResponseCode());
-  Logger.log('Detail HTML length: ' + html.length + (html.length < 50000 ? ' ← TOO SHORT (still app shell)' : ' ✓ FULL PAGE'));
-
-  if (html.length > 50000) {
-    var name    = ((html.match(/font-semibold leading-5[^"]*">\s*([^<\n]+?)\s*</) || [])[1] ||
-                   (html.match(/font-semibold leading-6[^"]*">\s*([^<\n]+?)\s*</) || [])[1] || deviceId).trim();
-    var serial  = (html.match(/data-serial="(\d+)"/) || [])[1] || '(none)';
-    var status  = (html.match(/data-status="([^"]+)"/) || [])[1] || '(none)';
-    var address = (html.match(/class="(?:ml-1 truncate|truncate ml-1)"[^>]*data-tippy-content="([^"]+)"/) || [])[1] || '(none)';
-    Logger.log('→ name: ' + name + '  serial: ' + serial + '  status: ' + status);
-    Logger.log('→ address: ' + address);
+  if (vehicles.length) {
+    CacheService.getScriptCache().put('sc_vehicles', JSON.stringify(vehicles), 400);
+    Logger.log('SC: cached ' + vehicles.length + ' of ' + ids.length + ' vehicles');
+  } else {
+    // Zero results most likely means the session expired — clear it so next run re-logs in.
+    CacheService.getScriptCache().remove('sc_session');
+    Logger.log('SC: zero vehicles returned; session cleared for re-login');
   }
 }
 
+// Fetches the SureCam Turbo Frame for one device and parses its name, status, and position.
 function scParseVehicle_(deviceId, session) {
-  // Replicate the exact request Turbo Drive sends when clicking a vehicle in the sidebar:
-  //   URL includes ?sort_view=lastConnected (triggers full server render, not app shell)
-  //   Accept: text/html, application/xhtml+xml  (Turbo's default)
-  //   Turbo-Frame: live_device
-  var opts = {
-    headers: {
-      Cookie: session,
-      'Turbo-Frame': 'live_device',
-      'Accept': 'text/html, application/xhtml+xml',
-    },
-    muteHttpExceptions: true, followRedirects: true,
-  };
   var url = SC_BASE + '/accounts/' + SC_ACCT + '/live/' + deviceId + '?sort_view=lastConnected';
-  var html = UrlFetchApp.fetch(url, opts).getContentText();
+  var resp = UrlFetchApp.fetch(url, {
+    headers: {
+      'Cookie':       session,
+      'Turbo-Frame':  'live_device',
+      'Accept':       'text/html, application/xhtml+xml',
+      'User-Agent':   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      'Referer':      SC_BASE + '/accounts/' + SC_ACCT + '/live',
+    },
+    muteHttpExceptions: true,
+    followRedirects: true,
+  });
 
-  // Vehicle name — class varies; try leading-5 first, then any font-semibold heading
+  var html = resp.getContentText();
+  // App shell is ~13 KB; the vehicle detail Turbo Frame is much larger.
+  if (html.length < 5000) {
+    Logger.log('SC ' + deviceId.substring(0, 8) + ': got app shell (' + html.length + ' chars) — session may be invalid');
+    return null;
+  }
+
   var name = (
-    (html.match(/font-semibold leading-5[^"]*">\s*([^<\n]+?)\s*</) || [])[1] ||
-    (html.match(/font-semibold leading-6[^"]*">\s*([^<\n]+?)\s*</) || [])[1] ||
+    (html.match(/class="[^"]*font-semibold[^"]*leading-5[^"]*"[^>]*>\s*([^<]+?)\s*</) || [])[1] ||
+    (html.match(/class="[^"]*font-semibold[^"]*leading-6[^"]*"[^>]*>\s*([^<]+?)\s*</) || [])[1] ||
     (html.match(/class="[^"]*font-semibold[^"]*"[^>]*>\s*([A-Z0-9 ]{3,40})\s*</) || [])[1] ||
     deviceId
   ).trim();
 
-  var serial  = (html.match(/data-serial="(\d+)"/) || [])[1] || '';
-  var status  = (html.match(/data-status="([^"]+)"/) || [])[1] || 'unknown';
-  // The current-location address is in the first <span class="ml-1 truncate"> with a tippy,
-  // which sits after the map-pin SVG. Matching generically on data-tippy-content picks up the
-  // status-description tooltip instead (wrong element, same attribute name).
-  var address = (html.match(/class="(?:ml-1 truncate|truncate ml-1)"[^>]*data-tippy-content="([^"]+)"/) || [])[1] || '';
-  return { name: name, serial: serial, status: status, address: address, deviceId: deviceId };
+  var status = (html.match(/data-status="([^"]+)"/) || [])[1] || 'unknown';
+
+  // ── Coordinates ──────────────────────────────────────────────────────────
+  var lat = null, lng = null;
+
+  // 1. Explicit data attributes
+  var dLat = html.match(/data-lat(?:itude)?="(-?\d+\.\d+)"/);
+  var dLng = html.match(/data-l(?:ng|ongitude)?="(-?\d+\.\d+)"/);
+  if (dLat && dLng) { lat = parseFloat(dLat[1]); lng = parseFloat(dLng[1]); }
+
+  // 2. Google Maps link: ?q=LAT,LNG or /maps/@LAT,LNG
+  if (!lat) {
+    var gm = html.match(/maps\.google\.com[^"']*[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/) ||
+             html.match(/\/maps\/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (gm) { lat = parseFloat(gm[1]); lng = parseFloat(gm[2]); }
+  }
+
+  // 3. JSON coordinate pair in JS: [LAT, LNG] with enough decimal places to be real coords
+  if (!lat) {
+    var jc = html.match(/\[(-?\d{2}\.\d{4,}),\s*(-?1[01]\d\.\d{4,})\]/);
+    if (jc) { lat = parseFloat(jc[1]); lng = parseFloat(jc[2]); }
+  }
+
+  // 4. Fallback: geocode the displayed address
+  if (!lat) {
+    var addr = (html.match(/class="(?:ml-1 truncate|truncate ml-1)"[^>]*data-tippy-content="([^"]+)"/) || [])[1] || '';
+    if (addr) {
+      var pos = scGeocode_(addr);
+      if (pos) { lat = pos.lat; lng = pos.lng; }
+    }
+  }
+
+  return { name: name, status: status, deviceId: deviceId, lat: lat, lng: lng, updatedAt: new Date().toISOString() };
 }
 
+// Geocodes an address to {lat, lng}. Results are cached in Script Properties (SC_GEO)
+// so the same address is never geocoded twice.
 function scGeocode_(address) {
   if (!address) return null;
-  const props = PropertiesService.getScriptProperties();
-  let cache = {};
+  var props = PropertiesService.getScriptProperties();
+  var cache = {};
   try { cache = JSON.parse(props.getProperty('SC_GEO') || '{}'); } catch(e) {}
   if (cache[address]) return cache[address];
   try {
-    const r = Maps.newGeocoder().geocode(address);
-    const loc = r.results && r.results[0] && r.results[0].geometry && r.results[0].geometry.location;
+    var r = Maps.newGeocoder().geocode(address);
+    var loc = r.results && r.results[0] && r.results[0].geometry && r.results[0].geometry.location;
     if (loc) {
       cache[address] = { lat: loc.lat, lng: loc.lng };
-      const keys = Object.keys(cache);
-      if (keys.length > 300) delete cache[keys[0]]; // keep under control
+      var keys = Object.keys(cache);
+      if (keys.length > 200) delete cache[keys[0]];
       props.setProperty('SC_GEO', JSON.stringify(cache));
       return cache[address];
     }
-  } catch(e) { Logger.log('SC geocode error for "' + address + '": ' + e.message); }
+  } catch(e) { Logger.log('SC geocode error: ' + e.message); }
   return null;
 }
 
-// Called by the 5-minute time trigger. Safe to call manually too.
-function cacheSurecamVehicles() {
-  const session = scSession_();
-  if (!session) return; // credentials not yet configured
+// ─── Debug ───────────────────────────────────────────────────────────────────
 
+// Run from the Apps Script editor to test the full login → vehicle data flow.
+function debugSurecamVehicle() {
+  CacheService.getScriptCache().remove('sc_session');
+  var session = scSession_();
+  if (!session) { Logger.log('✗ Login failed — check SC_EMAIL/SC_PASS in Script Properties'); return; }
+  Logger.log('✓ Login succeeded: ' + session.substring(0, 50) + '...');
+
+  var deviceId = '8b9bbd1f-e903-4354-a79c-738493f69028'; // 2023 GMC 3500
+  var v = scParseVehicle_(deviceId, session);
+  Logger.log('Vehicle result: ' + JSON.stringify(v));
+
+  if (!v || (!v.lat && !v.lng)) {
+    Logger.log('No coordinates — logging first 2000 chars of detail HTML for inspection:');
+    var url = SC_BASE + '/accounts/' + SC_ACCT + '/live/' + deviceId + '?sort_view=lastConnected';
+    var html = UrlFetchApp.fetch(url, {
+      headers: { 'Cookie': session, 'Turbo-Frame': 'live_device',
+                 'Accept': 'text/html, application/xhtml+xml' },
+      muteHttpExceptions: true, followRedirects: true,
+    }).getContentText();
+    Logger.log(html.substring(0, 2000).replace(/\s+/g, ' '));
+  }
+}
+
+
+// Tests two Auth0 approaches that don't require a browser.
+// Run once and share the full execution log.
+function debugAuth0DirectLogin() {
+  var props = PropertiesService.getScriptProperties();
+  var email = props.getProperty('SC_EMAIL');
+  var pass  = props.getProperty('SC_PASS');
+  var AUTH0  = 'https://surecam.eu.auth0.com';
+  var CLIENT = 'SALqqmUHTaanNjTlJzoqqeWQVTT3nptG';
+
+  // ── Approach A: Resource Owner Password Credentials (ROPG) ────────────────
+  // If enabled, returns access_token + refresh_token directly.
+  Logger.log('=== A: ROPG /oauth/token ===');
   try {
-    const ids = scDiscoverIds_(session);
-    if (!ids.length) { Logger.log('SC: no vehicle IDs found on live page'); return; }
-
-    const vehicles = [];
-    ids.forEach(function(id) {
-      try {
-        const v = scParseVehicle_(id, session);
-        const pos = scGeocode_(v.address);
-        vehicles.push({
-          name: v.name, serial: v.serial, status: v.status,
-          address: v.address, deviceId: v.deviceId,
-          lat: pos ? pos.lat : null,
-          lng: pos ? pos.lng : null,
-          updatedAt: new Date().toISOString(),
-        });
-      } catch(e) {
-        Logger.log('SC vehicle error ' + id + ': ' + e.message);
-      }
+    var ra = UrlFetchApp.fetch(AUTH0 + '/oauth/token', {
+      method: 'post', muteHttpExceptions: true,
+      contentType: 'application/json',
+      payload: JSON.stringify({
+        grant_type: 'password',
+        username: email, password: pass,
+        client_id: CLIENT,
+        scope: 'openid profile email',
+      }),
     });
+    Logger.log('Status: ' + ra.getResponseCode());
+    Logger.log('Body:   ' + ra.getContentText().substring(0, 600));
+  } catch(e) { Logger.log('Error: ' + e.message); }
 
-    if (vehicles.length) {
-      CacheService.getScriptCache().put('sc_vehicles', JSON.stringify(vehicles), 400);
-    }
-  } catch(e) {
-    Logger.log('cacheSurecamVehicles: ' + e.message);
-    CacheService.getScriptCache().remove('sc_session'); // force re-login next time
-  }
+  // ── Approach B: Cross-Origin Authenticate → login_ticket ─────────────────
+  // Returns a login_ticket we use to complete the auth-code flow server-side.
+  Logger.log('=== B: /co/authenticate ===');
+  try {
+    var rb = UrlFetchApp.fetch(AUTH0 + '/co/authenticate', {
+      method: 'post', muteHttpExceptions: true,
+      contentType: 'application/json',
+      payload: JSON.stringify({
+        client_id: CLIENT,
+        username: email, password: pass,
+        realm: 'Username-Password-Authentication',
+        credential_type: 'http://auth0.com/oauth/grant-type/password-realm',
+      }),
+    });
+    Logger.log('Status: ' + rb.getResponseCode());
+    Logger.log('Body:   ' + rb.getContentText().substring(0, 600));
+  } catch(e) { Logger.log('Error: ' + e.message); }
 }
 
-// Run from the Apps Script editor to find which API endpoint returns vehicle/device data.
-function debugSurecamApi() {
-  var session = scSession_();
-  if (!session) { Logger.log('No session'); return; }
-
-  var cookie = scCookieStr_(session);
-
-  function probe(path, acceptHeader) {
-    var opts = {
-      headers: { 'Cookie': cookie },
-      followRedirects: true,
-      muteHttpExceptions: true
-    };
-    if (acceptHeader) opts.headers['Accept'] = acceptHeader;
-    try {
-      var resp = UrlFetchApp.fetch(SC_BASE + path, opts);
-      var code = resp.getResponseCode();
-      var body = resp.getContentText().substring(0, 250).replace(/\s+/g, ' ');
-      Logger.log(path + ' → ' + code + ' | ' + body);
-    } catch(e) {
-      Logger.log(path + ' → ERROR: ' + e.message);
-    }
-  }
-
-  probe('/accounts/' + SC_ACCT + '/vehicles.json');
-  probe('/accounts/' + SC_ACCT + '/vehicle_devices.json');
-  probe('/accounts/' + SC_ACCT + '/devices.json');
-  probe('/accounts/' + SC_ACCT + '/live.json');
-  probe('/accounts/' + SC_ACCT + '/live/vehicles.json');
-  probe('/accounts/' + SC_ACCT + '/live', 'application/json');
-  probe('/api/v1/accounts/' + SC_ACCT + '/vehicles');
-  probe('/api/v1/accounts/' + SC_ACCT + '/devices');
-}
-
-// Run from the Apps Script editor to find device UUIDs via trip detail pages.
-function debugSurecamTrips() {
-  var session = scSession_();
-  if (!session) { Logger.log('No session'); return; }
-
-  // Get trips list and pull out trip UUIDs
-  var tripsHtml = scFetch_('/accounts/' + SC_ACCT + '/trips', session).getContentText();
-  var tripIds = (tripsHtml.match(/href="\/accounts\/\d+\/trips\/([0-9a-f-]{36})"/g) || [])
-    .map(function(m) { return m.match(/([0-9a-f-]{36})/)[1]; });
-  Logger.log('Trip IDs found on trips page: ' + tripIds.length);
-
-  if (!tripIds.length) {
-    // Log a page preview so we can see the structure
-    Logger.log('Trips page preview: ' + tripsHtml.substring(0, 600).replace(/\s+/g, ' '));
-    return;
-  }
-
-  // Fetch the first 3 trip detail pages and look for /live/{device_uuid} links
-  var deviceIds = {};
-  tripIds.slice(0, 6).forEach(function(tid) {
-    var html = scFetch_('/accounts/' + SC_ACCT + '/trips/' + tid, session).getContentText();
-    var matches = html.match(/\/accounts\/\d+\/live\/([0-9a-f-]{36})/g) || [];
-    matches.forEach(function(m) {
-      var uuid = m.match(/([0-9a-f-]{36})/)[1];
-      deviceIds[uuid] = true;
-    });
+// Run once to find SureCam's Auth0 domain — needed to enable auto-login.
+// Share the full execution log output with the developer after running.
+function debugScLoginRedirect() {
+  var ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
+  var getResp = UrlFetchApp.fetch(SC_BASE + '/login', {
+    followRedirects: true, muteHttpExceptions: true,
+    headers: { 'User-Agent': ua, 'Accept': 'text/html,application/xhtml+xml' },
   });
+  var html = getResp.getContentText();
+  var csrf = (html.match(/name="csrf-token"\s+content="([^"]+)"/) || [])[1] || '';
+  var formAction = (html.match(/<form[^>]+action="([^"]+)"/) || [])[1] || '/auth/auth0';
+  if (!formAction.startsWith('http')) formAction = SC_BASE + formAction;
+  Logger.log('Form action: ' + formAction);
+  if (!csrf) { Logger.log('No CSRF token found'); return; }
 
-  var found = Object.keys(deviceIds);
-  Logger.log('Device UUIDs found via trip pages: ' + found.length + ' — ' + found.join(', '));
-}
+  var initCookies = scParseCookies_(getResp);
+  var postResp = UrlFetchApp.fetch(formAction, {
+    method: 'post',
+    payload: 'authenticity_token=' + encodeURIComponent(csrf),
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': ua,
+      'Cookie': scCookieStr_(initCookies),
+    },
+    followRedirects: false,
+    muteHttpExceptions: true,
+  });
+  Logger.log('POST status: ' + postResp.getResponseCode());
+  var allHeaders = postResp.getAllHeaders();
+  var location = allHeaders['Location'] || allHeaders['location'] || '';
+  Logger.log('Redirect URL: ' + location);
 
-// Run from the Apps Script editor to diagnose why vehicle IDs aren't being found.
-function debugSurecam() {
-  var session = scSession_();
-  if (!session) { Logger.log('No session — run setSurecamCreds first'); return; }
+  if (location) {
+    var domainMatch = location.match(/https?:\/\/([^\/\?]+)/);
+    if (domainMatch) Logger.log('Auth0 domain: ' + domainMatch[1]);
+    var clientMatch = location.match(/client_id=([^&]+)/);
+    if (clientMatch) Logger.log('client_id: ' + decodeURIComponent(clientMatch[1]));
+    var audienceMatch = location.match(/audience=([^&]+)/);
+    if (audienceMatch) Logger.log('audience: ' + decodeURIComponent(audienceMatch[1]));
 
-  // Main live page
-  var liveResp = scFetch_('/accounts/' + SC_ACCT + '/live', session);
-  var liveHtml = liveResp.getContentText();
-  Logger.log('Live page response code: ' + liveResp.getResponseCode());
-  Logger.log('Live page length: ' + liveHtml.length + ' chars');
-
-  // Turbo frames that might load the vehicle list
-  var frames = liveHtml.match(/<turbo-frame[^>]+src="([^"]+)"/g) || [];
-  Logger.log('Turbo frames with src: ' + (frames.length ? frames.join(' | ') : 'none'));
-
-  // /live/{uuid} links in the page
-  var liveLinks = liveHtml.match(/\/accounts\/\d+\/live\/[0-9a-f-]{36}/g) || [];
-  Logger.log('Vehicle links on live page: ' + liveLinks.length + (liveLinks.length ? ' — ' + liveLinks.slice(0, 3).join(', ') : ''));
-
-  // Health page often has all devices listed
-  var healthHtml = scFetch_('/accounts/' + SC_ACCT + '/health', session).getContentText();
-  var healthLinks = healthHtml.match(/\/accounts\/\d+\/live\/[0-9a-f-]{36}/g) || [];
-  Logger.log('Health page vehicle links: ' + healthLinks.length + (healthLinks.length ? ' — ' + healthLinks.slice(0, 3).join(', ') : ''));
-
-  // Trips page
-  var tripsHtml = scFetch_('/accounts/' + SC_ACCT + '/trips', session).getContentText();
-  var tripsLinks = tripsHtml.match(/\/accounts\/\d+\/live\/[0-9a-f-]{36}/g) || [];
-  Logger.log('Trips page vehicle links: ' + tripsLinks.length + (tripsLinks.length ? ' — ' + tripsLinks.slice(0, 3).join(', ') : ''));
-
-  // First 400 chars of live page (confirms auth worked)
-  Logger.log('Live page start: ' + liveHtml.substring(0, 400).replace(/\s+/g, ' '));
+    // Test if the Auth0 domain is reachable from Apps Script
+    if (domainMatch) {
+      try {
+        var testResp = UrlFetchApp.fetch('https://' + domainMatch[1] + '/', {
+          muteHttpExceptions: true, followRedirects: false,
+        });
+        Logger.log('Auth0 domain reachable — status ' + testResp.getResponseCode());
+      } catch(e) {
+        Logger.log('Auth0 domain NOT reachable: ' + e.message);
+      }
+    }
+  }
 }
 
 // Run once from the Apps Script editor to set up the 5-minute refresh trigger.

@@ -159,6 +159,19 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .zoom-reset-btn:active { background: #eee; }
 .truck-toggle-btn { padding: 4px 10px; border-radius: 20px; border: 1px solid #ddd; background: #f5f5f5; color: #888; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
 .truck-toggle-btn.on { background: #1e4589; border-color: #1e4589; color: #fff; }
+.vehicles-section { padding: 4px 14px 8px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }
+#vehicles-collapsible { display: none; }
+#vehicles-collapsible.open { display: block; padding-top: 2px; }
+.vehicle-list-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.vehicle-item { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-radius: 6px; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background 0.1s; }
+.vehicle-item:hover { background: #f0f5ff; }
+.vehicle-item:active { background: #e8eeff; }
+.vehicle-item.v-no-pos { opacity: 0.4; cursor: default; pointer-events: none; }
+.v-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.v-info { flex: 1; min-width: 0; }
+.v-name { font-size: 12px; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v-status { font-size: 10px; color: #aaa; font-family: 'DM Mono', monospace; }
+.v-arrow { color: #ccc; font-size: 14px; flex-shrink: 0; line-height: 1; }
 .settings-action {
   width: 100%; margin-top: 10px; padding: 10px; border-radius: 8px; border: 1px solid #e8e8e8; background: #fff;
   font-size: 13px; font-weight: 600; color: #1a1a1a; cursor: pointer; font-family: 'DM Sans', sans-serif;
@@ -491,9 +504,26 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
           </div>
           <div class="filter-label" style="margin-top:10px">Crew</div>
           <div class="crew-btns" id="crew-btns"></div>
-          <div class="filter-label" style="margin-top:10px">Trucks</div>
-          <div><button class="truck-toggle-btn on" id="btn-trucks" onclick="toggleTrucks()">SureCam Live</button></div>
           <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
+        </div>
+      </div>
+
+      <div class="vehicles-section">
+        <button class="filters-toggle" id="vehicles-toggle" onclick="toggleVehiclesPanel()">
+          <svg class="filter-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="5" width="8.5" height="5.5" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M9.5 6.5h2.8L14 8.5v2H9.5V6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+            <circle cx="3.5" cy="10.5" r="1" stroke="currentColor" stroke-width="1.2"/>
+            <circle cx="12" cy="10.5" r="1" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+          Vehicles <span class="chevron">⌄</span>
+        </button>
+        <div id="vehicles-collapsible">
+          <div class="vehicle-list-header">
+            <span class="filter-label" style="margin-bottom:0">Live Trucks</span>
+            <button class="truck-toggle-btn on" id="btn-trucks" onclick="toggleTrucks()">Show/Hide</button>
+          </div>
+          <div id="vehicle-list-items"><div style="font-size:11px;color:#ccc;padding:6px 4px">Loading…</div></div>
         </div>
       </div>
 
@@ -538,9 +568,23 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
           </div>
           <div class="filter-label" style="margin-top:10px">Crew</div>
           <div class="crew-btns" id="map-crew-btns"></div>
-          <div class="filter-label" style="margin-top:10px">Trucks</div>
-          <div><button class="truck-toggle-btn on" id="map-btn-trucks" onclick="toggleTrucks()">SureCam Live</button></div>
           <span class="filter-reset" onclick="resetFilters()">Reset filters</span>
+        </div>
+        <button class="map-filter-toggle" id="map-vehicles-toggle" style="border-top:1px solid #f0f0f0" onclick="toggleMapVehiclesPanel()">
+          <svg class="filter-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="5" width="8.5" height="5.5" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M9.5 6.5h2.8L14 8.5v2H9.5V6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+            <circle cx="3.5" cy="10.5" r="1" stroke="currentColor" stroke-width="1.2"/>
+            <circle cx="12" cy="10.5" r="1" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+          Vehicles <span class="chevron">⌄</span>
+        </button>
+        <div class="map-filter-panel" id="map-vehicles-panel">
+          <div class="vehicle-list-header">
+            <span class="filter-label" style="margin-bottom:0">Live Trucks</span>
+            <button class="truck-toggle-btn on" id="map-btn-trucks" onclick="toggleTrucks()">Show/Hide</button>
+          </div>
+          <div id="map-vehicle-list-items"><div style="font-size:11px;color:#ccc;padding:6px 4px">Loading…</div></div>
         </div>
       </div>
       <div id="map"></div>
@@ -912,6 +956,7 @@ function initHomeMarker() {
 
 // ── SureCam vehicle markers ───────────────────────────────────────────────────
 let vehicleMarkers = [];
+let lastVehicles = [];
 let showVehicles = true;
 let vehicleInfoWindow = null;
 
@@ -943,6 +988,7 @@ function truckInfoHtml_(v) {
 function renderVehicleMarkers(vehicles) {
   vehicleMarkers.forEach(m => m.setMap(null));
   vehicleMarkers = [];
+  vehicles.forEach(v => { v._marker = null; });
   if (!showVehicles || !map) return;
   vehicles.forEach(v => {
     if (!v.lat || !v.lng) return;
@@ -958,6 +1004,7 @@ function renderVehicleMarkers(vehicles) {
       vehicleInfoWindow = new google.maps.InfoWindow({ content: truckInfoHtml_(v) });
       vehicleInfoWindow.open(map, marker);
     });
+    v._marker = marker;
     vehicleMarkers.push(marker);
   });
 }
@@ -965,8 +1012,60 @@ function renderVehicleMarkers(vehicles) {
 function fetchVehicles() {
   if (!auth) return;
   scriptGet('getVehicles')
-    .then(data => { if (data && data.vehicles) renderVehicleMarkers(data.vehicles); })
+    .then(data => {
+      if (data && data.vehicles) {
+        lastVehicles = data.vehicles;
+        renderVehicleMarkers(lastVehicles);
+        renderVehiclesPanel();
+      }
+    })
     .catch(() => {});
+}
+
+function toggleVehiclesPanel() {
+  document.getElementById('vehicles-collapsible').classList.toggle('open');
+  document.getElementById('vehicles-toggle').classList.toggle('open');
+}
+
+function toggleMapVehiclesPanel() {
+  document.getElementById('map-vehicles-panel').classList.toggle('open');
+  document.getElementById('map-vehicles-toggle').classList.toggle('open');
+}
+
+function focusVehicle(idx) {
+  const v = lastVehicles[idx];
+  if (!v || !v.lat || !v.lng) return;
+  if (isMobile()) setMobileView('map');
+  map.panTo({ lat: v.lat, lng: v.lng });
+  map.setZoom(15);
+  if (v._marker) {
+    if (vehicleInfoWindow) vehicleInfoWindow.close();
+    vehicleInfoWindow = new google.maps.InfoWindow({ content: truckInfoHtml_(v) });
+    vehicleInfoWindow.open(map, v._marker);
+  }
+}
+
+function renderVehiclesPanel() {
+  const STATUS_COLORS = { normal: '#16a34a', idling: '#d97706', park_mode: '#6b7280' };
+  const STATUS_LABELS = { normal: 'Driving', idling: 'Idle', park_mode: 'Parked', unknown: 'Unknown' };
+  const html = lastVehicles.length
+    ? lastVehicles.map((v, i) => {
+        const dot = STATUS_COLORS[v.status] || '#9ca3af';
+        const label = STATUS_LABELS[v.status] || (v.status || 'Unknown');
+        const hasPos = !!(v.lat && v.lng);
+        return '<div class="vehicle-item' + (hasPos ? '' : ' v-no-pos') + '"' +
+          (hasPos ? ' onclick="focusVehicle(' + i + ')"' : '') + '>' +
+          '<span class="v-dot" style="background:' + dot + '"></span>' +
+          '<div class="v-info"><div class="v-name">' + v.name + '</div>' +
+          '<div class="v-status">' + label + '</div></div>' +
+          (hasPos ? '<span class="v-arrow">›</span>' : '') +
+          '</div>';
+      }).join('')
+    : '<div style="font-size:11px;color:#ccc;padding:6px 4px">No vehicles loaded yet</div>';
+  ['vehicle-list-items', 'map-vehicle-list-items'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  });
 }
 
 function toggleTrucks() {
