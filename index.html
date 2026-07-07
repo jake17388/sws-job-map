@@ -1105,7 +1105,7 @@ function initMap() {
   document.getElementById('date-to').value = fmt(today);
   loadAll();
   fetchVehicles();
-  setInterval(fetchVehicles, 5 * 60 * 1000);
+  setInterval(fetchVehicles, 90 * 1000);
 }
  
 // On first load, paint last session's data from localStorage immediately,
