@@ -356,7 +356,7 @@ function refreshCurrentJobs() {
 
 // ── SureCam Integration ───────────────────────────────────────────────────────
 // Auth: form POST to /login using SC_EMAIL + SC_PASS from Script Properties.
-// Data: per-device Turbo Frame requests → parse coordinates + status from HTML.
+// Data: one /live sidebar fetch → parse each vehicle's data-* attributes for GPS + status.
 // Trigger: cacheSurecamVehicles() every 1 min via setupVehicleTrigger().
 const SC_BASE = 'https://view.surecam.com';
 const SC_ACCT = '01127';
@@ -523,21 +523,13 @@ function cacheSurecamVehicles() {
   try { ids = JSON.parse(PropertiesService.getScriptProperties().getProperty('SC_DEVICE_IDS') || '[]'); } catch(e) {}
   if (!ids.length) { Logger.log('SC: no device IDs — run setSurecamDeviceIds() first'); return; }
 
-  // Try JSON API endpoints first — they may return true GPS positions.
-  // Falls back to per-vehicle HTML parsing if the API doesn't return usable data.
-  var apiVehicles = scTryJsonApi_(session, ids);
-  var vehicles = [];
-  if (apiVehicles && apiVehicles.length) {
-    Logger.log('SC: using JSON API data for ' + apiVehicles.length + ' vehicles');
-    vehicles = apiVehicles;
-  } else {
-    ids.forEach(function(id) {
-      try {
-        var v = scParseVehicle_(id, session);
-        if (v) vehicles.push(v);
-      } catch(e) { Logger.log('SC ' + id.substring(0, 8) + ': ' + e.message); }
-    });
-  }
+  // The /live sidebar (already fetched above for warm-up) embeds every vehicle's
+  // true GPS position as data-* attributes, keyed by the same device UUID used
+  // in per-device URLs — one page covers the whole fleet, correctly scoped.
+  var idSet = {};
+  ids.forEach(function(id) { idSet[id] = true; });
+  var vehicles = scParseLivePage_(warmHtml).filter(function(v) { return idSet[v.deviceId]; });
+  Logger.log('SC: parsed ' + vehicles.length + ' of ' + ids.length + ' tracked vehicles from live page');
 
   vehicles.forEach(function(v) {
     if (SC_NAMES[v.deviceId]) v.name = SC_NAMES[v.deviceId];
@@ -552,206 +544,30 @@ function cacheSurecamVehicles() {
   }
 }
 
-// Fetches the SureCam live page for one device and parses its name, status, and position.
-// Also refreshes the stored session if the server returns a new Set-Cookie.
-function scParseVehicle_(deviceId, session) {
-  var url = SC_BASE + '/accounts/' + SC_ACCT + '/live/' + deviceId + '?sort_view=lastConnected';
-  var resp = UrlFetchApp.fetch(url, {
-    headers: {
-      'Cookie':       session,
-      'Turbo-Frame':  'live_device',
-      'Accept':       'text/html, application/xhtml+xml',
-      'User-Agent':   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      'Referer':      SC_BASE + '/accounts/' + SC_ACCT + '/live',
-    },
-    muteHttpExceptions: true,
-    followRedirects: true,
+// Parses the SureCam /live sidebar HTML for every vehicle's GPS position in one pass.
+// Each vehicle's tracking data lives entirely on its own "group/vehicle" list-item
+// div: data-live-device-details-src carries the same device UUID used in
+// /live/{deviceId} URLs, alongside data-latitude/data-longitude/data-status/data-label.
+// Reading it straight off that div (rather than scanning the whole page for the
+// first lat/lng-shaped pair) is what keeps each position matched to the right truck.
+function scParseLivePage_(html) {
+  var vehicles = [];
+  var tags = html.match(/<div class="group\/vehicle[^"]*"(?:\s+[a-zA-Z0-9_-]+(?:="[^"]*")?)*>/g) || [];
+  tags.forEach(function(tag) {
+    var deviceId = (tag.match(/data-live-device-details-src="\/accounts\/[^\/"]+\/live\/([0-9a-f-]+)"/) || [])[1];
+    var lat = (tag.match(/data-latitude="(-?\d+\.\d+)"/) || [])[1];
+    var lng = (tag.match(/data-longitude="(-?\d+\.\d+)"/) || [])[1];
+    if (!deviceId || !lat || !lng) return;
+    vehicles.push({
+      deviceId: deviceId,
+      name: (tag.match(/data-label="([^"]*)"/) || [])[1] || deviceId,
+      status: (tag.match(/data-status="([^"]*)"/) || [])[1] || 'unknown',
+      lat: parseFloat(lat),
+      lng: parseFloat(lng),
+      updatedAt: new Date().toISOString(),
+    });
   });
-
-  var html = resp.getContentText();
-  // Unauthenticated response is ~13K (landing page or app shell).
-  // Authenticated vehicle detail page is ~100K+. Require at least 50K.
-  if (html.length < 50000) {
-    Logger.log('SC ' + deviceId.substring(0, 8) + ': session expired or app shell (code=' + resp.getResponseCode() + ', len=' + html.length + ')');
-    return null;
-  }
-
-  // Only capture a refreshed session cookie once we've confirmed we're logged in
-  var newSession = scExtractSession_(resp, session);
-  if (newSession && newSession !== session) {
-    var raw = newSession.replace(/^_vts2_session=/, '');
-    PropertiesService.getScriptProperties().setProperty('SC_SESSION', raw);
-    CacheService.getScriptCache().put('sc_session', newSession, 7000);
-  }
-
-  var name = (
-    (html.match(/class="[^"]*font-semibold[^"]*leading-5[^"]*"[^>]*>\s*([^<]+?)\s*</) || [])[1] ||
-    (html.match(/class="[^"]*font-semibold[^"]*leading-6[^"]*"[^>]*>\s*([^<]+?)\s*</) || [])[1] ||
-    (html.match(/class="[^"]*font-semibold[^"]*"[^>]*>\s*([A-Z0-9 ]{3,40})\s*</) || [])[1] ||
-    deviceId
-  ).trim();
-
-  var status = (html.match(/data-status="([^"]+)"/) || [])[1] || 'unknown';
-
-  // ── Coordinates ──────────────────────────────────────────────────────────
-  var lat = null, lng = null;
-  var coordMethod = 'none';
-
-  // 1. Explicit data attributes (lat/lng or latitude/longitude)
-  var dLat = html.match(/data-lat(?:itude)?="(-?\d+\.\d+)"/);
-  var dLng = html.match(/data-l(?:ng|ongitude)?="(-?\d+\.\d+)"/);
-  if (dLat && dLng) { lat = parseFloat(dLat[1]); lng = parseFloat(dLng[1]); coordMethod = 'data-attr'; }
-
-  // 2. Google Maps link: ?q=LAT,LNG or /maps/@LAT,LNG
-  if (!lat) {
-    var gm = html.match(/maps\.google\.com[^"']*[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/) ||
-             html.match(/\/maps\/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-    if (gm) { lat = parseFloat(gm[1]); lng = parseFloat(gm[2]); coordMethod = 'google-maps-link'; }
-  }
-
-  // 3. JSON key-value: "lat":33.1234,"lng":-111.5678 or "latitude"/"longitude"
-  if (!lat) {
-    var jl = html.match(/"lat(?:itude)?"\s*:\s*(-?\d{2}\.\d{4,})/);
-    var jn = html.match(/"l(?:ng|ongitude)"\s*:\s*(-?1[01]\d\.\d{4,})/);
-    if (jl && jn) { lat = parseFloat(jl[1]); lng = parseFloat(jn[1]); coordMethod = 'json-key'; }
-  }
-
-  // 4. [LAT, LNG] array – Google Maps order (lat first, ~33.x, ~-111.x for AZ)
-  if (!lat) {
-    var jc = html.match(/\[(-?3[0-7]\.\d{4,}),\s*(-?1[01]\d\.\d{4,})\]/);
-    if (jc) { lat = parseFloat(jc[1]); lng = parseFloat(jc[2]); coordMethod = 'array-lat-lng'; }
-  }
-
-  // 5. [LNG, LAT] array – Mapbox order (lng first, ~-111.x, ~33.x for AZ)
-  if (!lat) {
-    var mb = html.match(/\[(-?1[01]\d\.\d{4,}),\s*(-?3[0-7]\.\d{4,})\]/);
-    if (mb) { lat = parseFloat(mb[2]); lng = parseFloat(mb[1]); coordMethod = 'array-lng-lat'; }
-  }
-
-  // 6. Mapbox-style: center:[-111.x, 33.x] or setLngLat([-111.x, 33.x])
-  if (!lat) {
-    var mc = html.match(/(?:center|lngLat|setLngLat)\s*[:(]\s*\[(-?1[01]\d\.\d{4,}),\s*(-?3[0-7]\.\d{4,})\]/);
-    if (mc) { lat = parseFloat(mc[2]); lng = parseFloat(mc[1]); coordMethod = 'mapbox-center'; }
-  }
-
-  // 7. Stimulus/Turbo data-*-value with lat/lng/longitude JSON
-  if (!lat) {
-    var allSv = html.match(/data-[^=\s]+-value\s*=\s*['"](\{[^'"]{10,}\})['"]/g) || [];
-    for (var si = 0; si < allSv.length && !lat; si++) {
-      var m = allSv[si].match(/['"](\{[^'"]+\})['"]/);
-      if (!m) continue;
-      try {
-        var p = JSON.parse(m[1]);
-        if (p.lat && p.lng) { lat = parseFloat(p.lat); lng = parseFloat(p.lng); coordMethod = 'stimulus-lat-lng'; }
-        else if (p.latitude && p.longitude) { lat = parseFloat(p.latitude); lng = parseFloat(p.longitude); coordMethod = 'stimulus-latlong'; }
-      } catch(e) {}
-    }
-  }
-
-  // 8. Bare decimal pairs: any occurrence of ~33.x, ~-111.x close together in text
-  if (!lat) {
-    var bare = html.match(/(-?3[0-7]\.\d{5,})[^\d.-]{0,10}(-?1[01]\d\.\d{5,})/);
-    if (bare) { lat = parseFloat(bare[1]); lng = parseFloat(bare[2]); coordMethod = 'bare-pair'; }
-  }
-
-  // 9. Geocode the displayed address (broadened class / attribute search)
-  if (!lat) {
-    var addr =
-      (html.match(/data-tippy-content="([^"]{10,}(?:Road|Street|Ave|Blvd|Way|Dr|Rd|St)[^"]{0,60})"/) || [])[1] ||
-      (html.match(/class="[^"]*truncate[^"]*"[^>]*>([^<]{10,}(?:Road|Street|Ave|Blvd|Way|Dr|Rd|St)[^<]{0,60})</) || [])[1] ||
-      (html.match(/class="[^"]*address[^"]*"[^>]*>([^<]{10,})</) || [])[1] || '';
-    addr = addr.replace(/&amp;/g, '&').trim();
-    if (addr) {
-      var pos = scGeocode_(addr);
-      if (pos) { lat = pos.lat; lng = pos.lng; coordMethod = 'geocode'; }
-    }
-  }
-
-  Logger.log('SC ' + deviceId.substring(0, 8) + ': coords via ' + coordMethod + ' → ' + lat + ',' + lng);
-  return { name: name, status: status, deviceId: deviceId, lat: lat, lng: lng, updatedAt: new Date().toISOString() };
-}
-
-// Geocodes an address to {lat, lng}. Results are cached in Script Properties (SC_GEO)
-// so the same address is never geocoded twice.
-function scGeocode_(address) {
-  if (!address) return null;
-  var props = PropertiesService.getScriptProperties();
-  var cache = {};
-  try { cache = JSON.parse(props.getProperty('SC_GEO') || '{}'); } catch(e) {}
-  if (cache[address]) return cache[address];
-  try {
-    var r = Maps.newGeocoder().geocode(address);
-    var loc = r.results && r.results[0] && r.results[0].geometry && r.results[0].geometry.location;
-    if (loc) {
-      cache[address] = { lat: loc.lat, lng: loc.lng };
-      var keys = Object.keys(cache);
-      if (keys.length > 200) delete cache[keys[0]];
-      props.setProperty('SC_GEO', JSON.stringify(cache));
-      return cache[address];
-    }
-  } catch(e) { Logger.log('SC geocode error: ' + e.message); }
-  return null;
-}
-
-// Tries SureCam JSON API endpoints that might return GPS coordinates directly,
-// avoiding the geocode fallback. Returns an array of vehicle objects if successful,
-// or null if no usable data was found.
-function scTryJsonApi_(session, ids) {
-  var endpoints = [
-    SC_BASE + '/accounts/' + SC_ACCT + '/vehicles.json',
-    SC_BASE + '/accounts/' + SC_ACCT + '/live.json',
-    SC_BASE + '/api/v1/accounts/' + SC_ACCT + '/vehicles',
-    SC_BASE + '/api/accounts/' + SC_ACCT + '/vehicles',
-  ];
-  var headers = {
-    'Cookie':     session,
-    'Accept':     'application/json, text/javascript, */*',
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-    'Referer':    SC_BASE + '/accounts/' + SC_ACCT + '/live',
-    'X-Requested-With': 'XMLHttpRequest',
-  };
-
-  for (var i = 0; i < endpoints.length; i++) {
-    try {
-      var resp = UrlFetchApp.fetch(endpoints[i], { headers: headers, muteHttpExceptions: true, followRedirects: true });
-      var code = resp.getResponseCode();
-      var body = resp.getContentText();
-      Logger.log('SC API probe ' + endpoints[i].split('/').pop() + ': code=' + code + ' len=' + body.length);
-
-      if (code !== 200) continue;
-      var data;
-      try { data = JSON.parse(body); } catch(e) { continue; }
-
-      // Accept array or { vehicles: [...] } / { data: [...] } wrappers
-      var arr = Array.isArray(data) ? data : (data.vehicles || data.data || null);
-      if (!arr || !arr.length) continue;
-
-      var vehicles = [];
-      var idSet = {};
-      ids.forEach(function(id) { idSet[id] = true; });
-
-      arr.forEach(function(v) {
-        var deviceId = v.device_id || v.deviceId || v.id || '';
-        if (!idSet[deviceId]) return;
-
-        var lat = parseFloat(v.latitude || v.lat || v.gps_latitude || 0);
-        var lng = parseFloat(v.longitude || v.lng || v.gps_longitude || 0);
-        if (!lat || !lng) return;
-
-        var name = v.name || v.vehicle_name || deviceId;
-        if (SC_NAMES[deviceId]) name = SC_NAMES[deviceId];
-        var status = v.status || v.vehicle_status || 'unknown';
-
-        vehicles.push({ name: name, status: status, deviceId: deviceId, lat: lat, lng: lng, updatedAt: new Date().toISOString() });
-        Logger.log('SC API: ' + name + ' lat=' + lat + ' lng=' + lng);
-      });
-
-      if (vehicles.length) return vehicles;
-    } catch(e) {
-      Logger.log('SC API probe error: ' + e.message);
-    }
-  }
-  return null;
+  return vehicles;
 }
 
 // ─── Debug ───────────────────────────────────────────────────────────────────
@@ -798,20 +614,12 @@ function debugSurecamVehicle() {
   if (!session) { Logger.log('✗ Login failed — check SC_EMAIL/SC_PASS in Script Properties'); return; }
   Logger.log('✓ Login succeeded: ' + session.substring(0, 50) + '...');
 
-  var deviceId = '8b9bbd1f-e903-4354-a79c-738493f69028'; // 2023 GMC 3500
-  var v = scParseVehicle_(deviceId, session);
-  Logger.log('Vehicle result: ' + JSON.stringify(v));
-
-  if (!v || (!v.lat && !v.lng)) {
-    Logger.log('No coordinates — logging first 2000 chars of detail HTML for inspection:');
-    var url = SC_BASE + '/accounts/' + SC_ACCT + '/live/' + deviceId + '?sort_view=lastConnected';
-    var html = UrlFetchApp.fetch(url, {
-      headers: { 'Cookie': session, 'Turbo-Frame': 'live_device',
-                 'Accept': 'text/html, application/xhtml+xml' },
-      muteHttpExceptions: true, followRedirects: true,
-    }).getContentText();
-    Logger.log(html.substring(0, 2000).replace(/\s+/g, ' '));
-  }
+  var html = UrlFetchApp.fetch(SC_BASE + '/accounts/' + SC_ACCT + '/live', {
+    headers: { 'Cookie': session, 'Accept': 'text/html, application/xhtml+xml' },
+    muteHttpExceptions: true, followRedirects: true,
+  }).getContentText();
+  var vehicles = scParseLivePage_(html);
+  Logger.log('Parsed ' + vehicles.length + ' vehicles: ' + JSON.stringify(vehicles));
 }
 
 
