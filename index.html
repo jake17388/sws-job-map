@@ -951,14 +951,16 @@ function initHomeMarker() {
       <div style="font-size:11px;color:#888">${HOME_ADDRESS}</div>
     </div>`
   });
-  marker.addListener('click', () => iw.open(map, marker));
+  marker.addListener('click', () => {
+    if (infoWindowOpen) infoWindowOpen.close();
+    iw.open(map, marker); infoWindowOpen = iw;
+  });
 }
 
 // ── SureCam vehicle markers ───────────────────────────────────────────────────
 let vehicleMarkers = [];
 let lastVehicles = [];
 let showVehicles = true;
-let vehicleInfoWindow = null;
 
 function truckIcon_(status) {
   const fill = { normal: '#16a34a', idling: '#d97706', park_mode: '#6b7280' }[status] || '#9ca3af';
@@ -1000,9 +1002,9 @@ function renderVehicleMarkers(vehicles) {
       zIndex: 500,
     });
     marker.addListener('click', () => {
-      if (vehicleInfoWindow) vehicleInfoWindow.close();
-      vehicleInfoWindow = new google.maps.InfoWindow({ content: truckInfoHtml_(v) });
-      vehicleInfoWindow.open(map, marker);
+      if (infoWindowOpen) infoWindowOpen.close();
+      const iw = new google.maps.InfoWindow({ content: truckInfoHtml_(v) });
+      iw.open(map, marker); infoWindowOpen = iw;
     });
     v._marker = marker;
     vehicleMarkers.push(marker);
@@ -1039,9 +1041,9 @@ function focusVehicle(idx) {
   map.panTo({ lat: v.lat, lng: v.lng });
   map.setZoom(15);
   if (v._marker) {
-    if (vehicleInfoWindow) vehicleInfoWindow.close();
-    vehicleInfoWindow = new google.maps.InfoWindow({ content: truckInfoHtml_(v) });
-    vehicleInfoWindow.open(map, v._marker);
+    if (infoWindowOpen) infoWindowOpen.close();
+    const iw = new google.maps.InfoWindow({ content: truckInfoHtml_(v) });
+    iw.open(map, v._marker); infoWindowOpen = iw;
   }
 }
 
