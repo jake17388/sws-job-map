@@ -1,4 +1,4 @@
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcac0fvc0_sIIl7DQ5cHNV_94AxD_Ijobv1_HpcDI/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 const SURECAM_DOMAIN = 'view.surecam.com';
 
 // Watch for any SureCam cookie change
