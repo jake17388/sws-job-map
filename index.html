@@ -1599,32 +1599,70 @@ function addUnscheduled() {
   const title = document.getElementById('u-title').value.trim();
   const addr = document.getElementById('u-addr').value.trim();
   if (!num || !addr) { alert('Job number and address are required.'); return; }
-  const btn = document.getElementById('add-btn');
-  btn.disabled = true; btn.textContent = 'Saving...';
+
+  document.getElementById('u-num').value = '';
+  document.getElementById('u-title').value = '';
+  document.getElementById('u-addr').value = '';
+  document.getElementById('u-num').focus();
+  closeAddModal();
+
+  // Optimistic insert: show the job (and geocode it) immediately, reconcile with the server in the background.
+  const job = {
+    id: 'temp-' + Date.now(), job_num: num, title: title || num, address: addr,
+    added_by: currentUser, added: new Date().toISOString(), _status: 'pending', _marker: null, _iw: null,
+  };
+  unscheduledJobs.push(job);
+  renderList();
+  const hit = geoCacheGet(addr);
+  if (hit) {
+    job._lat = hit.lat; job._lng = hit.lng; job._status = 'ok';
+    buildUnschedMarker(job, 'U' + (unscheduledJobs.indexOf(job) + 1));
+  } else {
+    geocodeAddress(addr, (ok, lat, lng, status) => {
+      if (ok) {
+        job._lat = lat; job._lng = lng; job._status = 'ok';
+        buildUnschedMarker(job, 'U' + (unscheduledJobs.indexOf(job) + 1));
+      } else { job._status = 'error'; job._geoError = status; }
+      scheduleRender();
+    });
+  }
+
   scriptPost({ action: 'addUnsched', job_num: num, title: title || num, address: addr, added_by: currentUser })
-    .then(() => {
-      document.getElementById('u-num').value = '';
-      document.getElementById('u-title').value = '';
-      document.getElementById('u-addr').value = '';
-      btn.disabled = false; btn.textContent = '+ Add to map';
-      document.getElementById('u-num').focus();
-      closeAddModal();
-      loadUnscheduled();
+    .then(data => {
+      if (data && data.success === false) throw new Error(data.error || 'Save failed');
+      job.id = String(data.id);
+      writeCache(UNSCHED_CACHE_KEY, { jobs: unscheduledJobs });
     })
-    .catch(() => { btn.disabled = false; btn.textContent = '+ Add to map'; alert('Failed to save. Try again.'); });
+    .catch(err => {
+      if (job._marker) job._marker.setMap(null);
+      unscheduledJobs = unscheduledJobs.filter(j => j !== job);
+      renderList();
+      alert('Failed to save. Try again.\n' + (err && err.message ? err.message : ''));
+    });
 }
- 
+
 function removeUnsched(id) {
+  const job = unscheduledJobs.find(j => String(j.id) === String(id));
+  if (!job) return;
+  const idx = unscheduledJobs.indexOf(job);
+
+  // Optimistic removal: hide it immediately, roll back if the server call fails.
+  if (job._marker) job._marker.setMap(null);
+  unscheduledJobs = unscheduledJobs.filter(j => j !== job);
+  writeCache(UNSCHED_CACHE_KEY, { jobs: unscheduledJobs });
+  renderList();
+
   scriptPost({ action: 'removeUnsched', id })
     .then(data => {
       if (data && data.success === false) throw new Error(data.error || 'Row not found');
-      const job = unscheduledJobs.find(j => String(j.id) === String(id));
-      if (job && job._marker) job._marker.setMap(null);
-      unscheduledJobs = unscheduledJobs.filter(j => String(j.id) !== String(id));
+    })
+    .catch(err => {
+      unscheduledJobs.splice(idx, 0, job);
+      if (job._lat != null && job._lng != null) buildUnschedMarker(job, 'U' + (unscheduledJobs.indexOf(job) + 1));
       writeCache(UNSCHED_CACHE_KEY, { jobs: unscheduledJobs });
       renderList();
-    })
-    .catch(err => alert('Failed to remove. Try again.\n' + (err && err.message ? err.message : '')));
+      alert('Failed to remove. Try again.\n' + (err && err.message ? err.message : ''));
+    });
 }
  
 function focusUnsched(id) {
