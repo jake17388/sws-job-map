@@ -1620,7 +1620,9 @@ function removeUnsched(id) {
       if (data && data.success === false) throw new Error(data.error || 'Row not found');
       const job = unscheduledJobs.find(j => String(j.id) === String(id));
       if (job && job._marker) job._marker.setMap(null);
-      loadUnscheduled();
+      unscheduledJobs = unscheduledJobs.filter(j => String(j.id) !== String(id));
+      writeCache(UNSCHED_CACHE_KEY, { jobs: unscheduledJobs });
+      renderList();
     })
     .catch(err => alert('Failed to remove. Try again.\n' + (err && err.message ? err.message : '')));
 }
