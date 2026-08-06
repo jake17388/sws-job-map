@@ -155,6 +155,11 @@ function doPost(e) {
   if (data.action === 'login') {
     return json(checkPin(data.pin));
   }
+  // The Chrome extension has no PIN session — it authenticates with its own
+  // shared secret, so this must run before the token gate below.
+  if (data.action === 'updateScSession') {
+    return json(updateScSessionFromExtension(data));
+  }
 
   const user = verifyToken(data.token);
   if (!user) return json(UNAUTHORIZED);
@@ -418,6 +423,30 @@ function setScSession() {
   PropertiesService.getScriptProperties().setProperty('SC_SESSION', cookieString);
   CacheService.getScriptCache().put('sc_session', cookieString, 7000);
   Logger.log('Session stored (' + cookieString.substring(0, 60) + '...). Trigger will test it within 5 min.');
+}
+
+// Called by the Chrome extension — verifies the shared secret then stores the cookie.
+function updateScSessionFromExtension(data) {
+  var secret = PropertiesService.getScriptProperties().getProperty('EXTENSION_SECRET');
+  if (!secret || data.secret !== secret) return { success: false, error: 'invalid secret' };
+  if (!data.cookieString || !data.cookieString.includes('_vts2_session')) {
+    return { success: false, error: 'no _vts2_session in cookie string' };
+  }
+  PropertiesService.getScriptProperties().setProperty('SC_SESSION', data.cookieString);
+  CacheService.getScriptCache().put('sc_session', data.cookieString, 7000);
+  Logger.log('SC: session updated automatically by Chrome extension');
+  return { success: true };
+}
+
+// Run this once from the Apps Script editor to see the secret to paste into the extension popup.
+function getExtensionSecret() {
+  var props = PropertiesService.getScriptProperties();
+  var secret = props.getProperty('EXTENSION_SECRET');
+  if (!secret) {
+    secret = Utilities.getUuid();
+    props.setProperty('EXTENSION_SECRET', secret);
+  }
+  Logger.log('Extension secret: ' + secret);
 }
 
 function scSession_() {
