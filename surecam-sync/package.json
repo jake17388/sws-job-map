@@ -1,0 +1,11 @@
+{
+  "name": "surecam-sync",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node sync.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.47.0"
+  }
+}
