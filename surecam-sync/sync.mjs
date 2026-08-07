@@ -77,6 +77,22 @@ try {
   }
   const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
+  // Diagnostic: replay the same cookie over plain HTTP (no browser), exactly as
+  // Apps Script does. If this returns the small shell while the browser got
+  // 200KB+, the session needs browser context (JS/bot check) rather than just
+  // the cookie — which would explain the backend's persistent warm-up failures.
+  const probe = await fetch(LIVE_URL, {
+    headers: {
+      'Cookie': cookieString,
+      'Accept': 'text/html, application/xhtml+xml',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    },
+    redirect: 'follow',
+  });
+  const probeBody = await probe.text();
+  console.log(`Plain-HTTP probe: status=${probe.status} bytes=${probeBody.length} url=${probe.url}`);
+  console.log(`Probe verdict: ${probeBody.length >= MIN_AUTHED_BYTES ? 'cookie works without a browser' : 'cookie does NOT work without a browser'}`);
+
   const resp = await fetch(SCRIPT_URL, {
     method: 'POST',
     body: JSON.stringify({ action: 'updateScSession', secret: SWS_EXTENSION_SECRET, cookieString }),
