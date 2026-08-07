@@ -30,9 +30,11 @@ try {
   await page.click('button[type="submit"]');
   await page.waitForURL(/auth0\.com/, { timeout: 20000 });
 
-  await page.fill('#1-email', SURECAM_EMAIL);
-  await page.fill('#1-password', SURECAM_PASSWORD);
-  await page.click('#1-submit');
+  // Auth0 ids look like "1-email"; a CSS id selector can't start with a digit,
+  // so select by name instead (also stabler across Auth0 template changes).
+  await page.fill('input[name="email"]', SURECAM_EMAIL);
+  await page.fill('input[name="password"]', SURECAM_PASSWORD);
+  await page.click('button[name="submit"]');
 
   // Wait only for the callback to land us back on SureCam — don't assume which
   // page it redirects to, since that target has changed before.
