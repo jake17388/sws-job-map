@@ -8,6 +8,8 @@ import { chromium } from 'playwright';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 const LIVE_URL = 'https://view.surecam.com/accounts/01127/live';
 const SHOT_PATH = 'failure.png';
+// Matches the backend's own auth check in cacheSurecamVehicles().
+const MIN_AUTHED_BYTES = 50000;
 
 // Name the specific missing variables — a generic "something is missing" tells
 // you nothing when three secrets have to line up.
@@ -36,6 +38,16 @@ try {
   await page.fill('input[name="password"]', SURECAM_PASSWORD);
   await page.click('button[name="submit"]');
 
+  // Auth0 reports bad credentials/MFA inline without navigating, which would
+  // otherwise surface later as a confusing "not authenticated" size check.
+  const authError = await page
+    .waitForSelector('.auth0-global-message-error, [class*="error-message"]', { timeout: 8000 })
+    .then(el => el.textContent())
+    .catch(() => null);
+  if (authError && authError.trim()) {
+    throw new Error('Auth0 rejected the login: ' + authError.trim());
+  }
+
   // Wait only for the callback to land us back on SureCam — don't assume which
   // page it redirects to, since that target has changed before.
   await page.waitForURL(/view\.surecam\.com/, { timeout: 30000 });
@@ -44,6 +56,20 @@ try {
   // session cookie here, and the backend's warm-up check requires it.
   await page.goto(LIVE_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+
+  // Verify we're ACTUALLY logged in before shipping anything. A _vts2_session
+  // cookie proves nothing — Rails issues one to anonymous visitors too, so a
+  // failed login still yields a cookie and would silently push a dead session.
+  // Use the same signal the backend uses: the logged-out shell is ~13KB, the
+  // real live page is 150KB+.
+  const html = await page.content();
+  console.log(`Live page: ${page.url()} (${html.length} bytes)`);
+  if (html.length < MIN_AUTHED_BYTES) {
+    throw new Error(
+      `Not authenticated — live page was only ${html.length} bytes (need >${MIN_AUTHED_BYTES}). ` +
+      'Login likely failed; check SURECAM_EMAIL/SURECAM_PASSWORD, or SureCam may now require MFA.'
+    );
+  }
 
   const cookies = await context.cookies('https://view.surecam.com');
   if (!cookies.some(c => c.name === '_vts2_session')) {
