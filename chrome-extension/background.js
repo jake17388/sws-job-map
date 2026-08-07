@@ -12,7 +12,11 @@ chrome.cookies.onChanged.addListener((changeInfo) => {
 
 // Throws on any failure so callers (the popup's manual sync button) see the real reason.
 async function syncCookies() {
-  const cookies = await chrome.cookies.getAll({ domain: SURECAM_DOMAIN });
+  // Query by URL, not domain: SureCam sets _vts2_session on the parent
+  // ".surecam.com" domain, and the domain filter only matches a cookie's
+  // domain or its subdomains — it misses parent-domain cookies entirely.
+  // The URL filter replicates real request-time cookie scoping instead.
+  const cookies = await chrome.cookies.getAll({ url: `https://${SURECAM_DOMAIN}/` });
   if (!cookies.length || !cookies.some(c => c.name === '_vts2_session')) {
     throw new Error('Not logged into SureCam — open view.surecam.com, sign in, then sync again.');
   }
