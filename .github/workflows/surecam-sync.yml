@@ -30,3 +30,13 @@ jobs:
           SURECAM_PASSWORD: ${{ secrets.SURECAM_PASSWORD }}
           SWS_EXTENSION_SECRET: ${{ secrets.SWS_EXTENSION_SECRET }}
         run: node sync.mjs
+
+      # The login flow is the fragile part; a screenshot of where it stopped
+      # usually identifies the cause without another debug round-trip.
+      - name: Upload failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-screenshot
+          path: surecam-sync/failure.png
+          if-no-files-found: ignore

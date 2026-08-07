@@ -6,12 +6,19 @@
 import { chromium } from 'playwright';
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
+const LIVE_URL = 'https://view.surecam.com/accounts/01127/live';
+const SHOT_PATH = 'failure.png';
 
-const { SURECAM_EMAIL, SURECAM_PASSWORD, SWS_EXTENSION_SECRET } = process.env;
-if (!SURECAM_EMAIL || !SURECAM_PASSWORD || !SWS_EXTENSION_SECRET) {
-  console.error('Missing SURECAM_EMAIL, SURECAM_PASSWORD, or SWS_EXTENSION_SECRET env vars.');
+// Name the specific missing variables — a generic "something is missing" tells
+// you nothing when three secrets have to line up.
+const REQUIRED = ['SURECAM_EMAIL', 'SURECAM_PASSWORD', 'SWS_EXTENSION_SECRET'];
+const missing = REQUIRED.filter(k => !process.env[k]);
+if (missing.length) {
+  console.error('Missing required secret(s): ' + missing.join(', '));
+  console.error('Add them under repo Settings → Secrets and variables → Actions.');
   process.exit(1);
 }
+const { SURECAM_EMAIL, SURECAM_PASSWORD, SWS_EXTENSION_SECRET } = process.env;
 
 const browser = await chromium.launch();
 const context = await browser.newContext();
@@ -19,22 +26,26 @@ const page = await context.newPage();
 
 try {
   await page.goto('https://view.surecam.com/login', { waitUntil: 'domcontentloaded' });
-  await page.click('button[type="submit"]'); // submits the CSRF-token form that kicks off the Auth0 redirect
-  await page.waitForURL(/auth0\.com/, { timeout: 15000 });
+  // /login is just a CSRF-token form whose submit kicks off the Auth0 redirect.
+  await page.click('button[type="submit"]');
+  await page.waitForURL(/auth0\.com/, { timeout: 20000 });
 
   await page.fill('#1-email', SURECAM_EMAIL);
   await page.fill('#1-password', SURECAM_PASSWORD);
   await page.click('#1-submit');
 
-  // Auth0 redirects to /auth/auth0/callback, which Rails exchanges server-side
-  // before bouncing to the live map — wait for that final landing page so the
-  // session cookie carries full account context, not just a bare login.
-  await page.waitForURL(/view\.surecam\.com\/accounts\//, { timeout: 30000 });
+  // Wait only for the callback to land us back on SureCam — don't assume which
+  // page it redirects to, since that target has changed before.
+  await page.waitForURL(/view\.surecam\.com/, { timeout: 30000 });
+
+  // Then load the live map explicitly: Rails writes account context into the
+  // session cookie here, and the backend's warm-up check requires it.
+  await page.goto(LIVE_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
 
   const cookies = await context.cookies('https://view.surecam.com');
   if (!cookies.some(c => c.name === '_vts2_session')) {
-    throw new Error('Login completed but no _vts2_session cookie was set — check credentials or SureCam login flow changes.');
+    throw new Error('Login finished but no _vts2_session cookie was set — check credentials, or SureCam changed its login flow.');
   }
   const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
@@ -46,6 +57,14 @@ try {
   if (!data.success) throw new Error('Apps Script rejected the sync: ' + data.error);
 
   console.log('SureCam session synced OK');
+} catch (err) {
+  // Capture where we actually ended up — the login flow is the fragile part and
+  // a URL + screenshot usually identifies the failure immediately.
+  console.error('Sync failed:', err.message);
+  console.error('Final URL:  ' + page.url());
+  console.error('Page title: ' + await page.title().catch(() => '(unavailable)'));
+  await page.screenshot({ path: SHOT_PATH, fullPage: true }).catch(() => {});
+  process.exitCode = 1;
 } finally {
   await browser.close();
 }
