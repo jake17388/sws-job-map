@@ -439,7 +439,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
     </div>
     <div class="toolbar-row">
       <div class="toolbar-left">
-        <button class="hdr-btn" onclick="loadAll()">↻ Refresh</button>
+        <button class="hdr-btn" id="refresh-btn" onclick="refreshAll()">↻ Refresh</button>
         <span id="last-updated"></span>
         <span id="header-count"></span>
       </div>
@@ -637,7 +637,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.06.17.8';
+const APP_VERSION = '2026.08.13.1';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -1124,6 +1124,23 @@ function loadAll() {
   checkForUpdate();
   return Promise.all([loadJobs(), loadUnscheduled()]);
 }
+
+async function refreshAll() {
+  const btn = document.getElementById('refresh-btn');
+  const status = document.getElementById('last-updated');
+  btn.disabled = true;
+  btn.textContent = '↻ Refreshing…';
+  status.textContent = 'Refreshing…';
+  try {
+    const results = await loadAll();
+    if (results.some(ok => !ok)) {
+      status.textContent = 'Connection error — showing cached data';
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↻ Refresh';
+  }
+}
  
 // ── Toggle ────────────────────────────────────────────────────────────────────
 function toggleType(type) {
@@ -1168,11 +1185,14 @@ function loadJobs() {
     .then(data => {
       writeCache(JOBS_CACHE_KEY, data);
       applyJobsData(data, false);
+      return true;
     })
     .catch(() => {
-      if (scheduledJobs.length) return; // cached data already on screen — keep it
-      document.getElementById('job-list').innerHTML = '<div class="no-results">Failed to load calendar.<br>Try refreshing.</div>';
-      document.getElementById('map-overlay').style.display = 'none';
+      if (!scheduledJobs.length) {
+        document.getElementById('job-list').innerHTML = '<div class="no-results">Failed to load calendar.<br>Try refreshing.</div>';
+        document.getElementById('map-overlay').style.display = 'none';
+      }
+      return false;
     });
 }
 
@@ -1559,8 +1579,12 @@ function loadUnscheduled() {
     .then(data => {
       writeCache(UNSCHED_CACHE_KEY, data);
       applyUnschedData(data);
+      return true;
     })
-    .catch(err => console.error('Failed to load unscheduled:', err));
+    .catch(err => {
+      console.error('Failed to load unscheduled:', err);
+      return false;
+    });
 }
 
 function applyUnschedData(data) {
@@ -1848,7 +1872,7 @@ function saveUnschedEdit() {
     indicator.classList.remove('armed');
     indicator.classList.add('spinning');
     indicator.style.height = '40px';
-    loadAll().finally(() => {
+    refreshAll().finally(() => {
       refreshing = false;
       indicator.classList.remove('spinning');
       indicator.style.height = '0px';
