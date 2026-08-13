@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { parseSurecamVehicles } from '../surecam-sync/lib.mjs';
+import { parseSurecamVehicles, postJsonWithRetry } from '../surecam-sync/lib.mjs';
 
 const html = `
   <div class="group/vehicle row"
@@ -22,3 +22,15 @@ assert.deepEqual(vehicles[0], {
   updatedAt: '2026-08-13T12:00:00.000Z',
 });
 
+let attempts = 0;
+const result = await postJsonWithRetry('https://example.test/sync', { ok: true }, {
+  attempts: 3,
+  delayMs: 0,
+  fetchImpl: async () => {
+    attempts += 1;
+    if (attempts === 1) return new Response('<!DOCTYPE html>Access denied', { status: 403 });
+    return Response.json({ success: true });
+  },
+});
+assert.equal(attempts, 2);
+assert.deepEqual(result, { success: true });
