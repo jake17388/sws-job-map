@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { parseSurecamVehicles, postJsonWithRetry } from '../surecam-sync/lib.mjs';
+import { parseSurecamVehicles, postJsonWithRetry, selectTrackedVehicles } from '../surecam-sync/lib.mjs';
 
 const html = `
   <div class="group/vehicle row"
@@ -34,3 +34,9 @@ const result = await postJsonWithRetry('https://example.test/sync', { ok: true }
 });
 assert.equal(attempts, 2);
 assert.deepEqual(result, { success: true });
+
+assert.deepEqual(
+  selectTrackedVehicles(vehicles, new Set(['e6c84a15-6a26-4f5a-9f27-494dc3a15f9a'])).map(v => v.deviceId),
+  ['e6c84a15-6a26-4f5a-9f27-494dc3a15f9a'],
+  'snapshot must exclude SureCam devices not configured for the Job Map',
+);
