@@ -18,6 +18,10 @@ export function parseSurecamVehicles(html, updatedAt = new Date().toISOString())
   });
 }
 
+export function selectTrackedVehicles(vehicles, trackedIds) {
+  return vehicles.filter(vehicle => trackedIds.has(vehicle.deviceId));
+}
+
 export async function postJsonWithRetry(url, payload, options = {}) {
   const attempts = options.attempts || 3;
   const delayMs = options.delayMs ?? 5000;

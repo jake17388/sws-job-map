@@ -4,13 +4,22 @@
 // unattended. UrlFetchApp can't complete this login itself because SureCam
 // uses an Auth0 browser-redirect flow; a real browser can.
 import { chromium } from 'playwright';
-import { parseSurecamVehicles, postJsonWithRetry } from './lib.mjs';
+import { parseSurecamVehicles, postJsonWithRetry, selectTrackedVehicles } from './lib.mjs';
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 const LIVE_URL = 'https://view.surecam.com/accounts/01127/live';
 const SHOT_PATH = 'failure.png';
 // Matches the backend's own auth check in cacheSurecamVehicles().
 const MIN_AUTHED_BYTES = 50000;
+const TRACKED_NAMES = new Map([
+  ['33bb8790-2acc-4ae5-9729-c6435152cf6f', '2025 Double Bucket'],
+  ['e6c84a15-6a26-4f5a-9f27-494dc3a15f9a', '2016 Flatbed'],
+  ['cbb1eae7-8270-4ded-ab87-910281b5800d', '2018 Big Crane'],
+  ['e7ee6ba9-1f74-4a76-b318-fae044c8a818', '2019 Single Bucket'],
+  ['0f74b5cc-b7e8-41d6-a5fc-6daa201b138a', '2023 Single Bucket'],
+  ['5e2c8f15-7b50-404a-baf3-538a2f51f301', '2022 Small Crane'],
+  ['3812774d-22d0-4a8e-9e35-22e277fa29f5', '2015 Double Bucket'],
+]);
 
 // Name the specific missing variables — a generic "something is missing" tells
 // you nothing when three secrets have to line up.
@@ -78,7 +87,8 @@ try {
   }
   const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
   const snapshotAt = new Date().toISOString();
-  const vehicles = parseSurecamVehicles(html, snapshotAt);
+  const vehicles = selectTrackedVehicles(parseSurecamVehicles(html, snapshotAt), new Set(TRACKED_NAMES.keys()))
+    .map(vehicle => ({ ...vehicle, name: TRACKED_NAMES.get(vehicle.deviceId) }));
   if (!vehicles.length) {
     throw new Error('Authenticated live page contained no vehicle positions; refusing to replace the last-known snapshot.');
   }
