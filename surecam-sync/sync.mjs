@@ -4,6 +4,7 @@
 // unattended. UrlFetchApp can't complete this login itself because SureCam
 // uses an Auth0 browser-redirect flow; a real browser can.
 import { chromium } from 'playwright';
+import { parseSurecamVehicles, postJsonWithRetry } from './lib.mjs';
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 const LIVE_URL = 'https://view.surecam.com/accounts/01127/live';
@@ -76,6 +77,12 @@ try {
     throw new Error('Login finished but no _vts2_session cookie was set — check credentials, or SureCam changed its login flow.');
   }
   const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+  const snapshotAt = new Date().toISOString();
+  const vehicles = parseSurecamVehicles(html, snapshotAt);
+  if (!vehicles.length) {
+    throw new Error('Authenticated live page contained no vehicle positions; refusing to replace the last-known snapshot.');
+  }
+  console.log(`Parsed ${vehicles.length} vehicle positions for durable snapshot`);
 
   // Diagnostic: replay the same cookie over plain HTTP (no browser), exactly as
   // Apps Script does. If this returns the small shell while the browser got
@@ -93,14 +100,15 @@ try {
   console.log(`Plain-HTTP probe: status=${probe.status} bytes=${probeBody.length} url=${probe.url}`);
   console.log(`Probe verdict: ${probeBody.length >= MIN_AUTHED_BYTES ? 'cookie works without a browser' : 'cookie does NOT work without a browser'}`);
 
-  const resp = await fetch(SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'updateScSession', secret: SWS_EXTENSION_SECRET, cookieString }),
+  await postJsonWithRetry(SCRIPT_URL, {
+    action: 'updateScSession',
+    secret: SWS_EXTENSION_SECRET,
+    cookieString,
+    vehicles,
+    snapshotAt,
   });
-  const data = await resp.json();
-  if (!data.success) throw new Error('Apps Script rejected the sync: ' + data.error);
 
-  console.log('SureCam session synced OK');
+  console.log(`SureCam session and ${vehicles.length}-vehicle snapshot synced OK`);
 } catch (err) {
   // Capture where we actually ended up — the login flow is the fragile part and
   // a URL + screenshot usually identifies the failure immediately.

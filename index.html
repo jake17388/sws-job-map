@@ -637,7 +637,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.08.13.1';
+const APP_VERSION = '2026.08.13.2';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -666,8 +666,10 @@ const activeCrews = new Set(CREW);
 const GEO_CACHE_KEY = 'sws_geo_cache_v1';
 const JOBS_CACHE_KEY = 'sws_jobs_cache_v1';
 const UNSCHED_CACHE_KEY = 'sws_unsched_cache_v1';
+const VEHICLE_CACHE_KEY = 'sws_vehicle_snapshot_v1';
 const GEO_CACHE_MAX_AGE = 90 * 24 * 3600 * 1000;  // addresses rarely move
 const DATA_CACHE_MAX_AGE = 24 * 3600 * 1000;      // jobs change daily
+const VEHICLE_CACHE_MAX_AGE = 7 * 24 * 3600 * 1000;
 
 function readCache(key, maxAge) {
   try {
@@ -961,6 +963,8 @@ function initHomeMarker() {
 let vehicleMarkers = [];
 let lastVehicles = [];
 let showVehicles = true;
+let vehicleSnapshotAt = null;
+let vehicleDataStale = false;
 
 function truckIcon_(status) {
   const fill = { normal: '#16a34a', idling: '#d97706', park_mode: '#6b7280' }[status] || '#9ca3af';
@@ -1011,17 +1015,29 @@ function renderVehicleMarkers(vehicles) {
   });
 }
 
+function applyVehicleSnapshot(data, fromCache) {
+  if (!data || !Array.isArray(data.vehicles) || !data.vehicles.length) return;
+  lastVehicles = data.vehicles;
+  vehicleSnapshotAt = data.snapshotAt || data.vehicles[0]?.updatedAt || null;
+  vehicleDataStale = !!data.stale || !!fromCache;
+  renderVehicleMarkers(lastVehicles);
+  renderVehiclesPanel();
+}
+
 function fetchVehicles() {
   if (!auth) return;
   scriptGet('getVehicles')
     .then(data => {
-      if (data && data.vehicles) {
-        lastVehicles = data.vehicles;
-        renderVehicleMarkers(lastVehicles);
-        renderVehiclesPanel();
+      if (data && data.vehicles && data.vehicles.length) {
+        writeCache(VEHICLE_CACHE_KEY, data);
+        applyVehicleSnapshot(data, false);
       }
     })
-    .catch(() => {});
+    .catch(err => {
+      console.error('Failed to load vehicles; keeping last-known positions:', err);
+      vehicleDataStale = true;
+      renderVehiclesPanel();
+    });
 }
 
 function toggleVehiclesPanel() {
@@ -1050,7 +1066,14 @@ function focusVehicle(idx) {
 function renderVehiclesPanel() {
   const STATUS_COLORS = { normal: '#16a34a', idling: '#d97706', park_mode: '#6b7280' };
   const STATUS_LABELS = { normal: 'Driving', idling: 'Idle', park_mode: 'Parked', unknown: 'Unknown' };
-  const html = lastVehicles.length
+  const snapshotTime = vehicleSnapshotAt
+    ? new Date(vehicleSnapshotAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : '';
+  const ageNote = snapshotTime
+    ? '<div style="font-size:10px;color:' + (vehicleDataStale ? '#b7791f' : '#aaa') + ';padding:2px 4px 5px">' +
+      (vehicleDataStale ? 'Last known positions · ' : 'Positions updated · ') + snapshotTime + '</div>'
+    : '';
+  const rows = lastVehicles.length
     ? lastVehicles.map((v, i) => {
         const dot = STATUS_COLORS[v.status] || '#9ca3af';
         const label = STATUS_LABELS[v.status] || (v.status || 'Unknown');
@@ -1064,6 +1087,7 @@ function renderVehiclesPanel() {
           '</div>';
       }).join('')
     : '<div style="font-size:11px;color:#ccc;padding:6px 4px">No vehicles loaded yet</div>';
+  const html = ageNote + rows;
   ['vehicle-list-items', 'map-vehicle-list-items'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = html;
@@ -1106,6 +1130,8 @@ function initMap() {
   document.getElementById('date-from').value = fmt(today);
   document.getElementById('date-to').value = fmt(today);
   loadAll();
+  const savedVehicles = readCache(VEHICLE_CACHE_KEY, VEHICLE_CACHE_MAX_AGE);
+  if (savedVehicles) applyVehicleSnapshot(savedVehicles, true);
   fetchVehicles();
   setInterval(fetchVehicles, 90 * 1000);
 }

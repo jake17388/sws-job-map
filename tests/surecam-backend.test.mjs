@@ -23,7 +23,10 @@ vm.runInContext(readFileSync(new URL('../Code.js', import.meta.url), 'utf8'), co
 
 const snapshot = {
   snapshotAt: '2026-08-13T12:00:00.000Z',
-  vehicles: [{ deviceId: 'truck-1', name: 'Truck 1', status: 'normal', lat: 33.4, lng: -111.9 }],
+  vehicles: [{
+    deviceId: 'truck-1', name: 'Truck 1', status: 'normal', lat: 33.4, lng: -111.9,
+    updatedAt: '2026-08-13T12:00:00.000Z',
+  }],
 };
 
 // A successful update must be durable, not only a six-minute CacheService entry.
@@ -34,4 +37,3 @@ assert.ok(properties.get('SC_VEHICLE_SNAPSHOT'));
 cache.clear();
 const restored = JSON.parse(JSON.stringify(context.getVehicleSnapshot_()));
 assert.deepEqual(restored, snapshot);
-
