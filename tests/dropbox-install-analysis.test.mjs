@@ -70,6 +70,11 @@ test('authentication has no source-controlled PIN fallback and uses a new sessio
   assert.equal(properties.has('AUTH_SECRET'), false);
 });
 
+test('incorrect PINs never create a shared failed-attempt lockout', () => {
+  const { context } = loadBackend();
+  for (let i = 0; i < 20; i++) assert.deepEqual(JSON.parse(JSON.stringify(context.checkPin('0000'))), { ok: false });
+});
+
 test('job numbers accept only normalized five or six digit values', () => {
   const { context } = loadBackend();
   assert.equal(context.normalizeJobNumber_(' 260248 '), '260248');

@@ -25,7 +25,6 @@ function normalizeCrew(names) {
 // Active PINs live only in Script Properties. Versioned property names prevent
 // legacy source-controlled credentials and sessions from being reused.
 const TOKEN_TTL_MS = 30 * 24 * 3600 * 1000; // sessions last 30 days
-const MAX_PIN_FAILS = 10;                   // then logins lock for 10 minutes
 const PINS_PROPERTY = 'PINS_V2';
 const AUTH_SECRET_PROPERTY = 'AUTH_SECRET_V2';
 
@@ -105,14 +104,8 @@ function verifyToken(token) {
 }
 
 function checkPin(pin) {
-  const cache = CacheService.getScriptCache();
-  const fails = +(cache.get('pin_fails') || 0);
-  if (fails >= MAX_PIN_FAILS) return { ok: false, locked: true };
   const user = getPins()[String(pin)];
-  if (!user) {
-    cache.put('pin_fails', String(fails + 1), 600);
-    return { ok: false };
-  }
+  if (!user) return { ok: false };
   return { ok: true, user: user, role: roleForUser_(user), token: makeToken(user) };
 }
 
