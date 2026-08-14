@@ -25,9 +25,13 @@ function loadBackend() {
   const context = vm.createContext({
     PropertiesService: { getScriptProperties: () => propertyApi },
     CacheService: { getScriptCache: () => cacheApi },
+    LockService: {
+      getScriptLock: () => ({ waitLock() {}, releaseLock() {} }),
+    },
     Utilities: {
       getUuid: () => `uuid-${++uuid}`,
       computeDigest: (_algorithm, value) => Array.from(Buffer.from(String(value))),
+      base64Encode: value => Buffer.from(value).toString('base64'),
       base64EncodeWebSafe: value => Buffer.from(value).toString('base64url'),
       DigestAlgorithm: { SHA_256: 'sha256' },
     },
@@ -44,6 +48,7 @@ function loadBackend() {
       MimeType: { JSON: 'json' },
       createTextOutput: text => ({ text, setMimeType() { return this; } }),
     },
+    HtmlService: { createHtmlOutput: html => ({ html }) },
     console,
   });
   vm.runInContext(readFileSync(new URL('../Code.js', import.meta.url), 'utf8'), context);
@@ -55,6 +60,14 @@ test('Jake Banks is the only administrator', () => {
   assert.equal(context.roleForUser_('Jake Banks'), 'admin');
   assert.equal(context.roleForUser_('Ryan Chapman'), 'viewer');
   assert.equal(context.roleForUser_('jake banks'), 'viewer');
+});
+
+test('authentication has no source-controlled PIN fallback and uses a new session namespace', () => {
+  const { context, properties } = loadBackend();
+  assert.deepEqual(JSON.parse(JSON.stringify(context.getPins())), {});
+  context.getAuthSecret();
+  assert.ok(properties.has('AUTH_SECRET_V2'));
+  assert.equal(properties.has('AUTH_SECRET'), false);
 });
 
 test('job numbers accept only normalized five or six digit values', () => {
@@ -105,6 +118,15 @@ test('OAuth state is expiring, one-time, and never stored in plaintext', () => {
   assert.equal(context.consumeDropboxOAuthState_(expired, now + 11 * 60 * 1000), false);
 });
 
+test('Dropbox denial consumes OAuth state and returns a sanitized error', () => {
+  const { context } = loadBackend();
+  const state = context.createDropboxOAuthState_('Jake Banks', 1_000_000);
+  const result = context.handleDropboxOAuthCallback_({ parameter: { state, error: 'access_denied' } }, 'https://example.test/exec');
+  assert.match(result.html, /connection failed/i);
+  assert.doesNotMatch(result.html, /access_denied/);
+  assert.equal(context.consumeDropboxOAuthState_(state, 1_000_001), false);
+});
+
 test('analysis validation limits equipment and preserves unknown counts', () => {
   const { context } = loadBackend();
   const valid = {
@@ -122,6 +144,70 @@ test('analysis validation limits equipment and preserves unknown counts', () => 
   assert.equal(context.validateInstallAnalysis_({ ...valid, letterCount: null }), true);
   assert.equal(context.validateInstallAnalysis_({ ...valid, installRequirements: [{ ...valid.installRequirements[0], quantity: -2 }] }), false);
   assert.equal(context.validateInstallAnalysis_({ ...valid, installRequirements: [{ ...valid.installRequirements[0], source: 'invented' }] }), false);
+});
+
+test('strict install-analysis schema uses only supported array constraints', () => {
+  const { context } = loadBackend();
+  const serialized = JSON.stringify(context.installAnalysisJsonSchema_());
+  assert.doesNotMatch(serialized, /uniqueItems/);
+  assert.match(serialized, /flatbed truck/);
+});
+
+test('Responses API request sends a high-detail PDF with strict structured output', () => {
+  const { context, properties } = loadBackend();
+  properties.set('OPENAI_API_KEY', 'test-key');
+  let captured;
+  context.UrlFetchApp.fetch = (url, options) => {
+    captured = { url, options };
+    return {
+      getResponseCode: () => 200,
+      getContentText: () => JSON.stringify({ output_text: JSON.stringify({
+        recommendedEquipment: ['crane', 'crane'],
+        installRequirements: [],
+        letterCount: null,
+        lettersetCount: null,
+        monument: { present: null, quantity: null, notes: '' },
+        components: Object.fromEntries(['acm','rpc','fco','emc','sf','ds','df','wireway','raceway'].map(key => [key, { present: null, quantity: null, notes: '' }])),
+        unknowns: [],
+      }) }),
+    };
+  };
+  const result = context.analyzeProductionPdf_({ getBytes: () => [1, 2, 3] }, '260248');
+  const payload = JSON.parse(captured.options.payload);
+  assert.equal(captured.url, 'https://api.openai.com/v1/responses');
+  assert.equal(payload.input[0].content[1].type, 'input_file');
+  assert.equal(payload.input[0].content[1].detail, 'high');
+  assert.equal(payload.store, false);
+  assert.equal(payload.text.format.strict, true);
+  assert.doesNotMatch(JSON.stringify(payload.text.format.schema), /uniqueItems/);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.analysis.recommendedEquipment)), ['crane']);
+});
+
+test('analysis queue eligibility includes due work and stale claims only', () => {
+  const { context } = loadBackend();
+  const now = Date.parse('2026-08-14T12:00:00Z');
+  assert.equal(context.analysisRecordEligibleForClaim_({ status: 'queued' }, now), true);
+  assert.equal(context.analysisRecordEligibleForClaim_({ status: 'retry_wait', next_attempt_at: '2026-08-14T11:59:00Z' }, now), true);
+  assert.equal(context.analysisRecordEligibleForClaim_({ status: 'retry_wait', next_attempt_at: '2026-08-14T12:01:00Z' }, now), false);
+  assert.equal(context.analysisRecordEligibleForClaim_({ status: 'analyzing', claimed_at: '2026-08-14T11:30:00Z' }, now), true);
+  assert.equal(context.analysisRecordEligibleForClaim_({ status: 'analyzing', claimed_at: '2026-08-14T11:55:00Z' }, now), false);
+});
+
+test('backend atomically claims analysis work with a script lock', () => {
+  const source = readFileSync(new URL('../Code.js', import.meta.url), 'utf8');
+  assert.match(source, /function claimNextAnalysisRecord_[\s\S]*LockService\.getScriptLock\(\)[\s\S]*status: 'claimed'/);
+  assert.match(source, /function writeAnalysisRecordForClaim_[\s\S]*current\.claim_id !== claimId[\s\S]*return false/);
+  assert.match(source, /function enqueueInstallAnalysis_[\s\S]*LockService\.getScriptLock\(\)/);
+});
+
+test('already-locked job mutations use the non-locking queue helper', () => {
+  const source = readFileSync(new URL('../Code.js', import.meta.url), 'utf8');
+  const addBody = source.match(/function addUnsched\(data\) \{([\s\S]*?)\n\}/)[1];
+  const updateBody = source.match(/function updateUnsched\(data\) \{([\s\S]*?)\n\}/)[1];
+  assert.match(addBody, /enqueueInstallAnalysisUnlocked_/);
+  assert.match(updateBody, /enqueueInstallAnalysisUnlocked_/);
+  assert.doesNotMatch(addBody, /enqueueInstallAnalysis_\(/);
+  assert.doesNotMatch(updateBody, /enqueueInstallAnalysis_\(/);
 });
 
 test('folder listing drains every Dropbox pagination cursor', () => {

@@ -1839,7 +1839,9 @@ function addUnscheduled() {
     .then(data => {
       if (!data || data.error || data.success === false) throw new Error(data && data.error || 'Save failed');
       job.id = String(data.id);
+      if (job._iw) job._iw.setContent(unschedCardHTML(job));
       writeCache(UNSCHED_CACHE_KEY, { jobs: unscheduledJobs });
+      renderList();
     })
     .catch(err => {
       if (job._marker) job._marker.setMap(null);

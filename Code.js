@@ -22,53 +22,45 @@ function normalizeCrew(names) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-// Active PINs live in Script Properties. They are seeded once from DEFAULT_PINS
-// (these defaults are already public in git history — rotate to new PINs by
-// editing setPins() in the Apps Script editor, running it, then undoing the
-// edit so the new PINs never land in this public repo).
+// Active PINs live only in Script Properties. Versioned property names prevent
+// legacy source-controlled credentials and sessions from being reused.
 const TOKEN_TTL_MS = 30 * 24 * 3600 * 1000; // sessions last 30 days
 const MAX_PIN_FAILS = 10;                   // then logins lock for 10 minutes
+const PINS_PROPERTY = 'PINS_V2';
+const AUTH_SECRET_PROPERTY = 'AUTH_SECRET_V2';
 
-const DEFAULT_PINS = {
-  '2580': 'Jake Banks',
-  '4567': 'Ryan Chapman',
-  '6789': 'Monica White',
-  '6543': 'Anders Nordstrom',
-};
-
-// To change PINs: paste the new set here, run this once from the Apps Script
-// editor, then undo the edit so real PINs never land in git.
-function setPins() {
-  PropertiesService.getScriptProperties()
-    .setProperty('PINS', JSON.stringify(DEFAULT_PINS));
+// Execution-API helpers for secure PIN provisioning. PIN values are passed at
+// invocation time and never stored in source control.
+function addPin(pin, user) {
+  if (!/^\d{4}$/.test(String(pin)) || !String(user || '').trim()) throw new Error('PIN must be four digits and user is required');
+  const pins = getPins();
+  pins[String(pin)] = String(user).trim();
+  PropertiesService.getScriptProperties().setProperty(PINS_PROPERTY, JSON.stringify(pins));
+  return { success: true, user: pins[String(pin)] };
 }
 
-// Admin helper for onboarding a new user without touching the other live
-// PINs. Takes the PIN/name as arguments rather than a hardcoded value, so
-// it's safe to keep in source — see addPinRunner() below for how to invoke
-// it from the Apps Script editor (which can't pass arguments to Run).
-function addPin(pin, user) {
+function replaceUserPin(pin, user) {
+  if (!/^\d{4}$/.test(String(pin)) || !String(user || '').trim()) throw new Error('PIN must be four digits and user is required');
+  const normalizedUser = String(user).trim();
   const pins = getPins();
-  pins[String(pin)] = user;
-  PropertiesService.getScriptProperties().setProperty('PINS', JSON.stringify(pins));
+  Object.keys(pins).forEach(existingPin => { if (pins[existingPin] === normalizedUser) delete pins[existingPin]; });
+  pins[String(pin)] = normalizedUser;
+  PropertiesService.getScriptProperties().setProperty(PINS_PROPERTY, JSON.stringify(pins));
+  return { success: true, user: normalizedUser };
 }
 
 function getPins() {
-  const props = PropertiesService.getScriptProperties();
-  let pins = props.getProperty('PINS');
-  if (!pins) {
-    pins = JSON.stringify(DEFAULT_PINS);
-    props.setProperty('PINS', pins);
-  }
-  return JSON.parse(pins);
+  const pins = PropertiesService.getScriptProperties().getProperty(PINS_PROPERTY);
+  if (!pins) return {};
+  try { return JSON.parse(pins); } catch (err) { return {}; }
 }
 
 function getAuthSecret() {
   const props = PropertiesService.getScriptProperties();
-  let secret = props.getProperty('AUTH_SECRET');
+  let secret = props.getProperty(AUTH_SECRET_PROPERTY);
   if (!secret) {
     secret = Utilities.getUuid() + Utilities.getUuid();
-    props.setProperty('AUTH_SECRET', secret);
+    props.setProperty(AUTH_SECRET_PROPERTY, secret);
   }
   return secret;
 }
@@ -134,7 +126,7 @@ const UNAUTHORIZED = { error: 'unauthorized' };
 // ── Routing ───────────────────────────────────────────────────────────────────
 function doGet(e) {
   const params = (e && e.parameter) || {};
-  if (params.code && params.state) {
+  if (params.state && (params.code || params.error)) {
     try {
       return handleDropboxOAuthCallback_(e, ScriptApp.getService().getUrl());
     } catch (err) {
@@ -355,7 +347,7 @@ function addUnsched(data) {
       new Date().toISOString(), id, data.added_by || 'Unknown',
     ]);
     try {
-      enqueueInstallAnalysis_(String(id), jobNum, true);
+      enqueueInstallAnalysisUnlocked_(String(id), jobNum, true);
       ensureInstallAnalysisTriggers_();
     } catch (err) {
       console.error('Install analysis queue failed: %s', err && err.message);
@@ -404,7 +396,7 @@ function updateUnsched(data) {
         sheet.getRange(i + 1, 2).setValue(data.title);
         sheet.getRange(i + 1, 3).setValue(data.address);
         if (previousJobNum !== jobNum) {
-          try { enqueueInstallAnalysis_(String(data.id), jobNum, true); ensureInstallAnalysisTriggers_(); } catch (err) { /* best-effort */ }
+          try { enqueueInstallAnalysisUnlocked_(String(data.id), jobNum, true); ensureInstallAnalysisTriggers_(); } catch (err) { /* best-effort */ }
         }
         return { success: true };
       }
@@ -812,7 +804,8 @@ function createDropboxAuthorization_(actor, redirectUri) {
 
 function handleDropboxOAuthCallback_(event, redirectUri) {
   const params = (event && event.parameter) || {};
-  if (!params.code || !consumeDropboxOAuthState_(params.state)) {
+  const validState = consumeDropboxOAuthState_(params.state);
+  if (!validState || params.error || !params.code) {
     return HtmlService.createHtmlOutput('<p>Dropbox connection failed (invalid or expired request). Close this tab and try again from Settings.</p>');
   }
   const credentials = dropboxCredentials_();
@@ -984,7 +977,7 @@ function downloadDropboxPdf_(accessToken, fileId) {
 const INSTALL_ANALYSIS_HEADERS = [
   'job_id', 'job_num', 'status', 'file_id', 'file_rev', 'file_name', 'file_modified',
   'checked_at', 'prompt_version', 'model', 'analysis_json', 'analyzed_at',
-  'attempt_count', 'next_attempt_at', 'error_code', 'updated_at',
+  'attempt_count', 'next_attempt_at', 'error_code', 'updated_at', 'claim_id', 'claimed_at',
 ];
 
 function getInstallAnalysisSheet_() {
@@ -1003,7 +996,13 @@ function getInstallAnalysisSheet_() {
     sheet = spreadsheet.getSheets()[0];
     sheet.setName('InstallAnalysis');
   }
-  if (sheet.getLastRow() === 0) sheet.appendRow(INSTALL_ANALYSIS_HEADERS);
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(INSTALL_ANALYSIS_HEADERS);
+  } else {
+    const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const missingHeaders = INSTALL_ANALYSIS_HEADERS.filter(header => existingHeaders.indexOf(header) === -1);
+    if (missingHeaders.length) sheet.getRange(1, existingHeaders.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
+  }
   return sheet;
 }
 
@@ -1036,10 +1035,21 @@ function writeAnalysisRecord_(record) {
 }
 
 function enqueueInstallAnalysis_(jobId, jobNum, force) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    return enqueueInstallAnalysisUnlocked_(jobId, jobNum, force);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function enqueueInstallAnalysisUnlocked_(jobId, jobNum, force) {
   const normalized = normalizeJobNumber_(jobNum);
   if (!normalized) throw new Error('Invalid job number');
   const existing = getAnalysisRecord_(jobId);
   const changedJob = existing && existing.job_num !== normalized;
+  if (!force && !changedJob && existing && ['claimed', 'discovering', 'analyzing'].indexOf(existing.status) !== -1) return existing;
   writeAnalysisRecord_({
     job_id: String(jobId),
     job_num: normalized,
@@ -1052,6 +1062,8 @@ function enqueueInstallAnalysis_(jobId, jobNum, force) {
     attempt_count: force ? 0 : (existing && existing.attempt_count || 0),
     next_attempt_at: '',
     error_code: '',
+    claim_id: '',
+    claimed_at: '',
   });
 }
 
@@ -1114,7 +1126,7 @@ function installAnalysisJsonSchema_() {
   return {
     type: 'object', additionalProperties: false,
     properties: {
-      recommendedEquipment: { type: 'array', uniqueItems: true, items: { type: 'string', enum: ['crane', 'single bucket', 'double bucket', 'flatbed truck'] } },
+      recommendedEquipment: { type: 'array', items: { type: 'string', enum: ['crane', 'single bucket', 'double bucket', 'flatbed truck'] } },
       installRequirements: {
         type: 'array', items: {
           type: 'object', additionalProperties: false,
@@ -1155,6 +1167,7 @@ function analyzeProductionPdf_(blob, jobNum) {
   ].join('\n');
   const request = {
     model,
+    store: false,
     input: [{ role: 'user', content: [
       { type: 'input_text', text: prompt },
       { type: 'input_file', filename: jobNum + '.pdf', file_data: 'data:application/pdf;base64,' + Utilities.base64Encode(blob.getBytes()), detail: 'high' },
@@ -1175,16 +1188,62 @@ function analyzeProductionPdf_(blob, jobNum) {
   }
   let analysis;
   try { analysis = JSON.parse(outputText); } catch (err) { throw new Error('Install analysis returned invalid JSON'); }
+  analysis.recommendedEquipment = Array.from(new Set(analysis.recommendedEquipment || []));
   if (!validateInstallAnalysis_(analysis)) throw new Error('Install analysis did not match the required format');
   return { analysis, model };
 }
 
+function analysisRecordEligibleForClaim_(record, nowMs) {
+  const checkedAt = Number(nowMs == null ? Date.now() : nowMs);
+  if (record.status === 'queued') return true;
+  if (record.status === 'retry_wait') return !record.next_attempt_at || new Date(record.next_attempt_at).getTime() <= checkedAt;
+  if (['claimed', 'discovering', 'analyzing'].indexOf(record.status) !== -1) {
+    const claimedAt = new Date(record.claimed_at || record.updated_at || 0).getTime();
+    return !claimedAt || checkedAt - claimedAt >= 20 * 60 * 1000;
+  }
+  return false;
+}
+
+function claimNextAnalysisRecord_() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const record = getAllAnalysisRecords_().find(candidate => analysisRecordEligibleForClaim_(candidate, Date.now()));
+    if (!record) return null;
+    const claimId = Utilities.getUuid();
+    const claimedAt = new Date().toISOString();
+    writeAnalysisRecord_({
+      job_id: record.job_id,
+      status: 'claimed',
+      claim_id: claimId,
+      claimed_at: claimedAt,
+    });
+    return Object.assign({}, record, { status: 'claimed', claim_id: claimId, claimed_at: claimedAt });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function writeAnalysisRecordForClaim_(claimId, record) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const current = getAnalysisRecord_(record.job_id);
+    if (!current || current.claim_id !== claimId) return false;
+    writeAnalysisRecord_(record);
+    return true;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function processInstallAnalysisQueue() {
-  const now = new Date();
-  const records = getAllAnalysisRecords_().filter(record => {
-    if (record.status === 'queued') return true;
-    return record.status === 'retry_wait' && (!record.next_attempt_at || new Date(record.next_attempt_at) <= now);
-  }).slice(0, 2);
+  const records = [];
+  for (let i = 0; i < 2; i++) {
+    const claimed = claimNextAnalysisRecord_();
+    if (!claimed) break;
+    records.push(claimed);
+  }
   if (!records.length) return { processed: 0 };
   let accessToken;
   try { accessToken = getDropboxAccessToken_(); }
@@ -1192,7 +1251,10 @@ function processInstallAnalysisQueue() {
     records.forEach(record => scheduleAnalysisRetry_(record, 'dropbox_auth_failed'));
     return { processed: 0, error: 'Dropbox authentication failed' };
   }
-  if (!accessToken) return { processed: 0, error: 'Dropbox not connected' };
+  if (!accessToken) {
+    records.forEach(record => scheduleAnalysisRetry_(record, 'dropbox_not_connected'));
+    return { processed: 0, error: 'Dropbox not connected' };
+  }
   const listingCache = {};
   let orderEntries;
   try { orderEntries = listDropboxFolderAll_(accessToken, DROPBOX_ORDERS_PATH, listingCache); }
@@ -1202,15 +1264,15 @@ function processInstallAnalysisQueue() {
   }
   let processed = 0;
   records.forEach(record => {
-    writeAnalysisRecord_({ job_id: record.job_id, status: 'discovering' });
+    const transition = update => writeAnalysisRecordForClaim_(record.claim_id, Object.assign({ job_id: record.job_id }, update));
+    if (!transition({ status: 'discovering' })) return;
     try {
       const proof = findLatestProofForJob_(accessToken, record.job_num, orderEntries, listingCache);
       if (!proof) {
-        writeAnalysisRecord_({
+        if (transition({
           job_id: record.job_id, job_num: record.job_num, status: 'no_file', file_id: '', file_rev: '', file_name: '',
-          file_modified: '', checked_at: new Date().toISOString(), analysis_json: '', analyzed_at: '', attempt_count: 0, next_attempt_at: '', error_code: '',
-        });
-        processed++;
+          file_modified: '', checked_at: new Date().toISOString(), analysis_json: '', analyzed_at: '', attempt_count: 0, next_attempt_at: '', error_code: '', claim_id: '', claimed_at: '',
+        })) processed++;
         return;
       }
       const configuredModel = PropertiesService.getScriptProperties().getProperty('OPENAI_MODEL') || DEFAULT_OPENAI_MODEL;
@@ -1219,31 +1281,36 @@ function processInstallAnalysisQueue() {
         let cached;
         try { cached = JSON.parse(record.analysis_json); } catch (err) { cached = null; }
         if (validateInstallAnalysis_(cached)) {
-          writeAnalysisRecord_({ job_id: record.job_id, status: 'ready', checked_at: new Date().toISOString(), attempt_count: 0, next_attempt_at: '', error_code: '' });
-          processed++;
+          if (transition({ status: 'ready', checked_at: new Date().toISOString(), attempt_count: 0, next_attempt_at: '', error_code: '', claim_id: '', claimed_at: '' })) processed++;
           return;
         }
       }
       const reusable = getAllAnalysisRecords_().find(candidate => candidate.status === 'ready' && candidate.file_id === proof.id &&
         candidate.file_rev === proof.rev && candidate.prompt_version === INSTALL_ANALYSIS_PROMPT_VERSION && candidate.model === configuredModel && candidate.analysis_json);
       if (reusable) {
-        writeAnalysisRecord_({
-          job_id: record.job_id, job_num: record.job_num, status: 'ready', file_id: proof.id, file_rev: proof.rev,
-          file_name: proof.name, file_modified: proof.modified, checked_at: new Date().toISOString(), prompt_version: INSTALL_ANALYSIS_PROMPT_VERSION,
-          model: configuredModel, analysis_json: reusable.analysis_json, analyzed_at: reusable.analyzed_at, attempt_count: 0, next_attempt_at: '', error_code: '',
-        });
-        processed++;
-        return;
+        let reusableAnalysis;
+        try { reusableAnalysis = JSON.parse(reusable.analysis_json); } catch (err) { reusableAnalysis = null; }
+        if (validateInstallAnalysis_(reusableAnalysis)) {
+          if (transition({
+            job_id: record.job_id, job_num: record.job_num, status: 'ready', file_id: proof.id, file_rev: proof.rev,
+            file_name: proof.name, file_modified: proof.modified, checked_at: new Date().toISOString(), prompt_version: INSTALL_ANALYSIS_PROMPT_VERSION,
+            model: configuredModel, analysis_json: reusable.analysis_json, analyzed_at: reusable.analyzed_at, attempt_count: 0, next_attempt_at: '', error_code: '', claim_id: '', claimed_at: '',
+          })) processed++;
+          return;
+        }
       }
-      writeAnalysisRecord_({ job_id: record.job_id, status: 'analyzing', file_id: proof.id, file_rev: proof.rev, file_name: proof.name, file_modified: proof.modified, checked_at: new Date().toISOString() });
+      if (!transition({
+        job_id: record.job_id, status: 'analyzing', file_id: proof.id, file_rev: proof.rev,
+        file_name: proof.name, file_modified: proof.modified, checked_at: new Date().toISOString(),
+        analysis_json: '', analyzed_at: '', prompt_version: INSTALL_ANALYSIS_PROMPT_VERSION, model: configuredModel,
+      })) return;
       const result = analyzeProductionPdf_(downloadDropboxPdf_(accessToken, proof.id), record.job_num);
-      writeAnalysisRecord_({
+      if (transition({
         job_id: record.job_id, job_num: record.job_num, status: 'ready', file_id: proof.id, file_rev: proof.rev,
         file_name: proof.name, file_modified: proof.modified, checked_at: new Date().toISOString(),
         prompt_version: INSTALL_ANALYSIS_PROMPT_VERSION, model: result.model, analysis_json: JSON.stringify(result.analysis),
-        analyzed_at: new Date().toISOString(), attempt_count: 0, next_attempt_at: '', error_code: '',
-      });
-      processed++;
+        analyzed_at: new Date().toISOString(), attempt_count: 0, next_attempt_at: '', error_code: '', claim_id: '', claimed_at: '',
+      })) processed++;
     } catch (err) {
       console.error('Install analysis failed for job %s: %s', record.job_num, err && err.message);
       scheduleAnalysisRetry_(record, 'analysis_failed');
@@ -1256,11 +1323,14 @@ function scheduleAnalysisRetry_(record, errorCode) {
   const attempts = Number(record.attempt_count || 0) + 1;
   const status = attempts >= 3 ? 'error' : 'retry_wait';
   const delayMinutes = Math.pow(2, attempts) * 5;
-  writeAnalysisRecord_({
+  const update = {
     job_id: record.job_id, status, attempt_count: attempts,
     next_attempt_at: status === 'retry_wait' ? new Date(Date.now() + delayMinutes * 60 * 1000).toISOString() : '',
     error_code: errorCode,
-  });
+    claim_id: '',
+    claimed_at: '',
+  };
+  return record.claim_id ? writeAnalysisRecordForClaim_(record.claim_id, update) : writeAnalysisRecord_(update);
 }
 
 function getInstallAnalysisForClient_(jobId) {
@@ -1297,8 +1367,7 @@ function getProductionFileForClient_(jobId) {
 }
 
 function scheduledInstallAnalysisRefresh_() {
-  queueAllInstallAnalyses_();
-  return processInstallAnalysisQueue();
+  return queueAllInstallAnalyses_();
 }
 
 function ensureInstallAnalysisTriggers_() {

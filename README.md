@@ -10,6 +10,9 @@ SWS Job Map combines scheduled Google Calendar work, unscheduled jobs stored in 
 - Other PIN users are viewers. They can view the map and job list but cannot add, edit, or remove unscheduled jobs.
 - Dropbox settings, Production Files, filenames, metadata, and install analyses are returned only to Jake after backend token verification.
 - Roles are derived by the Apps Script backend. A role supplied by the browser is never trusted.
+- PINs are stored only in the `PINS_V2` Script Property. There are no fallback PINs in source control, and the `AUTH_SECRET_V2` namespace invalidates sessions from older releases.
+
+Provision or rotate a user through the Apps Script execution API by calling `replaceUserPin(pin, user)`. Never add a real PIN to `Code.js`, Git, logs, or documentation.
 
 ## Data sources
 
