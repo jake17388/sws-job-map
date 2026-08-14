@@ -17,6 +17,11 @@ function loadBackend() {
     remove: key => cache.delete(key),
   };
   let uuid = 0;
+  const requests = [];
+  const response = (code, body) => ({
+    getResponseCode: () => code,
+    getContentText: () => JSON.stringify(body),
+  });
   const context = vm.createContext({
     PropertiesService: { getScriptProperties: () => propertyApi },
     CacheService: { getScriptCache: () => cacheApi },
@@ -26,10 +31,23 @@ function loadBackend() {
       base64EncodeWebSafe: value => Buffer.from(value).toString('base64url'),
       DigestAlgorithm: { SHA_256: 'sha256' },
     },
+    UrlFetchApp: {
+      fetch: (url, options) => {
+        requests.push({ url, options });
+        if (url.endsWith('/users/get_current_account')) {
+          return response(200, { account_id: 'dbid:test', root_info: { root_namespace_id: 'team-root' } });
+        }
+        return response(200, { entries: [], has_more: false });
+      },
+    },
+    ContentService: {
+      MimeType: { JSON: 'json' },
+      createTextOutput: text => ({ text, setMimeType() { return this; } }),
+    },
     console,
   });
   vm.runInContext(readFileSync(new URL('../Code.js', import.meta.url), 'utf8'), context);
-  return { context, properties, cache };
+  return { context, properties, cache, requests };
 }
 
 test('Jake Banks is the only administrator', () => {
@@ -102,4 +120,35 @@ test('analysis validation limits equipment and preserves unknown counts', () => 
   assert.equal(context.validateInstallAnalysis_({ ...valid, recommendedEquipment: ['forklift'] }), false);
   assert.equal(context.validateInstallAnalysis_({ ...valid, letterCount: -1 }), false);
   assert.equal(context.validateInstallAnalysis_({ ...valid, letterCount: null }), true);
+  assert.equal(context.validateInstallAnalysis_({ ...valid, installRequirements: [{ ...valid.installRequirements[0], quantity: -2 }] }), false);
+  assert.equal(context.validateInstallAnalysis_({ ...valid, installRequirements: [{ ...valid.installRequirements[0], source: 'invented' }] }), false);
+});
+
+test('folder listing drains every Dropbox pagination cursor', () => {
+  const { context } = loadBackend();
+  const calls = [];
+  context.dropboxApiCall_ = (_token, endpoint, payload) => {
+    calls.push({ endpoint, payload });
+    if (endpoint === 'files/list_folder') return { entries: [{ id: '1' }], has_more: true, cursor: 'next-1' };
+    if (payload.cursor === 'next-1') return { entries: [{ id: '2' }], has_more: true, cursor: 'next-2' };
+    return { entries: [{ id: '3' }], has_more: false };
+  };
+  assert.deepEqual(JSON.parse(JSON.stringify(context.listDropboxFolderAll_('token', '/root', {}).map(entry => entry.id))), ['1', '2', '3']);
+  assert.deepEqual(calls.map(call => call.endpoint), ['files/list_folder', 'files/list_folder/continue', 'files/list_folder/continue']);
+});
+
+test('Team Space root header is attached to metadata requests', () => {
+  const { context, requests } = loadBackend();
+  context.dropboxApiCall_('token', 'files/list_folder', { path: '/orders' });
+  const apiRequest = requests.find(request => request.url.includes('/files/list_folder'));
+  assert.equal(apiRequest.options.headers['Dropbox-API-Path-Root'], JSON.stringify({ '.tag': 'root', root: 'team-root' }));
+});
+
+test('viewer requests are rejected by backend routes before private work runs', () => {
+  const { context } = loadBackend();
+  context.resolveActor_ = () => ({ name: 'Ryan Chapman', role: 'viewer' });
+  const mutation = context.doPost({ postData: { contents: JSON.stringify({ action: 'addUnsched', token: 'viewer-token', job_num: '260248' }) } });
+  assert.deepEqual(JSON.parse(mutation.text), { error: 'forbidden' });
+  const privateRead = context.doGet({ parameter: { action: 'getDropboxStatus', token: 'viewer-token' } });
+  assert.deepEqual(JSON.parse(privateRead.text), { error: 'unauthorized' });
 });
