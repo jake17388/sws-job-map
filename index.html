@@ -179,35 +179,6 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .settings-action:active { background: #f5f5f5; }
 .settings-action.danger { color: #DC143C; border-color: #f5d0d0; }
 .settings-action.danger:active { background: #fff0f0; }
-.dropbox-settings { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e8e8e8; }
-.dropbox-settings-title { font-size: 12px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
-.dropbox-status { font-size: 11px; color: #888; margin-bottom: 8px; }
-.dropbox-status.connected { color: #1a7040; font-weight: 700; }
-.dropbox-fields { display: grid; gap: 6px; }
-.dropbox-fields input { width: 100%; border: 1px solid #ddd; border-radius: 7px; padding: 8px; font-size: 12px; }
-.dropbox-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.dropbox-actions button { flex: 1; min-width: 92px; border: 1px solid #ddd; border-radius: 7px; padding: 8px; background: #fafafa; font-size: 11px; font-weight: 700; cursor: pointer; }
-.dropbox-hint { min-height: 16px; margin-top: 6px; color: #888; font-size: 10px; line-height: 1.35; }
-.install-analysis { margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; font-size: 11px; color: #555; }
-.analysis-title { font-size: 11px; font-weight: 800; color: #1a1a1a; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
-.analysis-state { padding: 8px; background: #f6f7f9; border-radius: 7px; color: #777; }
-.analysis-section { margin-top: 8px; }
-.analysis-label { font-weight: 800; color: #333; margin-bottom: 3px; }
-.analysis-equipment { display: flex; flex-wrap: wrap; gap: 4px; }
-.analysis-chip { background: #e7eefb; color: var(--navy); border-radius: 999px; padding: 3px 7px; font-weight: 700; }
-.analysis-counts { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 7px; }
-.analysis-count { background: #fafafa; border: 1px solid #eee; border-radius: 6px; padding: 5px; }
-.analysis-components { display: flex; gap: 4px; flex-wrap: wrap; }
-.analysis-component { border: 1px solid #e1e1e1; border-radius: 5px; padding: 2px 5px; background: #fff; }
-.analysis-list { margin: 3px 0 0 18px; line-height: 1.45; }
-.analysis-actions { display: flex; gap: 6px; margin-top: 9px; }
-.analysis-actions button { flex: 1; border: 1px solid #d5dceb; background: #f7f9fe; color: var(--navy); border-radius: 7px; padding: 7px; font-size: 10px; font-weight: 700; cursor: pointer; }
-.production-file-overlay { display: none; position: fixed; inset: 0; z-index: 1200; background: rgba(0,0,0,.82); padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
-.production-file-overlay.open { display: flex; flex-direction: column; }
-.production-file-bar { display: flex; align-items: center; justify-content: space-between; color: #fff; padding: 4px 2px 10px; gap: 8px; }
-.production-file-bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; }
-.production-file-bar button { border: 0; border-radius: 7px; background: #fff; color: #222; padding: 7px 11px; font-weight: 700; }
-.production-file-frame { width: 100%; flex: 1; border: 0; border-radius: 8px; background: #fff; }
 .filter-reset { font-size: 11px; color: #ccc; cursor: pointer; text-decoration: underline; margin-top: 6px; display: inline-block; }
 .filter-reset:hover { color: #888; }
  
@@ -655,32 +626,10 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
         <button class="zoom-reset-btn" onclick="resetZoom()">Reset</button>
       </div>
     </div>
-    <section class="dropbox-settings" id="dropbox-settings-section" hidden>
-      <div class="dropbox-settings-title">Dropbox Production Files</div>
-      <div class="dropbox-status" id="dropbox-status-text">Not configured</div>
-      <div class="dropbox-fields" id="dropbox-credentials-fields">
-        <input id="dropbox-app-key" type="text" placeholder="Dropbox app key" autocomplete="off" />
-        <input id="dropbox-app-secret" type="password" placeholder="Dropbox app secret" autocomplete="new-password" />
-        <button class="settings-action" id="dropbox-save-credentials-btn" onclick="saveDropboxCredentials()">Save Dropbox Credentials</button>
-      </div>
-      <div class="dropbox-actions">
-        <button id="dropbox-connect-btn" onclick="connectDropbox()" hidden>Connect</button>
-        <button id="dropbox-refresh-btn" onclick="refreshDropboxProductionFiles()" hidden>Refresh Production Files</button>
-        <button id="dropbox-disconnect-btn" onclick="disconnectDropbox()" hidden>Disconnect</button>
-      </div>
-      <div class="dropbox-hint" id="dropbox-hint"></div>
-    </section>
     <button class="settings-action" id="settings-check-link" onclick="checkForUpdate(true)">Check for updates</button>
     <button class="settings-action danger" onclick="closeSettings();signOut()">Sign out</button>
   </div>
 
-  <div class="production-file-overlay" id="production-file-overlay">
-    <div class="production-file-bar">
-      <span id="production-file-title">Production File</span>
-      <button onclick="closeProductionFile()">Close</button>
-    </div>
-    <iframe class="production-file-frame" id="production-file-frame" title="Production File"></iframe>
-  </div>
 </div>
  
 <script>
@@ -689,7 +638,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.08.18.1';
+const APP_VERSION = '2026.08.27.1';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -698,7 +647,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API limit reached', OVER_QUERY_LIMIT:'Rate limited', REQUEST_DENIED:'API key error', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
 const CREW = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
-const CREW_COLORS = { Johnny:'#E53935', Jonathan:'#5B9CF6', Randy:'#3aad6e', Eli:'#5E35B1', Jerry:'#FFBF00', Jake:'#111111' };
+const CREW_COLORS = { Johnny:'#F97316', Jonathan:'#5B9CF6', Randy:'#3aad6e', Eli:'#5E35B1', Jerry:'#FFBF00', Jake:'#111111' };
  
 // ── State ─────────────────────────────────────────────────────────────────────
 let map, geocoder, infoWindowOpen = null;
@@ -713,7 +662,6 @@ if (auth && !auth.role) auth.role = auth.user === 'Jake Banks' ? 'admin' : 'view
 let fetchedDateRange = null;
 let searchQuery = '';
 let editingId = null;
-let productionObjectUrl = null;
 const activeCrews = new Set(CREW);
 
 // ── Local caches (geocode results + last-session data) ───────────────────────
@@ -877,7 +825,6 @@ function applyRoleVisibility() {
   document.getElementById('fab-add').style.display = admin ? '' : 'none';
   document.getElementById('unsched-add').hidden = !admin;
   document.getElementById('unsched-add').style.display = admin ? '' : 'none';
-  document.getElementById('dropbox-settings-section').hidden = !admin;
   if (!admin) closeAddModal();
   renderList();
 }
@@ -911,85 +858,10 @@ function openSettings() {
   document.getElementById('zoom-label').textContent = ZOOM_STEPS[textZoomIdx] + '%';
   document.getElementById('settings-backdrop').classList.add('show');
   document.getElementById('settings-panel').classList.add('show');
-  if (isAdmin()) refreshDropboxSettings();
 }
 function closeSettings() {
   document.getElementById('settings-backdrop').classList.remove('show');
   document.getElementById('settings-panel').classList.remove('show');
-}
-
-function setDropboxHint(text) {
-  document.getElementById('dropbox-hint').textContent = text || '';
-}
-
-function renderDropboxStatus(status) {
-  const label = document.getElementById('dropbox-status-text');
-  label.textContent = status.connected ? 'Connected' : (status.hasCredentials ? 'Not connected' : 'Not configured');
-  label.classList.toggle('connected', !!status.connected);
-  document.getElementById('dropbox-connect-btn').hidden = !status.hasCredentials || status.connected;
-  document.getElementById('dropbox-refresh-btn').hidden = !status.connected;
-  document.getElementById('dropbox-disconnect-btn').hidden = !status.connected;
-  if (!status.openaiConfigured) setDropboxHint('Dropbox can be connected now. Add OPENAI_API_KEY in Apps Script Properties before analysis can run.');
-}
-
-function refreshDropboxSettings() {
-  if (!isAdmin()) return;
-  setDropboxHint('Checking connection…');
-  scriptGet('getDropboxStatus')
-    .then(status => { setDropboxHint(''); renderDropboxStatus(status); })
-    .catch(() => setDropboxHint('Could not load Dropbox status.'));
-}
-
-function saveDropboxCredentials() {
-  if (!isAdmin()) return;
-  const appKey = document.getElementById('dropbox-app-key').value.trim();
-  const appSecret = document.getElementById('dropbox-app-secret').value.trim();
-  if (!appKey || !appSecret) { setDropboxHint('App key and secret are both required.'); return; }
-  setDropboxHint('Saving…');
-  scriptPost({ action: 'setDropboxCredentials', appKey, appSecret })
-    .then(result => {
-      if (!result.success) throw new Error(result.error || 'Save failed');
-      document.getElementById('dropbox-app-key').value = '';
-      document.getElementById('dropbox-app-secret').value = '';
-      setDropboxHint('Saved. Connect Dropbox next.');
-      refreshDropboxSettings();
-    })
-    .catch(err => setDropboxHint(err.message || 'Could not save Dropbox credentials.'));
-}
-
-function connectDropbox() {
-  if (!isAdmin()) return;
-  setDropboxHint('Opening Dropbox authorization…');
-  scriptGet('getDropboxAuthUrl')
-    .then(result => {
-      if (!result.url) throw new Error(result.error || 'Could not start Dropbox connection');
-      window.open(result.url, '_blank', 'noopener');
-      setDropboxHint('Approve access in the new tab, then return here and reopen Settings.');
-    })
-    .catch(err => setDropboxHint(err.message || 'Could not connect Dropbox.'));
-}
-
-function refreshDropboxProductionFiles() {
-  if (!isAdmin()) return;
-  setDropboxHint('Queuing Production File refresh…');
-  scriptPost({ action: 'refreshDropboxProofsNow' })
-    .then(result => {
-      if (!result.success) throw new Error(result.error || 'Refresh failed');
-      setDropboxHint(`${result.queued || 0} job${result.queued === 1 ? '' : 's'} queued for refresh.`);
-    })
-    .catch(err => setDropboxHint(err.message || 'Refresh failed.'));
-}
-
-function disconnectDropbox() {
-  if (!isAdmin() || !confirm('Disconnect Dropbox? Production Files and new analyses will be unavailable until reconnected.')) return;
-  setDropboxHint('Disconnecting…');
-  scriptPost({ action: 'disconnectDropbox' })
-    .then(result => {
-      if (!result.success) throw new Error(result.error || 'Disconnect failed');
-      setDropboxHint('Disconnected.');
-      refreshDropboxSettings();
-    })
-    .catch(err => setDropboxHint(err.message || 'Disconnect failed.'));
 }
 
 // ── App update check ─────────────────────────────────────────────────────────
@@ -1024,7 +896,6 @@ function applyUpdate() {
   window.location.href = url.toString();
 }
 function signOut() {
-  closeProductionFile();
   localStorage.removeItem(AUTH_KEY);
   auth = null;
   currentUser = null; pinEntry = '';
@@ -1474,17 +1345,12 @@ function unschedCardHTML(job) {
       <button onclick="closeJobCard();editUnsched('${escapeHtml(job.id)}')">✎ Edit</button>
       <button class="danger" onclick="closeJobCard();removeUnsched('${escapeHtml(job.id)}')">✕ Remove</button>
     </div>` : '';
-  const analysis = isAdmin() ? `<section class="install-analysis" id="install-analysis-${escapeHtml(job.id)}">
-      <div class="analysis-title">Install Analysis</div>
-      <div class="analysis-state">Analyzing Production File…</div>
-    </section>` : '';
   return `<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:3px 0">
     <div style="font-size:10px;color:#aaa;font-weight:700;letter-spacing:.05em;font-family:'DM Mono',monospace">${escapeHtml(job.job_num)}</div>
     <div style="font-weight:700;font-size:13px;margin:3px 0;color:#1a1a1a">${escapeHtml(job.title)}</div>
     <div style="font-size:11px;color:#888;margin-bottom:5px">${escapeHtml(job.address)}</div>
     <div style="font-size:11px;font-weight:600;color:${COLORS.unscheduled}">UNSCHEDULED · Added by ${escapeHtml(job.added_by || 'Unknown')}</div>
     ${adminActions}
-    ${analysis}
   </div>`;
 }
 
@@ -1526,7 +1392,6 @@ function buildUnschedMarker(job, label) {
       iw.open(map, marker); infoWindowOpen = iw;
     }
     highlightItem('unsched-' + unscheduledJobs.indexOf(job));
-    if (isAdmin()) setTimeout(() => loadInstallAnalysis(job.id), 0);
   });
   job._marker = marker; job._iw = iw;
 }
@@ -1888,116 +1753,8 @@ function focusUnsched(id) {
     job._iw.open(map, job._marker); infoWindowOpen = job._iw;
   }
   highlightItem('unsched-' + unscheduledJobs.indexOf(job));
-  if (isAdmin()) setTimeout(() => loadInstallAnalysis(job.id), 0);
 }
 
-function loadInstallAnalysis(id) {
-  if (!isAdmin()) return;
-  const container = document.getElementById('install-analysis-' + id);
-  if (!container) return;
-  container.innerHTML = '<div class="analysis-title">Install Analysis</div><div class="analysis-state">Analyzing Production File…</div>';
-  scriptGet('getInstallAnalysis&id=' + encodeURIComponent(id))
-    .then(result => {
-      const current = document.getElementById('install-analysis-' + id);
-      if (!current) return;
-      current.innerHTML = renderInstallAnalysis(result, id);
-      if (['queued', 'discovering', 'analyzing', 'retry_wait'].includes(result.status)) {
-        setTimeout(() => { if (document.getElementById('install-analysis-' + id)) loadInstallAnalysis(id); }, 10000);
-      }
-    })
-    .catch(() => {
-      const current = document.getElementById('install-analysis-' + id);
-      if (current) current.innerHTML = renderInstallAnalysis({ status: 'error', canRetry: true }, id);
-    });
-}
-
-function renderInstallAnalysis(result, id) {
-  const title = '<div class="analysis-title">Install Analysis</div>';
-  if (!result || ['queued', 'discovering', 'analyzing', 'retry_wait'].includes(result.status)) {
-    return title + '<div class="analysis-state">Analyzing Production File…</div>';
-  }
-  if (result.status === 'no_file') {
-    return title + '<div class="analysis-state">No Production File Available</div>' + analysisRetryButton(id);
-  }
-  if (result.status !== 'ready' || !result.analysis) {
-    return title + '<div class="analysis-state">Analysis could not be completed.</div>' + analysisRetryButton(id);
-  }
-  const analysis = result.analysis;
-  const equipment = (analysis.recommendedEquipment || []).map(item => `<span class="analysis-chip">${escapeHtml(item)}</span>`).join('') || '<span class="analysis-state">Field verification required</span>';
-  const componentLabels = { acm:'ACM', rpc:'RPC', fco:'FCO', emc:'EMC', sf:'S/F', ds:'D/S', df:'D/F', wireway:'Wireway', raceway:'Raceway' };
-  const components = Object.keys(componentLabels).filter(key => analysis.components && analysis.components[key] && analysis.components[key].present === true)
-    .map(key => {
-      const component = analysis.components[key];
-      const quantity = component.quantity == null ? '' : ` × ${component.quantity}`;
-      const notes = component.notes ? ` — ${escapeHtml(component.notes)}` : '';
-      return `<span class="analysis-component">${componentLabels[key]}${quantity}${notes}</span>`;
-    });
-  if (analysis.monument && analysis.monument.present === true) {
-    components.unshift(`<span class="analysis-component">Monument${analysis.monument.quantity == null ? '' : ' × ' + analysis.monument.quantity}${analysis.monument.notes ? ' — ' + escapeHtml(analysis.monument.notes) : ''}</span>`);
-  }
-  const requirements = (analysis.installRequirements || []).map(requirement => {
-    const quantity = requirement.quantity == null ? '' : ` (${requirement.quantity}${requirement.unit ? ' ' + escapeHtml(requirement.unit) : ''})`;
-    const notes = requirement.notes ? ` — ${escapeHtml(requirement.notes)}` : '';
-    const pages = requirement.pages && requirement.pages.length ? ` [p. ${requirement.pages.join(', ')}]` : '';
-    return `<li>${escapeHtml(requirement.item)}${quantity}${notes}${pages}</li>`;
-  }).join('');
-  const unknowns = (analysis.unknowns || []).length
-    ? `<div class="analysis-section"><div class="analysis-label">Field Verification</div><ul class="analysis-list">${analysis.unknowns.map(note => `<li>${escapeHtml(note)}</li>`).join('')}</ul></div>`
-    : '';
-  const fileButton = result.productionFileAvailable
-    ? `<button onclick="openProductionFile('${escapeHtml(id)}')">View Production File</button>` : '';
-  return `${title}
-    <div class="analysis-section"><div class="analysis-label">Recommended Equipment</div><div class="analysis-equipment">${equipment}</div></div>
-    <div class="analysis-counts">
-      <div class="analysis-count"><b>Individual Letters</b><br>${analysis.letterCount == null ? 'Unknown' : analysis.letterCount}</div>
-      <div class="analysis-count"><b>Lettersets</b><br>${analysis.lettersetCount == null ? 'Unknown' : analysis.lettersetCount}</div>
-    </div>
-    <div class="analysis-section"><div class="analysis-label">Sign Types / Components</div><div class="analysis-components">${components.join('') || 'None identified'}</div></div>
-    <div class="analysis-section"><div class="analysis-label">Installation Requirements</div><ul class="analysis-list">${requirements || '<li>Field verification required</li>'}</ul></div>
-    ${unknowns}
-    <div class="analysis-actions">${fileButton}<button onclick="retryInstallAnalysis('${escapeHtml(id)}')">Retry Analysis</button></div>`;
-}
-
-function analysisRetryButton(id) {
-  return `<div class="analysis-actions"><button onclick="retryInstallAnalysis('${escapeHtml(id)}')">Retry Analysis</button></div>`;
-}
-
-function retryInstallAnalysis(id) {
-  if (!isAdmin()) return;
-  scriptPost({ action: 'retryInstallAnalysis', id })
-    .then(result => {
-      if (!result.success) throw new Error(result.error || 'Retry failed');
-      loadInstallAnalysis(id);
-    })
-    .catch(() => alert('Could not retry analysis. Try again.'));
-}
-
-function openProductionFile(id) {
-  if (!isAdmin()) return;
-  scriptGet('getProductionFile&id=' + encodeURIComponent(id))
-    .then(file => {
-      if (!file.available || !file.base64) throw new Error('No Production File Available');
-      closeProductionFile();
-      const binary = atob(file.base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      productionObjectUrl = URL.createObjectURL(new Blob([bytes], { type: file.mimeType || 'application/pdf' }));
-      document.getElementById('production-file-title').textContent = file.name || 'Production File';
-      document.getElementById('production-file-frame').src = productionObjectUrl;
-      document.getElementById('production-file-overlay').classList.add('open');
-    })
-    .catch(err => alert(err.message || 'Production File could not be opened.'));
-}
-
-function closeProductionFile() {
-  const overlay = document.getElementById('production-file-overlay');
-  const frame = document.getElementById('production-file-frame');
-  if (overlay) overlay.classList.remove('open');
-  if (frame) frame.removeAttribute('src');
-  if (productionObjectUrl) URL.revokeObjectURL(productionObjectUrl);
-  productionObjectUrl = null;
-}
- 
 function highlightItem(id) {
   document.querySelectorAll('.job-item').forEach(el => el.classList.remove('highlighted'));
   const el = document.getElementById('item-' + id);
