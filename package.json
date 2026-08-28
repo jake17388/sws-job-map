@@ -2,10 +2,13 @@
   "name": "sws-job-map",
   "private": true,
   "scripts": {
+    "build:backend": "node scripts/build-backend.mjs",
+    "build:frontend": "node scripts/build-frontend.mjs",
+    "build": "npm run build:backend && npm run build:frontend",
     "check:syntax": "node scripts/check-syntax.mjs",
-    "check": "npm run check:syntax && npm test",
-    "test": "node --test tests/*.test.mjs",
-    "test:coverage": "node --experimental-test-coverage --test tests/*.test.mjs"
+    "check": "npm run build && npm run check:syntax && npm test",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "test:coverage": "npm run build && node --experimental-test-coverage --test tests/*.test.mjs"
   },
   "engines": {
     "node": ">=22"

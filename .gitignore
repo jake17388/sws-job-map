@@ -1,0 +1,5 @@
+node_modules/
+/Code.js
+/index.html
+.DS_Store
+.claude/settings.local.json

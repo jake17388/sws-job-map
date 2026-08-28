@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'Code.js'
+      - 'src/backend/**'
       - 'appsscript.json'
 
 jobs:
@@ -17,6 +17,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Build backend
+        run: node scripts/build-backend.mjs
 
       - name: Install clasp
         run: npm install -g @google/clasp

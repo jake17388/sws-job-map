@@ -1,0 +1,36 @@
+# Ignore lockfiles and packages
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+node_modules/
+
+# Ignore local tool states
+.claude/
+.clasp.json
+.claspignore
+/Code.js
+/index.html
+
+# Ignore logs
+*.log
+
+# Ignore images & assets
+brand-mark-160.png
+brand-mark-96.png
+favicon.png
+icon-180.png
+icon-192.png
+icon-512.png
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+
+# Ignore system files
+.DS_Store
+.git/
+.github/
+.vscode/
+.idea/

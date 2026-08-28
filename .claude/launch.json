@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "SWS Job Map",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-p", "3000", "."],
+      "port": 3000
+    },
+    {
+      "name": "SWS Prod Calendar",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-p", "3100", "/Users/Jake/sws-prod-calendar"],
+      "port": 3100
+    }
+  ]
+}
