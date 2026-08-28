@@ -29,8 +29,10 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Build frontend
-        run: node scripts/build-frontend.mjs
+      # `check` builds backend + frontend, syntax-checks, and runs the test
+      # suite. A failure here stops the deploy before it reaches the live site.
+      - name: Verify and build
+        run: npm run check
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -43,3 +45,8 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Smoke test deployed frontend
+        run: |
+          curl --fail --location --silent --show-error --retry 4 --retry-delay 3 \
+            "${{ steps.deployment.outputs.page_url }}" | grep -q "SWS Job Map"

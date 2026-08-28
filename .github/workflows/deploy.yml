@@ -16,10 +16,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
-      - name: Build backend
-        run: node scripts/build-backend.mjs
+      # Gate the Apps Script push on the full suite: a bad backend commit
+      # would otherwise go straight to the live /exec web app.
+      - name: Verify and build backend
+        run: npm run check
 
       - name: Install clasp
         run: npm install -g @google/clasp
