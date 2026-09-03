@@ -220,16 +220,21 @@ function cacheSurecamVehicles() {
 // first lat/lng-shaped pair) is what keeps each position matched to the right truck.
 function scParseLivePage_(html) {
   var vehicles = [];
-  var tags = html.match(/<div class="group\/vehicle[^"]*"(?:\s+[a-zA-Z0-9_-]+(?:="[^"]*")?)*>/g) || [];
+  var tags = html.match(/<div\b[^>]*\bclass\s*=\s*(['"])[^'"]*\bgroup\/vehicle\b[^'"]*\1[^>]*>/gi) || [];
+  function attr(tag, name) {
+    var match = tag.match(new RegExp('\\b' + name + '\\s*=\\s*(["\\\'])(.*?)\\1', 'i'));
+    return match ? match[2] : '';
+  }
   tags.forEach(function(tag) {
-    var deviceId = (tag.match(/data-live-device-details-src="\/accounts\/[^\/"]+\/live\/([0-9a-f-]+)"/) || [])[1];
-    var lat = (tag.match(/data-latitude="(-?\d+\.\d+)"/) || [])[1];
-    var lng = (tag.match(/data-longitude="(-?\d+\.\d+)"/) || [])[1];
+    var src = attr(tag, 'data-live-device-details-src');
+    var deviceId = (src.match(/\/accounts\/[^\/]+\/live\/([0-9a-f-]+)/i) || [])[1];
+    var lat = attr(tag, 'data-latitude');
+    var lng = attr(tag, 'data-longitude');
     if (!deviceId || !lat || !lng) return;
     vehicles.push({
       deviceId: deviceId,
-      name: (tag.match(/data-label="([^"]*)"/) || [])[1] || deviceId,
-      status: (tag.match(/data-status="([^"]*)"/) || [])[1] || 'unknown',
+      name: attr(tag, 'data-label') || deviceId,
+      status: attr(tag, 'data-status') || 'unknown',
       lat: parseFloat(lat),
       lng: parseFloat(lng),
       updatedAt: new Date().toISOString(),

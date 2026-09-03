@@ -1,16 +1,22 @@
-const TAG_RE = /<div class="group\/vehicle[^"]*"(?:\s+[a-zA-Z0-9_-]+(?:="[^"]*")?)*>/g;
+const TAG_RE = /<div\b[^>]*\bclass\s*=\s*(['"])[^'"]*\bgroup\/vehicle\b[^'"]*\1[^>]*>/gi;
+
+function attr(tag, name) {
+  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*(["'])(.*?)\\1`, 'i'));
+  return match ? match[2] : '';
+}
 
 export function parseSurecamVehicles(html, updatedAt = new Date().toISOString()) {
   const tags = html.match(TAG_RE) || [];
   return tags.flatMap(tag => {
-    const deviceId = (tag.match(/data-live-device-details-src="\/accounts\/[^\/"]+\/live\/([0-9a-f-]+)"/) || [])[1];
-    const lat = Number((tag.match(/data-latitude="(-?\d+\.\d+)"/) || [])[1]);
-    const lng = Number((tag.match(/data-longitude="(-?\d+\.\d+)"/) || [])[1]);
+    const src = attr(tag, 'data-live-device-details-src');
+    const deviceId = (src.match(/\/accounts\/[^\/]+\/live\/([0-9a-f-]+)/i) || [])[1];
+    const lat = Number(attr(tag, 'data-latitude'));
+    const lng = Number(attr(tag, 'data-longitude'));
     if (!deviceId || !Number.isFinite(lat) || !Number.isFinite(lng)) return [];
     return [{
       deviceId,
-      name: (tag.match(/data-label="([^"]*)"/) || [])[1] || deviceId,
-      status: (tag.match(/data-status="([^"]*)"/) || [])[1] || 'unknown',
+      name: attr(tag, 'data-label') || deviceId,
+      status: attr(tag, 'data-status') || 'unknown',
       lat,
       lng,
       updatedAt,
