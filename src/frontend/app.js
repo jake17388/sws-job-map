@@ -411,8 +411,8 @@ function applyVehicleSnapshot(data, fromCache) {
 }
 
 function fetchVehicles() {
-  if (!auth) return;
-  scriptGet('getVehicles')
+  if (!auth) return Promise.resolve();
+  return scriptGet('getVehicles')
     .then(data => {
       if (data && data.vehicles && data.vehicles.length) {
         writeCache(VEHICLE_CACHE_KEY, data);
@@ -424,6 +424,19 @@ function fetchVehicles() {
       vehicleDataStale = true;
       renderVehiclesPanel();
     });
+}
+
+let vehicleRefreshInFlight = null;
+function refreshVehicles() {
+  if (vehicleRefreshInFlight) return vehicleRefreshInFlight;
+  const buttons = ['truck-refresh', 'map-truck-refresh']
+    .map(id => document.getElementById(id)).filter(Boolean);
+  buttons.forEach(btn => { btn.disabled = true; btn.classList.add('is-refreshing'); });
+  vehicleRefreshInFlight = fetchVehicles().finally(() => {
+    buttons.forEach(btn => { btn.disabled = false; btn.classList.remove('is-refreshing'); });
+    vehicleRefreshInFlight = null;
+  });
+  return vehicleRefreshInFlight;
 }
 
 function toggleVehiclesPanel() {

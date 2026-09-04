@@ -155,7 +155,10 @@
         <div id="vehicles-collapsible">
           <div class="vehicle-list-header">
             <span class="filter-label" style="margin-bottom:0">Live Trucks</span>
-            <button class="truck-toggle-btn on" id="btn-trucks" onclick="toggleTrucks()">Show/Hide</button>
+            <div class="vehicle-actions">
+              <button class="truck-refresh-btn" id="truck-refresh" onclick="refreshVehicles()" title="Refresh truck positions" aria-label="Refresh truck positions">↻</button>
+              <button class="truck-toggle-btn on" id="btn-trucks" onclick="toggleTrucks()">Show/Hide</button>
+            </div>
           </div>
           <div id="vehicle-list-items"><div style="font-size:11px;color:#ccc;padding:6px 4px">Loading…</div></div>
         </div>
@@ -216,7 +219,10 @@
         <div class="map-filter-panel" id="map-vehicles-panel">
           <div class="vehicle-list-header">
             <span class="filter-label" style="margin-bottom:0">Live Trucks</span>
-            <button class="truck-toggle-btn on" id="map-btn-trucks" onclick="toggleTrucks()">Show/Hide</button>
+            <div class="vehicle-actions">
+              <button class="truck-refresh-btn" id="map-truck-refresh" onclick="refreshVehicles()" title="Refresh truck positions" aria-label="Refresh truck positions">↻</button>
+              <button class="truck-toggle-btn on" id="map-btn-trucks" onclick="toggleTrucks()">Show/Hide</button>
+            </div>
           </div>
           <div id="map-vehicle-list-items"><div style="font-size:11px;color:#ccc;padding:6px 4px">Loading…</div></div>
         </div>

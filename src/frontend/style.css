@@ -133,6 +133,11 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .zoom-label { font-size: 12px; font-weight: 600; color: #1a1a1a; font-family: 'DM Mono', monospace; min-width: 38px; text-align: center; }
 .zoom-reset-btn { padding: 4px 9px; border-radius: 8px; border: 1px solid #e8e8e8; background: #fafafa; color: #888; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
 .zoom-reset-btn:active { background: #eee; }
+.vehicle-actions { display: flex; align-items: center; gap: 5px; }
+.truck-refresh-btn { width: 25px; height: 25px; padding: 0; border-radius: 50%; border: 1px solid #ddd; background: #f5f5f5; color: #777; font-size: 15px; line-height: 1; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+.truck-refresh-btn:hover { background: #eaf0fb; color: #1e4589; border-color: #b9c9e7; }
+.truck-refresh-btn:disabled { opacity: 0.55; cursor: wait; }
+.truck-refresh-btn.is-refreshing { animation: spin 0.8s linear infinite; }
 .truck-toggle-btn { padding: 4px 10px; border-radius: 20px; border: 1px solid #ddd; background: #f5f5f5; color: #888; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
 .truck-toggle-btn.on { background: #1e4589; border-color: #1e4589; color: #fff; }
 .vehicles-section { padding: 4px 14px 8px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }

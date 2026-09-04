@@ -2,9 +2,13 @@ name: Sync SureCam Session
 
 on:
   schedule:
-    # Refresh well before the observed ~10-hour SureCam session lifetime.
-    - cron: '17 */3 * * *'
+    # Refresh frequently enough for the map to show live truck positions.
+    - cron: '*/15 * * * *'
   workflow_dispatch: {}
+
+concurrency:
+  group: surecam-sync
+  cancel-in-progress: false
 
 jobs:
   sync:
