@@ -220,10 +220,10 @@ function cacheSurecamVehicles() {
 function scParseLivePage_(html) {
   var vehicles = [];
   // The device-detail attribute is stable across SureCam's wrapper/class changes.
-  var tags = html.match(/<[a-z][a-z0-9:-]*\b[^>]*\bdata-live-device-details-src\s*=\s*(['"])[^'"]*\1[^>]*>/gi) || [];
+  var tags = html.match(/<[a-z][a-z0-9:-]*\b[^>]*\bdata-live-device-details-src\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)[^>]*>/gi) || [];
   function attr(tag, name) {
-    var match = tag.match(new RegExp('\\b' + name + '\\s*=\\s*(["\\\'])(.*?)\\1', 'i'));
-    return match ? match[2] : '';
+    var match = tag.match(new RegExp('\\b' + name + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s>]+))', 'i'));
+    return match ? (match[1] || match[2] || match[3] || '') : '';
   }
   tags.forEach(function(tag) {
     var src = attr(tag, 'data-live-device-details-src');

@@ -1,9 +1,9 @@
 // The device-detail attribute is stable across SureCam's wrapper/class changes.
-const TAG_RE = /<[a-z][a-z0-9:-]*\b[^>]*\bdata-live-device-details-src\s*=\s*(['"])[^'"]*\1[^>]*>/gi;
+const TAG_RE = /<[a-z][a-z0-9:-]*\b[^>]*\bdata-live-device-details-src\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)[^>]*>/gi;
 
 function attr(tag, name) {
-  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*(["'])(.*?)\\1`, 'i'));
-  return match ? match[2] : '';
+  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'));
+  return match ? (match[1] ?? match[2] ?? match[3] ?? '') : '';
 }
 
 export function parseSurecamVehicles(html, updatedAt = new Date().toISOString()) {

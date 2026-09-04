@@ -57,3 +57,8 @@ const stableAttributeMarkup = `<div data-live-device-details-src="/accounts/0112
   data-latitude="33.42" data-longitude="-111.94" data-status="normal" data-label="Attribute Truck"></div>`;
 assert.equal(parseSurecamVehicles(stableAttributeMarkup, '2026-08-13T12:00:00.000Z').length, 1,
   'parser should use the stable device-detail attribute when wrapper classes change');
+
+const unquotedAttributeMarkup = `<div data-live-device-details-src=/accounts/01127/live/33bb8790-2acc-4ae5-9729-c6435152cf6f
+  data-latitude=33.43 data-longitude=-111.95 data-status=normal data-label="Unquoted Truck"></div>`;
+assert.equal(parseSurecamVehicles(unquotedAttributeMarkup, '2026-08-13T12:00:00.000Z').length, 1,
+  'parser should accept unquoted attributes from SureCam server markup');
