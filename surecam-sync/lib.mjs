@@ -1,4 +1,6 @@
-const TAG_RE = /<div\b[^>]*\bclass\s*=\s*(['"])[^'"]*\bgroup\/vehicle\b[^'"]*\1[^>]*>/gi;
+// SureCam has changed the vehicle wrapper element over time (div/li). Match
+// the semantic class rather than coupling parsing to one HTML tag.
+const TAG_RE = /<[a-z][a-z0-9:-]*\b[^>]*\bclass\s*=\s*(['"])[^'"]*\bgroup\/vehicle\b[^'"]*\1[^>]*>/gi;
 
 function attr(tag, name) {
   const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*(["'])(.*?)\\1`, 'i'));

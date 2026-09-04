@@ -220,7 +220,9 @@ function cacheSurecamVehicles() {
 // first lat/lng-shaped pair) is what keeps each position matched to the right truck.
 function scParseLivePage_(html) {
   var vehicles = [];
-  var tags = html.match(/<div\b[^>]*\bclass\s*=\s*(['"])[^'"]*\bgroup\/vehicle\b[^'"]*\1[^>]*>/gi) || [];
+  // SureCam has changed the vehicle wrapper element over time (div/li). Match
+  // the semantic class rather than coupling parsing to one HTML tag.
+  var tags = html.match(/<[a-z][a-z0-9:-]*\b[^>]*\bclass\s*=\s*(['"])[^'"]*\bgroup\/vehicle\b[^'"]*\1[^>]*>/gi) || [];
   function attr(tag, name) {
     var match = tag.match(new RegExp('\\b' + name + '\\s*=\\s*(["\\\'])(.*?)\\1', 'i'));
     return match ? match[2] : '';

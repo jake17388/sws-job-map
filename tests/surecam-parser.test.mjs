@@ -47,3 +47,8 @@ const reorderedMarkup = `<div data-status='normal' data-label='Reordered Truck'
   data-latitude='33.4'></div>`;
 assert.equal(parseSurecamVehicles(reorderedMarkup, '2026-08-13T12:00:00.000Z').length, 1,
   'parser should tolerate attribute order and quote style changes');
+
+const nonDivMarkup = `<li class="row group/vehicle" data-live-device-details-src="/accounts/01127/live/33bb8790-2acc-4ae5-9729-c6435152cf6f"
+  data-latitude="33.41" data-longitude="-111.93" data-status="idling" data-label="Bucket Truck"></li>`;
+assert.equal(parseSurecamVehicles(nonDivMarkup, '2026-08-13T12:00:00.000Z').length, 1,
+  'parser should accept the vehicle container regardless of its HTML element');
