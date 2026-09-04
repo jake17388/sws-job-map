@@ -432,7 +432,16 @@ function refreshVehicles() {
   const buttons = ['truck-refresh', 'map-truck-refresh']
     .map(id => document.getElementById(id)).filter(Boolean);
   buttons.forEach(btn => { btn.disabled = true; btn.classList.add('is-refreshing'); });
-  vehicleRefreshInFlight = fetchVehicles().finally(() => {
+  vehicleRefreshInFlight = (auth ? scriptGet('refreshVehicles').then(data => {
+    if (data && data.vehicles && data.vehicles.length) {
+      writeCache(VEHICLE_CACHE_KEY, data);
+      applyVehicleSnapshot(data, false);
+    }
+  }).catch(err => {
+    console.error('Failed to refresh vehicles:', err);
+    vehicleDataStale = true;
+    renderVehiclesPanel();
+  }) : Promise.resolve()).finally(() => {
     buttons.forEach(btn => { btn.disabled = false; btn.classList.remove('is-refreshing'); });
     vehicleRefreshInFlight = null;
   });

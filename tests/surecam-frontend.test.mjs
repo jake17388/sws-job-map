@@ -14,3 +14,5 @@ assert.match(html, /id="map-truck-refresh"[^>]*onclick="refreshVehicles\(\)"/,
   'map vehicle panel should expose a dedicated truck refresh button');
 assert.match(html, /function refreshVehicles\(\)/,
   'truck refresh button should trigger an immediate vehicle fetch');
+assert.match(html, /scriptGet\('refreshVehicles'\)/,
+  'truck refresh should request a fresh SureCam snapshot from the backend');

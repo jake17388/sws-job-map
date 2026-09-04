@@ -21,6 +21,10 @@ const context = vm.createContext({
 });
 vm.runInContext(readFileSync(new URL('../Code.js', import.meta.url), 'utf8'), context);
 
+assert.match(readFileSync(new URL('../Code.js', import.meta.url), 'utf8'),
+  /action === 'refreshVehicles'/,
+  'backend should expose a protected action for forcing a fresh vehicle snapshot');
+
 const snapshot = {
   snapshotAt: '2026-08-13T12:00:00.000Z',
   vehicles: [{

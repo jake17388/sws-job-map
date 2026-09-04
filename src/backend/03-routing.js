@@ -20,6 +20,18 @@ function doGet(e) {
     });
   }
 
+  if (action === 'refreshVehicles') {
+    if (!actor) return json(UNAUTHORIZED);
+    cacheSurecamVehicles();
+    const snapshot = getVehicleSnapshot_();
+    const ageMs = snapshot.snapshotAt ? Date.now() - new Date(snapshot.snapshotAt).getTime() : null;
+    return json({
+      vehicles: snapshot.vehicles,
+      snapshotAt: snapshot.snapshotAt,
+      stale: ageMs === null || ageMs > 30 * 60 * 1000,
+    });
+  }
+
   // The app itself is hosted on GitHub Pages, not here
   return ContentService.createTextOutput(
     'SWS Job Map: https://jake17388.github.io/sws-job-map/');
