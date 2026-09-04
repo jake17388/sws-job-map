@@ -207,8 +207,7 @@ function cacheSurecamVehicles() {
     storeVehicleSnapshot_(vehicles, new Date().toISOString());
     Logger.log('SC: cached ' + vehicles.length + ' of ' + ids.length + ' vehicles');
   } else {
-    CacheService.getScriptCache().remove('sc_session');
-    Logger.log('SC: zero vehicles returned; session cleared for re-login');
+    Logger.log('SC: zero vehicles returned; retaining session for next attempt');
   }
 }
 
@@ -220,9 +219,8 @@ function cacheSurecamVehicles() {
 // first lat/lng-shaped pair) is what keeps each position matched to the right truck.
 function scParseLivePage_(html) {
   var vehicles = [];
-  // SureCam has changed the vehicle wrapper element over time (div/li). Match
-  // the semantic class rather than coupling parsing to one HTML tag.
-  var tags = html.match(/<[a-z][a-z0-9:-]*\b[^>]*\bclass\s*=\s*(['"])[^'"]*\bgroup\/vehicle\b[^'"]*\1[^>]*>/gi) || [];
+  // The device-detail attribute is stable across SureCam's wrapper/class changes.
+  var tags = html.match(/<[a-z][a-z0-9:-]*\b[^>]*\bdata-live-device-details-src\s*=\s*(['"])[^'"]*\1[^>]*>/gi) || [];
   function attr(tag, name) {
     var match = tag.match(new RegExp('\\b' + name + '\\s*=\\s*(["\\\'])(.*?)\\1', 'i'));
     return match ? match[2] : '';

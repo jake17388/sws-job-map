@@ -24,6 +24,9 @@ vm.runInContext(readFileSync(new URL('../Code.js', import.meta.url), 'utf8'), co
 assert.match(readFileSync(new URL('../Code.js', import.meta.url), 'utf8'),
   /action === 'refreshVehicles'/,
   'backend should expose a protected action for forcing a fresh vehicle snapshot');
+assert.match(readFileSync(new URL('../Code.js', import.meta.url), 'utf8'),
+  /zero vehicles returned; retaining session/,
+  'backend should retain a valid session after a transient empty parse');
 
 const snapshot = {
   snapshotAt: '2026-08-13T12:00:00.000Z',
