@@ -261,8 +261,8 @@
         <button class="settings-action" id="settings-check-link" onclick="checkForUpdate(true)">Check for updates</button>
       </section>
       <section class="settings-card account-card"><h2>My Account</h2><p class="settings-help">Update the name and PIN used to sign in on this account.</p>
-        <div class="account-fields"><label>Name<input id="account-name" autocomplete="name"></label><label>New PIN<input id="account-pin" inputmode="numeric" maxlength="4" placeholder="New 4-digit PIN"></label></div>
-        <p class="field-hint">Enter a new 4-digit number to change your PIN. Leave blank to keep your current PIN.</p>
+        <div class="account-fields"><label>Name<input id="account-name" autocomplete="name"></label><label>New PIN<input id="account-pin" inputmode="numeric" maxlength="6" placeholder="New 6-digit PIN"></label></div>
+        <p class="field-hint">Enter a new 6-digit number to change your PIN. Leave blank to keep your current PIN.</p>
         <button class="primary-action" onclick="saveAccountInfo()">Save my info</button><p class="form-status" id="account-status"></p>
       </section>
       <section class="settings-card management-card"><h2>Management</h2><p class="settings-help">Manage people and permissions.</p><button class="settings-action" onclick="openUserManagement()">User Management</button></section>

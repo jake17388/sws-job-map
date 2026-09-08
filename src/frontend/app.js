@@ -230,7 +230,7 @@ function saveAccountInfo() {
   const name = document.getElementById('account-name').value.trim();
   const pin = document.getElementById('account-pin').value.trim();
   const status = document.getElementById('account-status');
-  if (!name || (pin && !/^\d{4}$/.test(pin))) { status.textContent = 'Enter a name and a valid 4-digit PIN.'; return; }
+  if (!name || (pin && !/^\d{6}$/.test(pin))) { status.textContent = 'Enter a name and a valid 6-digit PIN.'; return; }
   status.textContent = 'Saving…';
   scriptPost({ action:'updateMyInfo', name, pin }).then(res => { auth = { token:res.token, user:res.user, role:res.role }; currentUser = res.user; writeCache(AUTH_KEY, auth); document.getElementById('user-badge').textContent = currentUser; document.getElementById('account-pin').value = ''; status.textContent = 'Saved'; }).catch(() => { status.textContent = 'Could not save your information.'; });
 }
