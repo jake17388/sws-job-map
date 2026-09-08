@@ -138,12 +138,12 @@ function pinDel() {
   pinEntry = pinEntry.slice(0, -1);
   updateDots();
   document.getElementById('pin-error').textContent = '';
-  document.querySelectorAll('.pin-dot').forEach(d => d.classList.remove('error'));
+  document.querySelectorAll('.pin-dots span').forEach(d => d.classList.remove('error'));
 }
 function updateDots(state) {
   for (let i = 0; i < 6; i++) {
     const dot = document.getElementById('d' + i);
-    dot.className = 'pin-dot';
+    dot.className = '';
     if (state === 'error') dot.classList.add('error');
     else if (i < pinEntry.length) dot.classList.add('filled');
   }
