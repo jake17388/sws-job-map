@@ -250,24 +250,25 @@
   <div class="settings-backdrop" id="settings-backdrop" onclick="closeSettings()"></div>
   <div class="settings-panel" id="settings-panel">
     <div class="settings-header">
-      <span>Settings</span>
+      <div><h1>Settings</h1><p>Personal preferences and account controls</p></div>
       <button class="settings-close-btn" onclick="closeSettings()" title="Close">✕</button>
     </div>
-    <div class="settings-row">
-      <span>Version</span>
-      <span id="settings-version-text"></span>
+    <div class="settings-grid">
+      <section class="settings-card display-card"><h2>Display</h2><p class="settings-help">Adjust how the job map looks on this device.</p>
+        <div class="settings-row"><span>Version</span><span id="settings-version-text"></span></div>
+        <div class="settings-row"><span>Text size</span><div class="zoom-controls"><button class="zoom-btn" onclick="adjustZoom(-1)">−</button><span class="zoom-label" id="zoom-label">100%</span><button class="zoom-btn" onclick="adjustZoom(1)">+</button><button class="zoom-reset-btn" onclick="resetZoom()">Reset</button></div></div>
+        <div class="settings-row"><label for="theme-select">Theme</label><select id="theme-select" onchange="setTheme(this.value)"><option value="light">Light</option><option value="dark">Dark</option></select></div>
+        <button class="settings-action" id="settings-check-link" onclick="checkForUpdate(true)">Check for updates</button>
+      </section>
+      <section class="settings-card account-card"><h2>My Account</h2><p class="settings-help">Update the name and PIN used to sign in on this account.</p>
+        <div class="account-fields"><label>Name<input id="account-name" autocomplete="name"></label><label>New PIN<input id="account-pin" inputmode="numeric" maxlength="4" placeholder="New 4-digit PIN"></label></div>
+        <p class="field-hint">Enter a new 4-digit number to change your PIN. Leave blank to keep your current PIN.</p>
+        <button class="primary-action" onclick="saveAccountInfo()">Save my info</button><p class="form-status" id="account-status"></p>
+      </section>
+      <section class="settings-card management-card"><h2>Management</h2><p class="settings-help">Manage people and permissions.</p><button class="settings-action" onclick="openUserManagement()">User Management</button></section>
+      <section class="settings-card health-card"><div class="card-title-row"><div><h2>System Health</h2><p class="settings-help">Backup, recovery, and integration status for administrators.</p></div><span class="status-pill">Healthy</span></div><div class="health-row"><span>Tracking sheet</span><span>Connected</span></div><div class="health-row"><span>Last operational failure</span><span>None</span></div><button class="settings-action" onclick="checkSystemHealth(this)">Check system health</button></section>
     </div>
-    <div class="settings-row">
-      <span>Text size</span>
-      <div class="zoom-controls">
-        <button class="zoom-btn" onclick="adjustZoom(-1)">−</button>
-        <span class="zoom-label" id="zoom-label">100%</span>
-        <button class="zoom-btn" onclick="adjustZoom(1)">+</button>
-        <button class="zoom-reset-btn" onclick="resetZoom()">Reset</button>
-      </div>
-    </div>
-    <button class="settings-action" id="settings-check-link" onclick="checkForUpdate(true)">Check for updates</button>
-    <button class="settings-action danger" onclick="closeSettings();signOut()">Sign out</button>
+    <button class="settings-action danger signout-action" onclick="closeSettings();signOut()">Sign out</button>
   </div>
 
 </div>

@@ -25,6 +25,21 @@ function replaceUserPin(pin, user) {
   return { success: true, user: normalizedUser };
 }
 
+function updateMyInfo(actor, pin, user) {
+  const normalizedUser = String(user || '').trim();
+  if (!normalizedUser) throw new Error('Name is required');
+  if (pin && !/^\d{4}$/.test(String(pin))) throw new Error('PIN must be four digits');
+  const pins = getPins();
+  const currentPin = Object.keys(pins).find(key => pins[key] === actor.name);
+  Object.keys(pins).forEach(existingPin => { if (pins[existingPin] === actor.name) delete pins[existingPin]; });
+  const existingPin = Object.keys(pins).find(key => pins[key] === normalizedUser);
+  const nextPin = pin || existingPin || currentPin;
+  if (!nextPin) throw new Error('A PIN is required');
+  pins[nextPin] = normalizedUser;
+  PropertiesService.getScriptProperties().setProperty(PINS_PROPERTY, JSON.stringify(pins));
+  return { ok: true, user: normalizedUser, role: roleForUser_(normalizedUser), token: makeToken(normalizedUser) };
+}
+
 function getPins() {
   const pins = PropertiesService.getScriptProperties().getProperty(PINS_PROPERTY);
   if (!pins) return {};

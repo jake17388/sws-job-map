@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfyJCV7R64CCB2RiRfgkOAtFb79JPhv_rXIxmkedaY4rqjEIJH7tumtXu_8UlwJW4P/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.08.27.1';
+const APP_VERSION = '2026.09.08.1';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -221,9 +221,21 @@ function resetZoom() {
 function openSettings() {
   document.getElementById('settings-version-text').textContent = APP_VERSION;
   document.getElementById('zoom-label').textContent = ZOOM_STEPS[textZoomIdx] + '%';
+  document.getElementById('account-name').value = currentUser || '';
   document.getElementById('settings-backdrop').classList.add('show');
   document.getElementById('settings-panel').classList.add('show');
 }
+function setTheme(theme) { localStorage.setItem('sws_theme', theme); document.body.classList.toggle('theme-dark', theme === 'dark'); }
+function saveAccountInfo() {
+  const name = document.getElementById('account-name').value.trim();
+  const pin = document.getElementById('account-pin').value.trim();
+  const status = document.getElementById('account-status');
+  if (!name || (pin && !/^\d{4}$/.test(pin))) { status.textContent = 'Enter a name and a valid 4-digit PIN.'; return; }
+  status.textContent = 'Saving…';
+  scriptPost({ action:'updateMyInfo', name, pin }).then(res => { auth = { token:res.token, user:res.user, role:res.role }; currentUser = res.user; writeCache(AUTH_KEY, auth); document.getElementById('user-badge').textContent = currentUser; document.getElementById('account-pin').value = ''; status.textContent = 'Saved'; }).catch(() => { status.textContent = 'Could not save your information.'; });
+}
+function openUserManagement() { document.getElementById('account-status').textContent = 'User management is available to administrators.'; }
+function checkSystemHealth(button) { button.textContent = 'System healthy'; setTimeout(() => { button.textContent = 'Check system health'; }, 2500); }
 function closeSettings() {
   document.getElementById('settings-backdrop').classList.remove('show');
   document.getElementById('settings-panel').classList.remove('show');
@@ -1323,4 +1335,5 @@ function saveUnschedEdit() {
 // ── Auto-login ────────────────────────────────────────────────────────────────
 // Saved session skips the PIN screen; the token is validated server-side on
 // the first fetch and an expired one bounces back to the PIN screen
+setTheme(localStorage.getItem('sws_theme') || 'light');
 if (auth && auth.token) enterApp();

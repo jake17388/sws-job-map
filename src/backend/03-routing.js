@@ -52,6 +52,8 @@ function doPost(e) {
   const actor = resolveActor_(data.token);
   if (!actor) return json(UNAUTHORIZED);
 
+  if (data.action === 'updateMyInfo') return json(updateMyInfo(actor, data.pin, data.name));
+
   if (data.action === 'addUnsched') {
     if (!isAdmin_(actor)) return json({ error: 'forbidden' });
     data.added_by = actor.name; // trust the token, not the client-supplied name
