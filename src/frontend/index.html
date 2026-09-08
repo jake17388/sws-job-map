@@ -30,15 +30,15 @@
 <!-- PIN Screen -->
 <div id="pin-screen">
   <img class="pin-brand-mark" src="brand-mark-160.png" alt="" />
-  <div class="pin-logo"><span>SWS</span> Job Map</div>
+  <div class="pin-logo">SWS JOB MAP</div>
   <div class="pin-card">
     <div class="pin-title">Enter PIN</div>
-    <div class="pin-subtitle">Enter your 4-digit PIN to continue</div>
+    <div class="pin-subtitle">Enter your 6-digit PIN to continue</div>
     <div class="pin-dots">
       <div class="pin-dot" id="d0"></div>
       <div class="pin-dot" id="d1"></div>
       <div class="pin-dot" id="d2"></div>
-      <div class="pin-dot" id="d3"></div>
+      <div class="pin-dot" id="d3"></div><div class="pin-dot" id="d4"></div><div class="pin-dot" id="d5"></div>
     </div>
     <div class="pin-keypad">
       <button class="pin-key" onclick="pinKey('1')">1</button>
@@ -50,9 +50,8 @@
       <button class="pin-key" onclick="pinKey('7')">7</button>
       <button class="pin-key" onclick="pinKey('8')">8</button>
       <button class="pin-key" onclick="pinKey('9')">9</button>
-      <button class="pin-key empty"></button>
-      <button class="pin-key" onclick="pinKey('0')">0</button>
       <button class="pin-key del" onclick="pinDel()">⌫</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
     </div>
     <div class="pin-error" id="pin-error"></div>
   </div>
@@ -270,6 +269,7 @@
     </div>
     <button class="settings-action danger signout-action" onclick="closeSettings();signOut()">Sign out</button>
   </div>
+  <div class="user-management-panel" id="user-management-panel"><div class="user-management-header"><div><button class="back-settings" onclick="closeUserManagement()">← Settings</button><h1>User Management</h1><p>Add accounts, assign roles, update PINs, and manage access.</p></div><button class="settings-close-btn" onclick="closeUserManagement()">✕</button></div><div class="user-management-grid"><section class="settings-card"><h2>Add a user</h2><p class="settings-help">Create a six-digit PIN account and assign its access level.</p><input class="user-field" id="new-user-name" placeholder="Name"><select class="user-field" id="new-user-role"><option value="viewer">Viewer</option><option value="admin">Admin</option></select><input class="user-field" id="new-user-pin" inputmode="numeric" maxlength="6" placeholder="6-digit PIN"><button class="primary-action" onclick="addManagedUser()">Add user</button><p class="form-status" id="user-management-status"></p></section><section class="settings-card people-card"><h2>People</h2><p class="settings-help">Changes save when you leave a field. Select a row for account actions.</p><div id="managed-users"></div></section></div></div>
 
 </div>
  

@@ -8,7 +8,7 @@ const AUTH_SECRET_PROPERTY = 'AUTH_SECRET_V2';
 // Execution-API helpers for secure PIN provisioning. PIN values are passed at
 // invocation time and never stored in source control.
 function addPin(pin, user) {
-  if (!/^\d{4}$/.test(String(pin)) || !String(user || '').trim()) throw new Error('PIN must be four digits and user is required');
+  if (!/^\d{6}$/.test(String(pin)) || !String(user || '').trim()) throw new Error('PIN must be six digits and user is required');
   const pins = getPins();
   pins[String(pin)] = String(user).trim();
   PropertiesService.getScriptProperties().setProperty(PINS_PROPERTY, JSON.stringify(pins));
@@ -16,7 +16,7 @@ function addPin(pin, user) {
 }
 
 function replaceUserPin(pin, user) {
-  if (!/^\d{4}$/.test(String(pin)) || !String(user || '').trim()) throw new Error('PIN must be four digits and user is required');
+  if (!/^\d{6}$/.test(String(pin)) || !String(user || '').trim()) throw new Error('PIN must be six digits and user is required');
   const normalizedUser = String(user).trim();
   const pins = getPins();
   Object.keys(pins).forEach(existingPin => { if (pins[existingPin] === normalizedUser) delete pins[existingPin]; });
@@ -28,7 +28,12 @@ function replaceUserPin(pin, user) {
 function updateMyInfo(actor, pin, user) {
   const normalizedUser = String(user || '').trim();
   if (!normalizedUser) throw new Error('Name is required');
-  if (pin && !/^\d{4}$/.test(String(pin))) throw new Error('PIN must be four digits');
+  if (pin && !/^\d{6}$/.test(String(pin))) throw new Error('PIN must be six digits');
+
+function listUsers_() { return Object.keys(getPins()).map(pin => ({ pin, name:getPins()[pin], role:roleForUser_(getPins()[pin]) })); }
+function adminAddUser_(name,pin) { if(!/^\d{6}$/.test(String(pin))||!String(name).trim()) throw new Error('Invalid user'); const pins=getPins(); pins[pin]=String(name).trim(); PropertiesService.getScriptProperties().setProperty(PINS_PROPERTY,JSON.stringify(pins)); return {ok:true}; }
+function adminUpdateUser_(oldPin,name,pin) { const pins=getPins(); delete pins[oldPin]; return adminAddUser_(name,pin); }
+function adminRemoveUser_(pin) { const pins=getPins(); if(pins[pin]===ADMIN_USER_NAME) throw new Error('Cannot remove administrator'); delete pins[pin]; PropertiesService.getScriptProperties().setProperty(PINS_PROPERTY,JSON.stringify(pins)); return {ok:true}; }
   const pins = getPins();
   const currentPin = Object.keys(pins).find(key => pins[key] === actor.name);
   Object.keys(pins).forEach(existingPin => { if (pins[existingPin] === actor.name) delete pins[existingPin]; });

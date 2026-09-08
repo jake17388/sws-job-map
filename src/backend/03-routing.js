@@ -3,6 +3,7 @@ function doGet(e) {
   const params = (e && e.parameter) || {};
   const action = params.action;
   const actor = resolveActor_(params.token);
+  if (action === 'getUsers') return actor && isAdmin_(actor) ? json({users:listUsers_()}) : json(UNAUTHORIZED);
 
   if (action === 'getJobs' || action === 'getUnsched') {
     if (!actor) return json(UNAUTHORIZED);
@@ -51,6 +52,9 @@ function doPost(e) {
 
   const actor = resolveActor_(data.token);
   if (!actor) return json(UNAUTHORIZED);
+  if (data.action === 'addUser' && isAdmin_(actor)) return json(adminAddUser_(data.name,data.pin));
+  if (data.action === 'updateUser' && isAdmin_(actor)) return json(adminUpdateUser_(data.oldPin,data.name,data.pin));
+  if (data.action === 'removeUser' && isAdmin_(actor)) return json(adminRemoveUser_(data.pin));
 
   if (data.action === 'updateMyInfo') return json(updateMyInfo(actor, data.pin, data.name));
 

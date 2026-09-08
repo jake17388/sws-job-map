@@ -128,10 +128,10 @@ function closeJobCard() {
 
 // ── PIN logic ─────────────────────────────────────────────────────────────────
 function pinKey(k) {
-  if (pinBusy || pinEntry.length >= 4) return;
+  if (pinBusy || pinEntry.length >= 6) return;
   pinEntry += k;
   updateDots();
-  if (pinEntry.length === 4) submitPin();
+  if (pinEntry.length === 6) submitPin();
 }
 function pinDel() {
   if (pinBusy) return;
@@ -141,7 +141,7 @@ function pinDel() {
   document.querySelectorAll('.pin-dot').forEach(d => d.classList.remove('error'));
 }
 function updateDots(state) {
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     const dot = document.getElementById('d' + i);
     dot.className = 'pin-dot';
     if (state === 'error') dot.classList.add('error');
@@ -234,7 +234,12 @@ function saveAccountInfo() {
   status.textContent = 'Saving…';
   scriptPost({ action:'updateMyInfo', name, pin }).then(res => { auth = { token:res.token, user:res.user, role:res.role }; currentUser = res.user; writeCache(AUTH_KEY, auth); document.getElementById('user-badge').textContent = currentUser; document.getElementById('account-pin').value = ''; status.textContent = 'Saved'; }).catch(() => { status.textContent = 'Could not save your information.'; });
 }
-function openUserManagement() { document.getElementById('account-status').textContent = 'User management is available to administrators.'; }
+function closeUserManagement() { document.getElementById('user-management-panel').classList.remove('show'); }
+function openUserManagement() { if (!isAdmin()) return; document.getElementById('settings-panel').classList.remove('show'); document.getElementById('settings-backdrop').classList.remove('show'); document.getElementById('user-management-panel').classList.add('show'); loadManagedUsers(); }
+function loadManagedUsers() { scriptGet('getUsers').then(users => { document.getElementById('managed-users').innerHTML = (users.users || []).map(u => `<div class="managed-user"><input value="${escapeHtml(u.name)}" onchange="updateManagedUser('${escapeHtml(u.pin)}',this.value,this.parentElement.querySelector('select').value)"><select onchange="updateManagedUser('${escapeHtml(u.pin)}',this.parentElement.querySelector('input').value,this.value)"><option value="viewer" ${u.role==='viewer'?'selected':''}>Viewer</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option></select><input value="${escapeHtml(u.pin)}" maxlength="6" inputmode="numeric" onchange="updateManagedUser('${escapeHtml(u.pin)}',this.parentElement.querySelector('input').value,this.parentElement.querySelector('select').value,this.value)"><button class="delete-user" onclick="removeManagedUser('${escapeHtml(u.pin)}')">×</button></div>`).join(''); }); }
+function addManagedUser() { const name=document.getElementById('new-user-name').value.trim(), pin=document.getElementById('new-user-pin').value.trim(), status=document.getElementById('user-management-status'); if(!name || !/^\d{6}$/.test(pin)){status.textContent='Enter a name and a 6-digit PIN.';return;} scriptPost({action:'addUser',name,pin,role:document.getElementById('new-user-role').value}).then(()=>{status.textContent='User added';loadManagedUsers();}).catch(()=>status.textContent='Could not add user.'); }
+function updateManagedUser(oldPin,name,role,pin){ const nextPin=pin||oldPin; if(!name||!/^[0-9]{6}$/.test(nextPin))return; scriptPost({action:'updateUser',oldPin,name,pin:nextPin,role}).then(loadManagedUsers); }
+function removeManagedUser(pin){ if(confirm('Remove this user?')) scriptPost({action:'removeUser',pin}).then(loadManagedUsers); }
 function checkSystemHealth(button) { button.textContent = 'System healthy'; setTimeout(() => { button.textContent = 'Check system health'; }, 2500); }
 function closeSettings() {
   document.getElementById('settings-backdrop').classList.remove('show');
