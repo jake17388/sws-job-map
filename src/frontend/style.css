@@ -167,8 +167,8 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .settings-action:active { background: #f5f5f5; }
 .settings-action.danger { color: #DC143C; border-color: #f5d0d0; }
 .settings-action.danger:active { background: #fff0f0; }
-.settings-panel { width: min(1280px, calc(100% - 48px)); max-height: 92vh; overflow:auto; bottom:auto; top:50%; padding:28px 32px 32px; border-radius:16px; transform:translate(-50%,-45%); background:#f3f6fb; box-shadow:0 18px 55px rgba(30,55,95,.22); }
-.settings-panel.show { transform:translate(-50%,-50%); }
+#settings-panel { width: min(1280px, calc(100% - 48px)); max-height: 92vh; overflow:auto; bottom:auto; top:50%; padding:28px 32px 32px; border-radius:16px; transform:translate(-50%,-45%); background:#f3f6fb; box-shadow:0 18px 55px rgba(30,55,95,.22); }
+#settings-panel.show { transform:translate(-50%,-50%); }
 .settings-header { margin-bottom:24px; align-items:flex-start; }
 .settings-header h1 { font-size:28px; color:#1d2b44; margin:0 0 3px; }
 .settings-header p,.settings-help { color:#5d708e; font-size:13px; font-weight:400; }
@@ -189,7 +189,7 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .status-pill { background:#e8f6ed; color:#188044; border-radius:20px; padding:4px 10px; font-size:11px; font-weight:700; }
 .health-row { display:flex; justify-content:space-between; padding:12px 0; color:#5d708e; font-size:13px; border-bottom:1px solid #edf0f5; }
 .signout-action { max-width:180px; }
-@media (max-width:768px) { .settings-panel { width:100%; max-height:100vh; top:auto; bottom:0; transform:translate(-50%,110%); border-radius:16px 16px 0 0; padding:22px 18px calc(22px + env(safe-area-inset-bottom)); } .settings-panel.show { transform:translate(-50%,0); } .settings-grid { grid-template-columns:1fr; gap:14px; } .settings-card { padding:18px; } .settings-header h1 { font-size:24px; } .user-management-panel { padding:24px 16px; }.user-management-grid { grid-template-columns:1fr; }.managed-user { grid-template-columns:1fr 1fr; } }
+@media (max-width:768px) { #settings-panel { width:100%; max-height:100vh; top:auto; bottom:0; transform:translate(-50%,110%); border-radius:16px 16px 0 0; padding:22px 18px calc(22px + env(safe-area-inset-bottom)); } #settings-panel.show { transform:translate(-50%,0); } .settings-grid { grid-template-columns:1fr; gap:14px; } .settings-card { padding:18px; } .settings-header h1 { font-size:24px; } .user-management-panel { padding:24px 16px; }.user-management-grid { grid-template-columns:1fr; }.managed-user { grid-template-columns:1fr 1fr; } }
 .filter-reset { font-size: 11px; color: #ccc; cursor: pointer; text-decoration: underline; margin-top: 6px; display: inline-block; }
 .filter-reset:hover { color: #888; }
  
