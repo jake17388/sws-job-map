@@ -1,5 +1,6 @@
 // The device-detail attribute is stable across SureCam's wrapper/class changes.
-const TAG_RE = /<[a-z][a-z0-9:-]*\b[^>]*\bdata-live-device-details-src\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)[^>]*>/gi;
+// Match complete tags, including literal > characters inside quoted attributes.
+const TAG_RE = /<[a-z][a-z0-9:-]*\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi;
 
 function attr(tag, name) {
   const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'));
@@ -11,8 +12,11 @@ export function parseSurecamVehicles(html, updatedAt = new Date().toISOString())
   return tags.flatMap(tag => {
     const src = attr(tag, 'data-live-device-details-src');
     const deviceId = (src.match(/\/accounts\/[^\/]+\/live\/([0-9a-f-]+)/i) || [])[1];
-    const lat = Number(attr(tag, 'data-latitude'));
-    const lng = Number(attr(tag, 'data-longitude'));
+    const latitude = attr(tag, 'data-latitude');
+    const longitude = attr(tag, 'data-longitude');
+    if (!latitude.trim() || !longitude.trim()) return [];
+    const lat = Number(latitude);
+    const lng = Number(longitude);
     if (!deviceId || !Number.isFinite(lat) || !Number.isFinite(lng)) return [];
     return [{
       deviceId,
