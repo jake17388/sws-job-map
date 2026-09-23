@@ -106,3 +106,121 @@ function updateUnsched(data) {
     lock.releaseLock();
   }
 }
+
+function parseScheduleDate_(value, label) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return { error: `Invalid ${label} date` };
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return { error: `Invalid ${label} date` };
+  }
+  return { date };
+}
+
+function requestedScheduleCrew_(value) {
+  if (!value) return { crew: [] };
+  const requested = Array.isArray(value) ? value : String(value).split(/[\/,&]/);
+  const cleaned = requested.map(name => String(name).trim()).filter(Boolean);
+  const unknown = cleaned.find(name => !CREW_NAMES.some(known => known.toLowerCase() === name.toLowerCase()));
+  if (unknown) return { error: `Unknown crew member: ${unknown}` };
+  return { crew: normalizeUnscheduledCrew_(cleaned) };
+}
+
+function scheduleReceiptKey_(id) {
+  return `SCHEDULED_UNSCHED_${String(id)}`;
+}
+
+function scheduleUnsched(data) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const id = String(data.id == null ? '' : data.id).trim();
+    if (!id) return { success: false, error: 'Invalid job identity' };
+    if (data.calendar !== 'install') return { success: false, error: 'Invalid target calendar' };
+
+    const properties = PropertiesService.getScriptProperties();
+    const receiptKey = scheduleReceiptKey_(id);
+    const savedReceipt = properties.getProperty(receiptKey);
+    if (savedReceipt) {
+      const receipt = JSON.parse(savedReceipt);
+      const cleanup = removeScheduledRow_(id);
+      if (!cleanup.success) {
+        return { ...receipt, success: false, partial: true, error: `Calendar event exists, but unscheduled cleanup failed: ${cleanup.error}` };
+      }
+      return { ...receipt, success: true, duplicate: true };
+    }
+
+    const sheet = getUnscheduledSheet_();
+    const rows = sheet.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][4]) === id) { rowIndex = i; break; }
+    }
+    if (rowIndex < 0) return { success: false, error: 'Unscheduled job not found' };
+
+    const row = rows[rowIndex];
+    const jobNum = normalizeJobNumber_(row[0]);
+    const title = String(row[1] == null ? '' : row[1]).trim();
+    const address = String(row[2] == null ? '' : row[2]).trim();
+    if (!jobNum || !title || !address) return { success: false, error: 'Stored job details are invalid' };
+    if (normalizeJobNumber_(data.job_num) !== jobNum ||
+        String(data.title == null ? '' : data.title).trim() !== title ||
+        String(data.address == null ? '' : data.address).trim() !== address) {
+      return { success: false, error: 'Job details changed; refresh and try again' };
+    }
+
+    const startResult = parseScheduleDate_(data.start_date, 'start');
+    if (startResult.error) return { success: false, error: startResult.error };
+    const endResult = parseScheduleDate_(data.end_date || data.start_date, 'end');
+    if (endResult.error) return { success: false, error: endResult.error };
+    if (endResult.date < startResult.date) return { success: false, error: 'End date cannot be before start date' };
+    const crewResult = requestedScheduleCrew_(data.crew);
+    if (crewResult.error) return { success: false, error: crewResult.error };
+
+    const calendar = CalendarApp.getCalendarById(INSTALL_CAL_ID);
+    if (!calendar) return { success: false, error: 'Install calendar not found' };
+    const exclusiveEnd = new Date(endResult.date);
+    exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
+    const eventTitle = `${crewResult.crew.length ? `(${crewResult.crew.join('/')}) ` : ''}${jobNum} ${title}`;
+    const event = calendar.createAllDayEvent(eventTitle, startResult.date, exclusiveEnd, { location: address });
+    const receipt = {
+      event_id: event.getId(),
+      type: 'install',
+      title: eventTitle,
+      crew: crewResult.crew,
+      start: formatDate(startResult.date),
+      end: formatDate(endResult.date),
+    };
+    properties.setProperty(receiptKey, JSON.stringify(receipt));
+
+    try {
+      sheet.deleteRow(rowIndex + 1);
+    } catch (cleanupError) {
+      return { ...receipt, success: false, partial: true, error: `Calendar event created, but unscheduled cleanup failed: ${cleanupError.message}` };
+    }
+    return { ...receipt, success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function removeScheduledRow_(id) {
+  try {
+    const sheet = getUnscheduledSheet_();
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][4]) === String(id)) {
+        sheet.deleteRow(i + 1);
+        return { success: true };
+      }
+    }
+    return { success: true, alreadyRemoved: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}

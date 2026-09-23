@@ -260,6 +260,30 @@
     </div>
   </div>
 
+  <div class="settings-backdrop" id="schedule-unscheduled-backdrop" onclick="closeUnscheduledScheduler()"></div>
+  <div class="scheduled-crew-panel schedule-unscheduled-panel" id="schedule-unscheduled-panel" role="dialog" aria-modal="true" aria-labelledby="schedule-unscheduled-title">
+    <div class="scheduled-crew-header">
+      <div><h2 id="schedule-unscheduled-title">Schedule job</h2><p id="schedule-unscheduled-summary"></p></div>
+      <button class="settings-close-btn" onclick="closeUnscheduledScheduler()" title="Close">✕</button>
+    </div>
+    <div class="schedule-job-details">
+      <div><span>Job</span><strong id="schedule-job-name"></strong></div>
+      <div><span>Address</span><strong id="schedule-job-address"></strong></div>
+    </div>
+    <div class="schedule-date-fields">
+      <label>Start date<input class="user-field" id="schedule-start-date" type="date" onchange="validateScheduleDates()"></label>
+      <label>End date<input class="user-field" id="schedule-end-date" type="date" onchange="validateScheduleDates()"></label>
+    </div>
+    <div class="unscheduled-crew-label">Crew (optional)</div>
+    <div class="crew-btns" id="schedule-crew-btns"></div>
+    <p class="scheduled-crew-help">Leave everyone unselected to schedule without an assigned crew.</p>
+    <p class="form-status schedule-status" id="schedule-unscheduled-status" role="alert"></p>
+    <div class="scheduled-crew-actions">
+      <button class="settings-action" onclick="closeUnscheduledScheduler()">Cancel</button>
+      <button class="primary-action" id="schedule-unscheduled-button" onclick="scheduleSelectedUnscheduled()">Schedule</button>
+    </div>
+  </div>
+
   <div class="settings-backdrop" id="settings-backdrop" onclick="closeSettings()"></div>
   <div class="settings-panel" id="settings-panel">
     <div class="settings-header">

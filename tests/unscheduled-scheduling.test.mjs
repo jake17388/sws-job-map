@@ -135,6 +135,18 @@ test('cleanup failure returns a durable partial result and retry does not duplic
   assert.equal(backend.rows.length, 2);
 });
 
+test('a retry after complete success returns the saved event without creating a duplicate', () => {
+  const backend = makeBackend();
+  const first = backend.context.scheduleUnsched(validRequest({ crew: ['Randy'] }));
+  const second = backend.context.scheduleUnsched(validRequest({ crew: ['Randy'] }));
+
+  assert.equal(first.success, true);
+  assert.equal(second.success, true);
+  assert.equal(second.duplicate, true);
+  assert.equal(second.event_id, first.event_id);
+  assert.equal(backend.created.length, 1);
+});
+
 test('the admin-only scheduling route does not trust a browser role', () => {
   assert.match(routingSource, /data\.action === 'scheduleUnsched'/);
   assert.match(routingSource, /if \(!isAdmin_\(actor\)\) return json\(\{ error: 'forbidden' \}\)/);
@@ -154,6 +166,7 @@ test('the scheduling modal exposes dates, optional crew, saving state, and the c
   assert.match(frontendSource, /end_date:\s*endDate/);
   assert.match(frontendSource, /calendar:\s*'install'/);
   assert.match(frontendSource, /scheduleButton\.disabled = true/);
+  assert.match(frontendSource, /initScheduleCrewButtons\(\)/);
   assert.match(frontendSource, /Promise\.all\(\[loadJobs\(\), loadUnscheduled\(\)\]\)/);
 });
 

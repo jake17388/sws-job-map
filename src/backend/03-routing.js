@@ -71,6 +71,10 @@ function doPost(e) {
     if (!isAdmin_(actor)) return json({ error: 'forbidden' });
     return json(updateUnsched(data));
   }
+  if (data.action === 'scheduleUnsched') {
+    if (!isAdmin_(actor)) return json({ error: 'forbidden' });
+    return json(scheduleUnsched(data));
+  }
   if (data.action === 'updateScheduledCrew') {
     if (!isAdmin_(actor)) return json({ error: 'forbidden' });
     return json(updateScheduledCrew(data));

@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwPSjnRVmTW0Azok6kY992-o4pdYacmaNkDYBk3XVihRMa32rLdwKdFKGoQbZHuGh6H/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.09.23.3';
+const APP_VERSION = '2026.09.23.4';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -31,6 +31,9 @@ const activeCrews = new Set(CREW);
 const selectedUnscheduledCrew = new Set();
 const selectedScheduledCrew = new Set();
 let editingScheduledIndex = null;
+const selectedScheduleCrew = new Set();
+let schedulingUnscheduledId = null;
+let scheduleSubmitting = false;
 
 // ── Local caches (geocode results + last-session data) ───────────────────────
 const GEO_CACHE_KEY = 'sws_geo_cache_v1';
@@ -554,6 +557,7 @@ function initMap() {
   initCrewButtons();
   initUnscheduledCrewButtons();
   initScheduledCrewButtons();
+  initScheduleCrewButtons();
   initTextZoom();
   initHomeMarker();
   const today = new Date();
@@ -757,6 +761,7 @@ function scheduledCardHTML(job) {
 function unschedCardHTML(job) {
   const crewChips = crewChipsHTML(job.crew || []);
   const adminActions = isAdmin() ? `<div class="job-card-actions">
+      <button onclick="closeJobCard();openUnscheduledScheduler('${escapeHtml(job.id)}')">Schedule</button>
       <button onclick="closeJobCard();editUnsched('${escapeHtml(job.id)}')">✎ Edit</button>
       <button class="danger" onclick="closeJobCard();removeUnsched('${escapeHtml(job.id)}')">✕ Remove</button>
     </div>` : '';
@@ -981,7 +986,7 @@ function renderList() {
       const errText = job._status === 'error'
         ? `<div class="geo-error-text">${GEO_ERRORS[job._geoError] || 'Geocode failed'} <button class="btn-retry" onclick="event.stopPropagation();retryGeocodeUnsched('${job.id}')" title="Retry">↺</button></div>`
         : '';
-      rows.push(`<div class="job-item" id="item-unsched-${i}" onclick="focusUnsched('${job.id}')">
+      rows.push(`<div class="job-item" id="item-unsched-${i}" onclick="${isAdmin() ? `openUnscheduledScheduler('${escapeHtml(job.id)}')` : `focusUnsched('${escapeHtml(job.id)}')`}">
         <div class="pin-badge ${sc}">U${i + 1}</div>
         <div class="job-info">
           <div class="job-num">${escapeHtml(job.job_num)}</div>
@@ -1237,6 +1242,117 @@ function initScheduledCrewButtons() {
     return `<button type="button" class="crew-btn" id="scheduled-crew-${name}" onclick="toggleScheduledCrew('${name}')" style="--cc:${cc};--ct:${ct}">${name}</button>`;
   }).join('');
   updateScheduledCrewButtons();
+}
+
+function initScheduleCrewButtons() {
+  const container = document.getElementById('schedule-crew-btns');
+  if (!container) return;
+  container.innerHTML = CREW.map(name => {
+    const cc = CREW_COLORS[name], ct = crewTextColor(cc);
+    return `<button type="button" class="crew-btn" id="schedule-crew-${name}" onclick="toggleScheduleCrew('${name}')" style="--cc:${cc};--ct:${ct}">${name}</button>`;
+  }).join('');
+  updateScheduleCrewButtons();
+}
+
+function toggleScheduleCrew(name) {
+  if (!CREW.includes(name)) return;
+  selectedScheduleCrew.has(name) ? selectedScheduleCrew.delete(name) : selectedScheduleCrew.add(name);
+  updateScheduleCrewButtons();
+}
+
+function setScheduleCrew(names) {
+  selectedScheduleCrew.clear();
+  (names || []).forEach(name => { if (CREW.includes(name)) selectedScheduleCrew.add(name); });
+  updateScheduleCrewButtons();
+}
+
+function updateScheduleCrewButtons() {
+  CREW.forEach(name => {
+    const button = document.getElementById('schedule-crew-' + name);
+    if (!button) return;
+    const selected = selectedScheduleCrew.has(name);
+    button.classList.toggle('on', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+}
+
+function openUnscheduledScheduler(id) {
+  if (!isAdmin()) return;
+  const job = unscheduledJobs.find(candidate => String(candidate.id) === String(id));
+  if (!job) return;
+  schedulingUnscheduledId = String(id);
+  setScheduleCrew(job.crew || []);
+  const defaultDate = document.getElementById('date-from').value || fmt(new Date());
+  document.getElementById('schedule-unscheduled-summary').textContent = job.job_num;
+  document.getElementById('schedule-job-name').textContent = job.title;
+  document.getElementById('schedule-job-address').textContent = job.address;
+  document.getElementById('schedule-start-date').value = defaultDate;
+  document.getElementById('schedule-end-date').value = defaultDate;
+  document.getElementById('schedule-unscheduled-status').textContent = '';
+  document.getElementById('schedule-unscheduled-button').disabled = false;
+  document.getElementById('schedule-unscheduled-button').textContent = 'Schedule';
+  document.getElementById('schedule-unscheduled-backdrop').classList.add('show');
+  document.getElementById('schedule-unscheduled-panel').classList.add('show');
+  closeJobCard();
+  if (infoWindowOpen) { infoWindowOpen.close(); infoWindowOpen = null; }
+  validateScheduleDates();
+}
+
+function closeUnscheduledScheduler() {
+  if (scheduleSubmitting) return;
+  schedulingUnscheduledId = null;
+  setScheduleCrew([]);
+  document.getElementById('schedule-unscheduled-backdrop').classList.remove('show');
+  document.getElementById('schedule-unscheduled-panel').classList.remove('show');
+  document.getElementById('schedule-unscheduled-status').textContent = '';
+}
+
+function validateScheduleDates() {
+  const startDate = document.getElementById('schedule-start-date').value;
+  const endDate = document.getElementById('schedule-end-date').value;
+  const status = document.getElementById('schedule-unscheduled-status');
+  const scheduleButton = document.getElementById('schedule-unscheduled-button');
+  const invalid = !startDate || !endDate || endDate < startDate;
+  status.textContent = endDate && startDate && endDate < startDate ? 'End date cannot be before start date.' : '';
+  scheduleButton.disabled = invalid;
+  return !invalid;
+}
+
+function scheduleSelectedUnscheduled() {
+  if (!isAdmin() || !schedulingUnscheduledId || !validateScheduleDates()) return;
+  const job = unscheduledJobs.find(candidate => String(candidate.id) === schedulingUnscheduledId);
+  if (!job) return;
+  const startDate = document.getElementById('schedule-start-date').value;
+  const endDate = document.getElementById('schedule-end-date').value;
+  const crew = CREW.filter(name => selectedScheduleCrew.has(name));
+  const scheduleButton = document.getElementById('schedule-unscheduled-button');
+  const status = document.getElementById('schedule-unscheduled-status');
+  scheduleButton.disabled = true;
+  scheduleButton.textContent = 'Scheduling…';
+  scheduleSubmitting = true;
+  status.textContent = 'Creating calendar event…';
+  scriptPost({
+    action: 'scheduleUnsched', id: job.id, job_num: job.job_num, title: job.title,
+    address: job.address, start_date: startDate, end_date: endDate, crew, calendar: 'install',
+  }).then(result => {
+    if (!result || result.error || result.success === false) {
+      const error = new Error(result && result.error || 'Scheduling failed');
+      error.partial = !!(result && result.partial);
+      throw error;
+    }
+    schedulingUnscheduledId = null;
+    scheduleSubmitting = false;
+    document.getElementById('schedule-unscheduled-backdrop').classList.remove('show');
+    document.getElementById('schedule-unscheduled-panel').classList.remove('show');
+    return Promise.all([loadJobs(), loadUnscheduled()]);
+  }).catch(err => {
+    scheduleSubmitting = false;
+    scheduleButton.disabled = false;
+    scheduleButton.textContent = 'Schedule';
+    status.textContent = err.partial
+      ? 'Calendar event was created, but the unscheduled item could not be removed. Retry to reconcile it safely.'
+      : (err.message || 'Could not schedule this job. Try again.');
+  });
 }
 
 function toggleScheduledCrew(name) {
