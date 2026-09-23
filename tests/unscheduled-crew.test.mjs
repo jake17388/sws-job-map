@@ -30,6 +30,21 @@ test('new and edited unscheduled jobs send optional crew assignments', () => {
   assert.match(frontendSource, /setUnscheduledCrew\(\[\]\)/);
 });
 
+test('clicking an unscheduled job focuses its map pin while the pencil opens editing', () => {
+  assert.match(
+    frontendSource,
+    /id="item-unsched-\$\{i\}" onclick="focusUnsched\('\$\{escapeHtml\(job\.id\)\}'\)"/,
+  );
+  assert.match(
+    frontendSource,
+    /class="btn-edit" onclick="event\.stopPropagation\(\);editUnsched\('\$\{escapeHtml\(job\.id\)\}'\)"/,
+  );
+  assert.doesNotMatch(
+    frontendSource,
+    /id="item-unsched-\$\{i\}" onclick="\$\{isAdmin\(\) \? `openUnscheduledScheduler/,
+  );
+});
+
 test('the backend reads and stores crew in the seventh sheet column', () => {
   assert.match(backendSource, /crew:\s*normalizeUnscheduledCrew_\(row\[6\]\)/);
   assert.match(backendSource, /setValue\('Crew'\)/);

@@ -170,6 +170,9 @@ test('the scheduling modal exposes dates, optional crew, saving state, and the c
   assert.match(frontendSource, /Promise\.all\(\[loadJobs\(\), loadUnscheduled\(\)\]\)/);
 });
 
-test('unscheduled cards and list rows open the scheduler for admins', () => {
-  assert.match(frontendSource, /openUnscheduledScheduler\('\$\{escapeHtml\(job\.id\)\}'\)/);
+test('unscheduled map cards offer scheduling to admins', () => {
+  assert.match(
+    frontendSource,
+    /<button onclick="closeJobCard\(\);openUnscheduledScheduler\('\$\{escapeHtml\(job\.id\)\}'\)">Schedule<\/button>/,
+  );
 });

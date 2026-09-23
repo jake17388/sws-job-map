@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwPSjnRVmTW0Azok6kY992-o4pdYacmaNkDYBk3XVihRMa32rLdwKdFKGoQbZHuGh6H/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.09.23.4';
+const APP_VERSION = '2026.09.23.5';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -993,7 +993,7 @@ function renderList() {
       const errText = job._status === 'error'
         ? `<div class="geo-error-text">${GEO_ERRORS[job._geoError] || 'Geocode failed'} <button class="btn-retry" onclick="event.stopPropagation();retryGeocodeUnsched('${job.id}')" title="Retry">↺</button></div>`
         : '';
-      rows.push(`<div class="job-item" id="item-unsched-${i}" onclick="${isAdmin() ? `openUnscheduledScheduler('${escapeHtml(job.id)}')` : `focusUnsched('${escapeHtml(job.id)}')`}">
+      rows.push(`<div class="job-item" id="item-unsched-${i}" onclick="focusUnsched('${escapeHtml(job.id)}')">
         <div class="pin-badge ${sc}">U${i + 1}</div>
         <div class="job-info">
           <div class="job-num">${escapeHtml(job.job_num)}</div>
