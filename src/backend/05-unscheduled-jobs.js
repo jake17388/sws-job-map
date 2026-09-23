@@ -4,11 +4,23 @@ function normalizeJobNumber_(value) {
   return /^\d{5,6}$/.test(normalized) ? normalized : null;
 }
 
+function normalizeUnscheduledCrew_(value) {
+  if (!value) return [];
+  const values = Array.isArray(value) ? value : String(value).split(/[\/,&]/);
+  const normalized = normalizeCrew(values.map(name => String(name).trim()).filter(Boolean));
+  return normalized.filter((name, index) => CREW_NAMES.includes(name) && normalized.indexOf(name) === index);
+}
+
 function getUnscheduledSheet_() {
   const spreadsheet = SpreadsheetApp.openById(SHEET_ID);
   const sheet = spreadsheet.getSheets().find(candidate => candidate.getSheetId() === UNSCHEDULED_SHEET_GID);
   if (!sheet) throw new Error('Unscheduled jobs sheet (gid 0) was not found');
   return sheet;
+}
+
+function ensureUnscheduledCrewHeader_(sheet) {
+  const header = sheet.getRange(1, 7);
+  if (!header.getValue()) header.setValue('Crew');
 }
 
 function getUnsched() {
@@ -22,6 +34,7 @@ function getUnsched() {
     address: row[2],
     added: row[3],
     added_by: row[5] || '',
+    crew: normalizeUnscheduledCrew_(row[6]),
   })).filter(j => j.job_num);
   return { jobs };
 }
@@ -33,10 +46,12 @@ function addUnsched(data) {
     const jobNum = normalizeJobNumber_(data.job_num);
     if (!jobNum) return { success: false, error: 'Job number must be 5 or 6 digits' };
     const sheet = getUnscheduledSheet_();
+    ensureUnscheduledCrewHeader_(sheet);
     const id = Date.now();
     sheet.appendRow([
       jobNum, data.title, data.address,
       new Date().toISOString(), id, data.added_by || 'Unknown',
+      normalizeUnscheduledCrew_(data.crew).join('/'),
     ]);
     return { success: true, id };
   } catch(e) {
@@ -73,12 +88,14 @@ function updateUnsched(data) {
     const jobNum = normalizeJobNumber_(data.job_num);
     if (!jobNum) return { success: false, error: 'Job number must be 5 or 6 digits' };
     const sheet = getUnscheduledSheet_();
+    ensureUnscheduledCrewHeader_(sheet);
     const rows = sheet.getDataRange().getValues();
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][4]) === String(data.id)) {
         sheet.getRange(i + 1, 1).setValue(jobNum);
         sheet.getRange(i + 1, 2).setValue(data.title);
         sheet.getRange(i + 1, 3).setValue(data.address);
+        sheet.getRange(i + 1, 7).setValue(normalizeUnscheduledCrew_(data.crew).join('/'));
         return { success: true };
       }
     }

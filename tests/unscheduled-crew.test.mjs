@@ -13,13 +13,15 @@ test('the unscheduled form offers optional crew buttons', () => {
 });
 
 test('new and edited unscheduled jobs send optional crew assignments', () => {
-  assert.match(frontendSource, /crew:\s*getSelectedUnscheduledCrew\(\)/);
+  assert.match(frontendSource, /const crew = getSelectedUnscheduledCrew\(\)/);
+  assert.match(frontendSource, /address: addr, crew/);
   assert.match(frontendSource, /setUnscheduledCrew\(job\.crew\s*\|\|\s*\[\]\)/);
   assert.match(frontendSource, /setUnscheduledCrew\(\[\]\)/);
 });
 
 test('the backend reads and stores crew in the seventh sheet column', () => {
   assert.match(backendSource, /crew:\s*normalizeUnscheduledCrew_\(row\[6\]\)/);
+  assert.match(backendSource, /setValue\('Crew'\)/);
   assert.match(backendSource, /normalizeUnscheduledCrew_\(data\.crew\)\.join\('\/'\)/);
   assert.match(backendSource, /getRange\(i \+ 1, 7\)\.setValue/);
 });

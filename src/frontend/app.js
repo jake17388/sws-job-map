@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwPSjnRVmTW0Azok6kY992-o4pdYacmaNkDYBk3XVihRMa32rLdwKdFKGoQbZHuGh6H/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.09.23.1';
+const APP_VERSION = '2026.09.23.2';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -28,6 +28,7 @@ let fetchedDateRange = null;
 let searchQuery = '';
 let editingId = null;
 const activeCrews = new Set(CREW);
+const selectedUnscheduledCrew = new Set();
 
 // ── Local caches (geocode results + last-session data) ───────────────────────
 const GEO_CACHE_KEY = 'sws_geo_cache_v1';
@@ -549,6 +550,7 @@ function initMap() {
   });
   geocoder = new google.maps.Geocoder();
   initCrewButtons();
+  initUnscheduledCrewButtons();
   initTextZoom();
   initHomeMarker();
   const today = new Date();
@@ -745,6 +747,7 @@ function scheduledCardHTML(job) {
   </div>`;
 }
 function unschedCardHTML(job) {
+  const crewChips = crewChipsHTML(job.crew || []);
   const adminActions = isAdmin() ? `<div class="job-card-actions">
       <button onclick="closeJobCard();editUnsched('${escapeHtml(job.id)}')">✎ Edit</button>
       <button class="danger" onclick="closeJobCard();removeUnsched('${escapeHtml(job.id)}')">✕ Remove</button>
@@ -754,6 +757,7 @@ function unschedCardHTML(job) {
     <div style="font-weight:700;font-size:13px;margin:3px 0;color:#1a1a1a">${escapeHtml(job.title)}</div>
     <div style="font-size:11px;color:#888;margin-bottom:5px">${escapeHtml(job.address)}</div>
     <div style="font-size:11px;font-weight:600;color:${COLORS.unscheduled}">UNSCHEDULED · Added by ${escapeHtml(job.added_by || 'Unknown')}</div>
+    ${crewChips}
     ${adminActions}
   </div>`;
 }
@@ -979,6 +983,7 @@ function renderList() {
             <span class="badge unscheduled">unscheduled</span>
             <span class="added-by">Added by ${escapeHtml(job.added_by || 'Unknown')}</span>
           </div>
+          ${crewChipsHTML(job.crew || [])}
           ${errText}
         </div>
         ${isAdmin() ? `<button class="btn-edit" onclick="event.stopPropagation();editUnsched('${escapeHtml(job.id)}')" title="Edit">✎</button>
@@ -1075,18 +1080,20 @@ function addUnscheduled() {
   const num = document.getElementById('u-num').value.trim();
   const title = document.getElementById('u-title').value.trim();
   const addr = document.getElementById('u-addr').value.trim();
+  const crew = getSelectedUnscheduledCrew();
   if (!num || !addr) { alert('Job number and address are required.'); return; }
 
   document.getElementById('u-num').value = '';
   document.getElementById('u-title').value = '';
   document.getElementById('u-addr').value = '';
+  setUnscheduledCrew([]);
   document.getElementById('u-num').focus();
   closeAddModal();
 
   // Optimistic insert: show the job (and geocode it) immediately, reconcile with the server in the background.
   const job = {
     id: 'temp-' + Date.now(), job_num: num, title: title || num, address: addr,
-    added_by: currentUser, added: new Date().toISOString(), _status: 'pending', _marker: null, _iw: null,
+    crew, added_by: currentUser, added: new Date().toISOString(), _status: 'pending', _marker: null, _iw: null,
   };
   unscheduledJobs.push(job);
   renderList();
@@ -1104,7 +1111,7 @@ function addUnscheduled() {
     });
   }
 
-  scriptPost({ action: 'addUnsched', job_num: num, title: title || num, address: addr, added_by: currentUser })
+  scriptPost({ action: 'addUnsched', job_num: num, title: title || num, address: addr, crew, added_by: currentUser })
     .then(data => {
       if (!data || data.error || data.success === false) throw new Error(data && data.error || 'Save failed');
       job.id = String(data.id);
@@ -1203,6 +1210,48 @@ function initCrewButtons() {
   });
 }
 
+function initUnscheduledCrewButtons() {
+  const container = document.getElementById('unscheduled-crew-btns');
+  if (!container) return;
+  container.innerHTML = CREW.map(name => {
+    const cc = CREW_COLORS[name], ct = crewTextColor(cc);
+    return `<button type="button" class="crew-btn" id="unscheduled-crew-${name}" onclick="toggleUnscheduledCrew('${name}')" style="--cc:${cc};--ct:${ct}">${name}</button>`;
+  }).join('');
+  updateUnscheduledCrewButtons();
+}
+
+function toggleUnscheduledCrew(name) {
+  if (!CREW.includes(name)) return;
+  selectedUnscheduledCrew.has(name) ? selectedUnscheduledCrew.delete(name) : selectedUnscheduledCrew.add(name);
+  updateUnscheduledCrewButtons();
+}
+
+function setUnscheduledCrew(names) {
+  selectedUnscheduledCrew.clear();
+  (names || []).forEach(name => { if (CREW.includes(name)) selectedUnscheduledCrew.add(name); });
+  updateUnscheduledCrewButtons();
+}
+
+function getSelectedUnscheduledCrew() {
+  return CREW.filter(name => selectedUnscheduledCrew.has(name));
+}
+
+function updateUnscheduledCrewButtons() {
+  CREW.forEach(name => {
+    const button = document.getElementById('unscheduled-crew-' + name);
+    if (button) {
+      const selected = selectedUnscheduledCrew.has(name);
+      button.classList.toggle('on', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    }
+  });
+}
+
+function crewChipsHTML(crew) {
+  if (!crew || crew.length === 0) return '';
+  return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">${crew.map(name => `<span style="font-size:10px;font-weight:700;color:${CREW_COLORS[name]||'#555'};background:${CREW_COLORS[name]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[name]||'#999'}55">${escapeHtml(name)}</span>`).join('')}</div>`;
+}
+
 function toggleCrew(name) {
   if (activeCrews.has(name)) {
     if (activeCrews.size === 1) return;
@@ -1265,6 +1314,7 @@ function editUnsched(id) {
   document.getElementById('u-num').value = job.job_num;
   document.getElementById('u-title').value = job.title;
   document.getElementById('u-addr').value = job.address;
+  setUnscheduledCrew(job.crew || []);
   document.getElementById('add-btn').textContent = 'Save Changes';
   document.querySelector('.add-form-label').textContent = 'Edit Unscheduled Job';
   document.getElementById('cancel-edit-btn').style.display = 'block';
@@ -1281,6 +1331,7 @@ function cancelEdit() {
   document.getElementById('u-num').value = '';
   document.getElementById('u-title').value = '';
   document.getElementById('u-addr').value = '';
+  setUnscheduledCrew([]);
   document.getElementById('add-btn').textContent = '+ Add to map';
   document.querySelector('.add-form-label').textContent = 'Add Unscheduled Job';
   document.getElementById('cancel-edit-btn').style.display = 'none';
@@ -1290,10 +1341,11 @@ function saveUnschedEdit() {
   const num = document.getElementById('u-num').value.trim();
   const title = document.getElementById('u-title').value.trim();
   const addr = document.getElementById('u-addr').value.trim();
+  const crew = getSelectedUnscheduledCrew();
   if (!num || !addr) { alert('Job number and address are required.'); return; }
   const btn = document.getElementById('add-btn');
   btn.disabled = true; btn.textContent = 'Saving...';
-  scriptPost({ action: 'updateUnsched', id: editingId, job_num: num, title: title || num, address: addr })
+  scriptPost({ action: 'updateUnsched', id: editingId, job_num: num, title: title || num, address: addr, crew })
     .then(result => { if (!result || result.error || result.success === false) throw new Error(result && result.error || 'Save failed'); cancelEdit(); closeAddModal(); loadUnscheduled(); })
     .catch(() => { btn.disabled = false; btn.textContent = 'Save Changes'; alert('Failed to save. Try again.'); });
 }

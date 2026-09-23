@@ -204,6 +204,8 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .inp-title { flex: 1; }
 .inp-addr { width: 100%; border: 1px solid #f0d0d5; border-radius: 6px; padding: 7px 10px; font-size: 12px; background: #fff; outline: none; color: #1a1a1a; margin-bottom: 6px; display: block; font-family: 'DM Sans', sans-serif; }
 .inp-addr:focus { border-color: #DC143C; }
+.unscheduled-crew-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #b45d6a; margin: 2px 0 6px; font-family: 'DM Mono', monospace; }
+.unscheduled-crew-btns { margin-bottom: 8px; }
 .btn-add { width: 100%; padding: 8px; border: none; border-radius: 6px; background: #DC143C; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s; font-family: 'DM Sans', sans-serif; }
 .btn-add:hover { background: #b01030; }
 .btn-add:disabled { background: #ccc; cursor: not-allowed; }
