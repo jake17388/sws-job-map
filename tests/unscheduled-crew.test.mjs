@@ -3,13 +3,24 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
 const frontendHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const frontendTemplate = readFileSync(new URL('../src/frontend/index.html', import.meta.url), 'utf8');
 const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
+const frontendStyles = readFileSync(new URL('../src/frontend/style.css', import.meta.url), 'utf8');
 const backendSource = readFileSync(new URL('../src/backend/05-unscheduled-jobs.js', import.meta.url), 'utf8');
 
 test('the unscheduled form offers optional crew buttons', () => {
   assert.match(frontendHtml, /Crew \(optional\)/);
   assert.match(frontendHtml, /id="unscheduled-crew-btns"/);
   assert.match(frontendSource, /function toggleUnscheduledCrew\(name\)/);
+});
+
+test('the unscheduled form is collapsed behind a calendar toggle and keeps all controls together', () => {
+  assert.match(frontendTemplate, /id="unsched-toggle"[^>]*onclick="toggleUnschedPanel\(\)"/);
+  assert.match(frontendTemplate, /class="calendar-icon"/);
+  assert.match(frontendTemplate, /id="unsched-collapsible"[\s\S]*id="u-num"[\s\S]*id="u-title"[\s\S]*id="u-addr"[\s\S]*Crew \(optional\)[\s\S]*id="unscheduled-crew-btns"[\s\S]*id="add-btn"/);
+  assert.match(frontendSource, /function toggleUnschedPanel\(\)[\s\S]*unsched-collapsible[\s\S]*unsched-toggle/);
+  assert.match(frontendStyles, /#unsched-collapsible\s*\{[^}]*display:\s*none/);
+  assert.match(frontendStyles, /#unsched-collapsible\.open\s*\{[^}]*display:\s*block/);
 });
 
 test('new and edited unscheduled jobs send optional crew assignments', () => {
