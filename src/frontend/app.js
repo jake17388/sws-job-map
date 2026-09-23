@@ -113,10 +113,17 @@ function toggleFiltersPanel() {
   document.getElementById('filters-toggle').classList.toggle('open');
 }
 
+function toggleUnschedPanel() {
+  document.getElementById('unsched-collapsible').classList.toggle('open');
+  document.getElementById('unsched-toggle').classList.toggle('open');
+}
+
 function openAddModal() {
   if (!isAdmin()) return;
   document.body.classList.add('add-modal-open');
   document.getElementById('unsched-add').classList.add('modal-open');
+  document.getElementById('unsched-collapsible').classList.add('open');
+  document.getElementById('unsched-toggle').classList.add('open');
 }
 function closeAddModal() {
   document.body.classList.remove('add-modal-open');

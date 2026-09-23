@@ -166,16 +166,25 @@
       <div class="unsched-add visible" id="unsched-add">
         <div class="modal-handle"></div>
         <button class="modal-close" onclick="closeAddModal()" title="Close">✕</button>
-        <div class="add-form-label">Add Unscheduled Job</div>
-        <div class="input-row">
-          <input class="inp-num" id="u-num" type="text" placeholder="Job #" />
-          <input class="inp-title" id="u-title" type="text" placeholder="Job name" />
+        <button class="filters-toggle unsched-toggle" id="unsched-toggle" onclick="toggleUnschedPanel()">
+          <svg class="filter-icon calendar-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="3.5" width="12" height="10.5" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M2 6.5h12M5 2v3M11 2v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          Add Unscheduled Job <span class="chevron">⌄</span>
+        </button>
+        <div id="unsched-collapsible">
+          <div class="add-form-label">Add Unscheduled Job</div>
+          <div class="input-row">
+            <input class="inp-num" id="u-num" type="text" placeholder="Job #" />
+            <input class="inp-title" id="u-title" type="text" placeholder="Job name" />
+          </div>
+          <input class="inp-addr" id="u-addr" type="text" placeholder="Full address..." />
+          <div class="unscheduled-crew-label">Crew (optional)</div>
+          <div class="crew-btns unscheduled-crew-btns" id="unscheduled-crew-btns"></div>
+          <button class="btn-cancel" id="cancel-edit-btn" onclick="cancelEdit()">✕ Cancel edit</button>
+          <button class="btn-add" id="add-btn" onclick="submitUnschedForm()">+ Add to map</button>
         </div>
-        <input class="inp-addr" id="u-addr" type="text" placeholder="Full address..." />
-        <div class="unscheduled-crew-label">Crew (optional)</div>
-        <div class="crew-btns unscheduled-crew-btns" id="unscheduled-crew-btns"></div>
-        <button class="btn-cancel" id="cancel-edit-btn" onclick="cancelEdit()">✕ Cancel edit</button>
-        <button class="btn-add" id="add-btn" onclick="submitUnschedForm()">+ Add to map</button>
       </div>
 
       <div class="pull-indicator" id="pull-indicator">

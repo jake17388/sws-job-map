@@ -16,7 +16,7 @@ test('the unscheduled form offers optional crew buttons', () => {
 
 test('the unscheduled form is collapsed behind a calendar toggle and keeps all controls together', () => {
   assert.match(frontendTemplate, /id="unsched-toggle"[^>]*onclick="toggleUnschedPanel\(\)"/);
-  assert.match(frontendTemplate, /class="calendar-icon"/);
+  assert.match(frontendTemplate, /class="[^"]*calendar-icon[^"]*"/);
   assert.match(frontendTemplate, /id="unsched-collapsible"[\s\S]*id="u-num"[\s\S]*id="u-title"[\s\S]*id="u-addr"[\s\S]*Crew \(optional\)[\s\S]*id="unscheduled-crew-btns"[\s\S]*id="add-btn"/);
   assert.match(frontendSource, /function toggleUnschedPanel\(\)[\s\S]*unsched-collapsible[\s\S]*unsched-toggle/);
   assert.match(frontendStyles, /#unsched-collapsible\s*\{[^}]*display:\s*none/);
