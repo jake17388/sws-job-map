@@ -6,6 +6,12 @@ const frontendHtml = readFileSync(new URL('../index.html', import.meta.url), 'ut
 const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
 const calendarSource = readFileSync(new URL('../src/backend/04-calendar-jobs.js', import.meta.url), 'utf8');
 const routingSource = readFileSync(new URL('../src/backend/03-routing.js', import.meta.url), 'utf8');
+const manifest = JSON.parse(readFileSync(new URL('../appsscript.json', import.meta.url), 'utf8'));
+
+test('the Apps Script manifest grants Calendar write access', () => {
+  assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/calendar'));
+  assert.ok(!manifest.oauthScopes.includes('https://www.googleapis.com/auth/calendar.readonly'));
+});
 
 test('scheduled jobs expose a stable calendar event identifier', () => {
   assert.match(calendarSource, /event_id:\s*event\.getId\(\)/);
