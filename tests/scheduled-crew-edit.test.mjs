@@ -26,6 +26,12 @@ test('the backend updates only crew prefixes on allowed calendars', () => {
   assert.match(routingSource, /isAdmin_\(actor\)/);
 });
 
+test('an editor-only helper can authorize Calendar writes without changing a title', () => {
+  assert.match(calendarSource, /function authorizeCalendarWrite\(\)/);
+  assert.match(calendarSource, /const existingTitle = event\.getTitle\(\)/);
+  assert.match(calendarSource, /event\.setTitle\(existingTitle\)/);
+});
+
 test('scheduled job cards provide an optional crew editor', () => {
   assert.match(frontendHtml, /id="scheduled-crew-panel"/);
   assert.match(frontendHtml, /id="scheduled-crew-btns"/);
