@@ -14,7 +14,7 @@ test('scheduled jobs expose a stable calendar event identifier', () => {
 test('the backend updates only crew prefixes on allowed calendars', () => {
   assert.match(calendarSource, /function updateScheduledCrew\(data\)/);
   assert.match(calendarSource, /normalizeUnscheduledCrew_\(data\.crew\)/);
-  assert.match(calendarSource, /replace\(\/\^\\\([\^\)]\+\\\)\\s\*\//);
+  assert.ok(calendarSource.includes("replace(/^\\([^)]+\\)\\s*/, '')"));
   assert.match(calendarSource, /event\.setTitle\(nextTitle\)/);
   assert.match(routingSource, /data\.action === 'updateScheduledCrew'/);
   assert.match(routingSource, /isAdmin_\(actor\)/);

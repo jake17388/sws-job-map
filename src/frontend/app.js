@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwPSjnRVmTW0Azok6kY992-o4pdYacmaNkDYBk3XVihRMa32rLdwKdFKGoQbZHuGh6H/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.09.23.2';
+const APP_VERSION = '2026.09.23.3';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -29,6 +29,8 @@ let searchQuery = '';
 let editingId = null;
 const activeCrews = new Set(CREW);
 const selectedUnscheduledCrew = new Set();
+const selectedScheduledCrew = new Set();
+let editingScheduledIndex = null;
 
 // ── Local caches (geocode results + last-session data) ───────────────────────
 const GEO_CACHE_KEY = 'sws_geo_cache_v1';
@@ -551,6 +553,7 @@ function initMap() {
   geocoder = new google.maps.Geocoder();
   initCrewButtons();
   initUnscheduledCrewButtons();
+  initScheduledCrewButtons();
   initTextZoom();
   initHomeMarker();
   const today = new Date();
@@ -738,12 +741,17 @@ function scheduledCardHTML(job) {
   const crewChips = crew.length > 0
     ? `<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">${crew.map(n => `<span style="font-size:10px;font-weight:700;color:${CREW_COLORS[n]||'#555'};background:${CREW_COLORS[n]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[n]||'#999'}44">${n}</span>`).join('')}</div>`
     : '';
+  const index = scheduledJobs.indexOf(job);
+  const editAction = isAdmin() && index >= 0
+    ? `<button class="scheduled-edit-btn" onclick="openScheduledCrewEditor(${index})">✎ Edit crew</button>`
+    : '';
   return `<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:3px 0">
     <div style="font-size:10px;color:#aaa;font-weight:700;letter-spacing:.05em;font-family:'DM Mono',monospace">${escapeHtml(job.num)}</div>
     <div style="font-weight:700;font-size:13px;margin:3px 0;color:#1a1a1a">${escapeHtml(job.title)}</div>
     <div style="font-size:11px;color:#888;margin-bottom:5px">${escapeHtml(job.addr)}</div>
     <div style="font-size:11px;font-weight:600;color:${SCHED_PIN}">${escapeHtml(job.type.toUpperCase())} · ${escapeHtml(dateStr)}</div>
     ${crewChips}
+    ${editAction}
   </div>`;
 }
 function unschedCardHTML(job) {
@@ -1011,6 +1019,7 @@ function renderList() {
         ${(job.crew||[]).length>0?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${(job.crew||[]).map(n=>`<span style="font-size:10px;font-weight:700;color:${CREW_COLORS[n]||'#555'};background:${CREW_COLORS[n]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[n]||'#999'}55">${n}</span>`).join('')}</div>`:''}
         ${errText}
       </div>
+      ${isAdmin() ? `<button class="btn-edit" onclick="event.stopPropagation();openScheduledCrewEditor(${idx})" title="Edit crew">✎</button>` : ''}
     </div>`);
   });
   list.innerHTML = rows.length ? rows.join('') : '<div class="no-results">No jobs match current filters</div>';
@@ -1218,6 +1227,89 @@ function initUnscheduledCrewButtons() {
     return `<button type="button" class="crew-btn" id="unscheduled-crew-${name}" onclick="toggleUnscheduledCrew('${name}')" style="--cc:${cc};--ct:${ct}">${name}</button>`;
   }).join('');
   updateUnscheduledCrewButtons();
+}
+
+function initScheduledCrewButtons() {
+  const container = document.getElementById('scheduled-crew-btns');
+  if (!container) return;
+  container.innerHTML = CREW.map(name => {
+    const cc = CREW_COLORS[name], ct = crewTextColor(cc);
+    return `<button type="button" class="crew-btn" id="scheduled-crew-${name}" onclick="toggleScheduledCrew('${name}')" style="--cc:${cc};--ct:${ct}">${name}</button>`;
+  }).join('');
+  updateScheduledCrewButtons();
+}
+
+function toggleScheduledCrew(name) {
+  if (!CREW.includes(name)) return;
+  selectedScheduledCrew.has(name) ? selectedScheduledCrew.delete(name) : selectedScheduledCrew.add(name);
+  updateScheduledCrewButtons();
+}
+
+function setScheduledCrew(names) {
+  selectedScheduledCrew.clear();
+  (names || []).forEach(name => { if (CREW.includes(name)) selectedScheduledCrew.add(name); });
+  updateScheduledCrewButtons();
+}
+
+function getSelectedScheduledCrew() {
+  return CREW.filter(name => selectedScheduledCrew.has(name));
+}
+
+function updateScheduledCrewButtons() {
+  CREW.forEach(name => {
+    const button = document.getElementById('scheduled-crew-' + name);
+    if (!button) return;
+    const selected = selectedScheduledCrew.has(name);
+    button.classList.toggle('on', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+}
+
+function openScheduledCrewEditor(index) {
+  if (!isAdmin()) return;
+  const job = scheduledJobs[index];
+  if (!job || !job.event_id) return;
+  editingScheduledIndex = index;
+  setScheduledCrew(job.crew || []);
+  document.getElementById('scheduled-crew-job').textContent = `${job.num || ''} ${job.title}`.trim();
+  document.getElementById('scheduled-crew-backdrop').classList.add('show');
+  document.getElementById('scheduled-crew-panel').classList.add('show');
+  closeJobCard();
+  if (infoWindowOpen) { infoWindowOpen.close(); infoWindowOpen = null; }
+}
+
+function closeScheduledCrewEditor() {
+  editingScheduledIndex = null;
+  setScheduledCrew([]);
+  document.getElementById('scheduled-crew-backdrop').classList.remove('show');
+  document.getElementById('scheduled-crew-panel').classList.remove('show');
+  const button = document.getElementById('save-scheduled-crew');
+  button.disabled = false;
+  button.textContent = 'Save crew';
+}
+
+function saveScheduledCrew() {
+  if (!isAdmin() || editingScheduledIndex === null) return;
+  const job = scheduledJobs[editingScheduledIndex];
+  if (!job) return;
+  const crew = getSelectedScheduledCrew();
+  const button = document.getElementById('save-scheduled-crew');
+  button.disabled = true;
+  button.textContent = 'Saving…';
+  scriptPost({ action: 'updateScheduledCrew', event_id: job.event_id, type: job.type, crew: getSelectedScheduledCrew() })
+    .then(result => {
+      if (!result || result.error || result.success === false) throw new Error(result && result.error || 'Save failed');
+      job.crew = result.crew || crew;
+      if (job._marker) job._marker.setIcon(makeIcon('•', SCHED_PIN, job.crew, COLORS[job.type] || COLORS.install));
+      if (job._iw) job._iw.setContent(scheduledCardHTML(job));
+      closeScheduledCrewEditor();
+      renderList();
+    })
+    .catch(err => {
+      button.disabled = false;
+      button.textContent = 'Save crew';
+      alert('Failed to update the calendar event. Try again.\n' + (err && err.message ? err.message : ''));
+    });
 }
 
 function toggleUnscheduledCrew(name) {

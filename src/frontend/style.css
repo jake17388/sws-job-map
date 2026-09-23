@@ -120,6 +120,16 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 /* ── Settings panel (version, update check, sign out) ── */
 .settings-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 700; }
 .settings-backdrop.show { display: block; }
+.scheduled-crew-panel { display:none; position:fixed; z-index:710; left:50%; top:50%; width:min(420px,calc(100% - 28px)); padding:22px; border-radius:16px; background:#fff; box-shadow:0 18px 55px rgba(20,35,60,.3); transform:translate(-50%,-45%); }
+.scheduled-crew-panel.show { display:block; transform:translate(-50%,-50%); }
+.scheduled-crew-header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:18px; }
+.scheduled-crew-header h2 { font-size:20px; color:#1d2b44; margin-bottom:4px; }
+.scheduled-crew-header p { font-size:12px; color:#7b8ba5; }
+.scheduled-crew-help { font-size:11px; line-height:1.45; color:#7b8ba5; margin:10px 0 16px; }
+.scheduled-crew-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.scheduled-crew-actions .settings-action { margin:0; }
+.scheduled-crew-actions .primary-action:disabled { background:#9aa8bc; cursor:wait; }
+.scheduled-edit-btn { margin-top:9px; padding:6px 9px; border:1px solid #d9e2ee; border-radius:6px; background:#fff; color:#1e4589; font:600 11px 'DM Sans',sans-serif; cursor:pointer; }
 .settings-panel {
   display: none; position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 110%);
   width: min(360px, calc(100% - 24px)); background: #fff; border-radius: 16px 16px 0 0;

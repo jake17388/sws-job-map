@@ -49,6 +49,7 @@ function fetchCalendarEvents(calId, type, start, end) {
     endDate.setDate(endDate.getDate() - 1);
     jobs.push({
       type, num: jobNum, title: cleanTitle || title,
+      event_id: event.getId(),
       addr: cleanAddr,
       start: formatDate(startDate),
       end: formatDate(endDate),
@@ -56,6 +57,29 @@ function fetchCalendarEvents(calId, type, start, end) {
     });
   });
   return jobs;
+}
+
+function calendarIdForJobType_(type) {
+  const calendars = {
+    install: INSTALL_CAL_ID,
+    service: SERVICE_CAL_ID,
+    excavation: EXCAV_CAL_ID,
+  };
+  return calendars[String(type || '').toLowerCase()] || null;
+}
+
+function updateScheduledCrew(data) {
+  const calendarId = calendarIdForJobType_(data.type);
+  if (!calendarId || !data.event_id) return { success: false, error: 'Invalid calendar event' };
+  const calendar = CalendarApp.getCalendarById(calendarId);
+  if (!calendar) return { success: false, error: 'Calendar not found' };
+  const event = calendar.getEventById(String(data.event_id));
+  if (!event) return { success: false, error: 'Calendar event not found' };
+  const crew = normalizeUnscheduledCrew_(data.crew);
+  const baseTitle = event.getTitle().replace(/^\([^)]+\)\s*/, '').trim();
+  const nextTitle = crew.length ? `(${crew.join('/')}) ${baseTitle}` : baseTitle;
+  event.setTitle(nextTitle);
+  return { success: true, crew, title: nextTitle };
 }
 
 function formatDate(d) {
