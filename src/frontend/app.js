@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwPSjnRVmTW0Azok6kY992-o4pdYacmaNkDYBk3XVihRMa32rLdwKdFKGoQbZHuGh6H/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.09.23.5';
+const APP_VERSION = '2026.09.23.6';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -1533,6 +1533,8 @@ function editUnsched(id) {
   document.getElementById('add-btn').textContent = 'Save Changes';
   document.querySelector('.add-form-label').textContent = 'Edit Unscheduled Job';
   document.getElementById('cancel-edit-btn').style.display = 'block';
+  document.getElementById('unsched-collapsible').classList.add('open');
+  document.getElementById('unsched-toggle').classList.add('open');
   if (isMobile()) {
     openAddModal();
   } else {

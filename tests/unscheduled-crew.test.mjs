@@ -45,6 +45,13 @@ test('clicking an unscheduled job focuses its map pin while the pencil opens edi
   );
 });
 
+test('editing an unscheduled job reveals the editor before focusing its fields', () => {
+  assert.match(
+    frontendSource,
+    /function editUnsched\(id\)[\s\S]*unsched-collapsible'\)\.classList\.add\('open'\)[\s\S]*unsched-toggle'\)\.classList\.add\('open'\)/,
+  );
+});
+
 test('the backend reads and stores crew in the seventh sheet column', () => {
   assert.match(backendSource, /crew:\s*normalizeUnscheduledCrew_\(row\[6\]\)/);
   assert.match(backendSource, /setValue\('Crew'\)/);
