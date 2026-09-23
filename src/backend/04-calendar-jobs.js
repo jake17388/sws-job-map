@@ -82,6 +82,24 @@ function updateScheduledCrew(data) {
   return { success: true, crew, title: nextTitle };
 }
 
+// Run once from the Apps Script editor after adding Calendar write scope.
+// Re-saving the exact same title forces Google's consent flow without making a
+// visible event change. This function is intentionally not exposed by doPost.
+function authorizeCalendarWrite() {
+  const calendar = CalendarApp.getCalendarById(INSTALL_CAL_ID);
+  if (!calendar) throw new Error('Install calendar not found');
+  const start = new Date();
+  start.setFullYear(start.getFullYear() - 1);
+  const end = new Date();
+  end.setFullYear(end.getFullYear() + 1);
+  const events = calendar.getEvents(start, end);
+  if (!events.length) throw new Error('No install event available for authorization');
+  const event = events.find(candidate => candidate.getGuestList().length === 0) || events[0];
+  const existingTitle = event.getTitle();
+  event.setTitle(existingTitle);
+  return { success: true, event_id: event.getId() };
+}
+
 function formatDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
