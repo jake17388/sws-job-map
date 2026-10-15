@@ -8,7 +8,7 @@ function normalizeUnscheduledCrew_(value) {
   if (!value) return [];
   const values = Array.isArray(value) ? value : String(value).split(/[\/,&]/);
   const normalized = normalizeCrew(values.map(name => String(name).trim()).filter(Boolean));
-  return normalized.filter((name, index) => CREW_NAMES.includes(name) && normalized.indexOf(name) === index);
+  return CREW_NAMES.filter(name => normalized.includes(name));
 }
 
 function getUnscheduledSheet_() {

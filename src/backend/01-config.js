@@ -8,7 +8,7 @@ const EXCAV_CAL_ID   = 'c_86ccbe589549562e734ff696a2cebbefc071fe607283d4a7cac31c
 
 const SKIP_KEYWORDS = ['no install','hunter out','johnny out','randy off','jake out','eli out','crane service','2018 crane','mother\'s day','memorial day'];
 
-const CREW_NAMES = ['Johnny', 'Jonathan', 'Randy', 'Eli', 'Jerry', 'Jake'];
+const CREW_NAMES = ['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy', 'Jake'];
 function normalizeCrew(names) {
   return names.map(n => {
     const match = CREW_NAMES.find(k => k.toLowerCase() === n.toLowerCase());
