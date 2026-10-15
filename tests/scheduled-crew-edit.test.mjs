@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 const frontendHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
+const configSource = readFileSync(new URL('../src/backend/01-config.js', import.meta.url), 'utf8');
 const calendarSource = readFileSync(new URL('../src/backend/04-calendar-jobs.js', import.meta.url), 'utf8');
+const unscheduledSource = readFileSync(new URL('../src/backend/05-unscheduled-jobs.js', import.meta.url), 'utf8');
 const routingSource = readFileSync(new URL('../src/backend/03-routing.js', import.meta.url), 'utf8');
 const manifest = JSON.parse(readFileSync(new URL('../appsscript.json', import.meta.url), 'utf8'));
 
@@ -44,4 +47,34 @@ test('clearing all scheduled crew remains a valid save', () => {
   assert.match(frontendSource, /function getSelectedScheduledCrew\(\)/);
   assert.match(frontendSource, /crew:\s*getSelectedScheduledCrew\(\)/);
   assert.doesNotMatch(frontendSource, /Select at least one crew member/);
+});
+
+test('scheduled crew titles use the standard priority regardless of selection order', () => {
+  let updatedTitle = '';
+  const event = {
+    getTitle: () => '(Jonathan/Eli) 123456 Monument Sign',
+    setTitle: title => { updatedTitle = title; },
+  };
+  const context = {
+    CalendarApp: {
+      getCalendarById: () => ({ getEventById: () => event }),
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext(`${configSource}\n${calendarSource}\n${unscheduledSource}`, context);
+
+  const result = context.updateScheduledCrew({
+    type: 'install',
+    event_id: 'event-1',
+    crew: ['Jonathan', 'Eli'],
+  });
+
+  assert.equal(updatedTitle, '(Eli/Jonathan) 123456 Monument Sign');
+  assert.deepEqual(Array.from(result.crew), ['Eli', 'Jonathan']);
+});
+
+test('backend and frontend share the requested crew priority', () => {
+  const priority = "['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy', 'Jake']";
+  assert.ok(configSource.includes(`const CREW_NAMES = ${priority}`));
+  assert.ok(frontendSource.includes(`const CREW = ${priority}`));
 });

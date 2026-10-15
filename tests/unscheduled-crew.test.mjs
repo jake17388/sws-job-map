@@ -62,5 +62,5 @@ test('the backend reads and stores crew in the seventh sheet column', () => {
 test('crew normalization accepts an empty assignment and filters unknown names', () => {
   assert.match(backendSource, /function normalizeUnscheduledCrew_\(value\)/);
   assert.match(backendSource, /if \(!value\) return \[\];/);
-  assert.match(backendSource, /CREW_NAMES\.includes\(name\)/);
+  assert.match(backendSource, /CREW_NAMES\.filter\(name => normalized\.includes\(name\)\)/);
 });

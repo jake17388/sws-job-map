@@ -81,15 +81,15 @@ test('single-day scheduling creates a parser-compatible all-day install event an
   assert.equal(backend.rows.length, 1);
 });
 
-test('multi-day scheduling preserves crew order and converts the inclusive end date to exclusive', () => {
+test('multi-day scheduling uses standard crew priority and converts the inclusive end date to exclusive', () => {
   const backend = makeBackend();
   const result = backend.context.scheduleUnsched(validRequest({
     end_date: '2026-10-08',
-    crew: ['Randy', 'Johnny'],
+    crew: ['Randy', 'Jonathan', 'Jerry', 'Johnny', 'Eli'],
   }));
 
-  assert.equal(result.title, '(Randy/Johnny) 123456 Monument Sign');
-  assert.deepEqual(Array.from(result.crew), ['Randy', 'Johnny']);
+  assert.equal(result.title, '(Johnny/Eli/Jerry/Jonathan/Randy) 123456 Monument Sign');
+  assert.deepEqual(Array.from(result.crew), ['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy']);
   assert.equal(backend.created[0].end.getFullYear(), 2026);
   assert.equal(backend.created[0].end.getMonth(), 9);
   assert.equal(backend.created[0].end.getDate(), 9);
