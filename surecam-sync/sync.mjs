@@ -6,7 +6,7 @@
 import { chromium } from 'playwright';
 import { parseSurecamVehicles, postJsonWithRetry, selectTrackedVehicles } from './lib.mjs';
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwPSjnRVmTW0Azok6kY992-o4pdYacmaNkDYBk3XVihRMa32rLdwKdFKGoQbZHuGh6H/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 const LIVE_URL = 'https://view.surecam.com/accounts/01127/live';
 const SHOT_PATH = 'failure.png';
 // Matches the backend's own auth check in cacheSurecamVehicles().
