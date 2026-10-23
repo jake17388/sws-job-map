@@ -14,7 +14,7 @@ const SC_NAMES = {
   'e7ee6ba9-1f74-4a76-b318-fae044c8a818': '2019 Single Bucket',
   '0f74b5cc-b7e8-41d6-a5fc-6daa201b138a': '2023 Single Bucket',
   '5e2c8f15-7b50-404a-baf3-538a2f51f301': '2022 Small Crane',
-  '3812774d-22d0-4a8e-9e35-22e277fa29f5': '2015 Double Bucket',
+  '3812774d-22d0-4a8e-9e35-22e277fa29f5': '2026 Flatbed',
 };
 
 function setSurecamDeviceIds() {
@@ -25,7 +25,7 @@ function setSurecamDeviceIds() {
     'e7ee6ba9-1f74-4a76-b318-fae044c8a818', // 2019 SINGLE BUCKET
     '0f74b5cc-b7e8-41d6-a5fc-6daa201b138a', // 2023 SINGLE BUCKET
     '5e2c8f15-7b50-404a-baf3-538a2f51f301', // 2022 SMALL CRANE
-    '3812774d-22d0-4a8e-9e35-22e277fa29f5', // 2015 DOUBLE BUCKET
+    '3812774d-22d0-4a8e-9e35-22e277fa29f5', // 2026 FLATBED
   ];
   PropertiesService.getScriptProperties().setProperty('SC_DEVICE_IDS', JSON.stringify(ids));
   Logger.log('Stored ' + ids.length + ' device IDs.');
