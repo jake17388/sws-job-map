@@ -1,4 +1,15 @@
 // ── Routing ───────────────────────────────────────────────────────────────────
+function vehicleResponse_() {
+  const snapshot = getVehicleSnapshot_();
+  const ageMs = snapshot.snapshotAt ? Date.now() - new Date(snapshot.snapshotAt).getTime() : null;
+  return {
+    vehicles: snapshot.vehicles,
+    vehicleCatalog: getVehicleCatalog_(),
+    snapshotAt: snapshot.snapshotAt,
+    stale: ageMs === null || ageMs > 30 * 60 * 1000,
+  };
+}
+
 function doGet(e) {
   const params = (e && e.parameter) || {};
   const action = params.action;
@@ -12,25 +23,13 @@ function doGet(e) {
 
   if (action === 'getVehicles') {
     if (!actor) return json(UNAUTHORIZED);
-    const snapshot = getVehicleSnapshot_();
-    const ageMs = snapshot.snapshotAt ? Date.now() - new Date(snapshot.snapshotAt).getTime() : null;
-    return json({
-      vehicles: snapshot.vehicles,
-      snapshotAt: snapshot.snapshotAt,
-      stale: ageMs === null || ageMs > 30 * 60 * 1000,
-    });
+    return json(vehicleResponse_());
   }
 
   if (action === 'refreshVehicles') {
     if (!actor) return json(UNAUTHORIZED);
     cacheSurecamVehicles();
-    const snapshot = getVehicleSnapshot_();
-    const ageMs = snapshot.snapshotAt ? Date.now() - new Date(snapshot.snapshotAt).getTime() : null;
-    return json({
-      vehicles: snapshot.vehicles,
-      snapshotAt: snapshot.snapshotAt,
-      stale: ageMs === null || ageMs > 30 * 60 * 1000,
-    });
+    return json(vehicleResponse_());
   }
 
   // The app itself is hosted on GitHub Pages, not here
@@ -78,6 +77,10 @@ function doPost(e) {
   if (data.action === 'updateScheduledCrew') {
     if (!isAdmin_(actor)) return json({ error: 'forbidden' });
     return json(updateScheduledCrew(data));
+  }
+  if (data.action === 'updateScheduledAssignments') {
+    if (!isAdmin_(actor)) return json({ error: 'forbidden' });
+    return json(updateScheduledAssignments(data));
   }
   return json({ error: 'unknown action' });
 }

@@ -182,6 +182,10 @@
           <input class="inp-addr" id="u-addr" type="text" placeholder="Full address..." />
           <div class="unscheduled-crew-label">Crew (optional)</div>
           <div class="crew-btns unscheduled-crew-btns" id="unscheduled-crew-btns"></div>
+          <div class="truck-assignment-section">
+            <div class="unscheduled-crew-label">Trucks (optional)</div>
+            <div id="unscheduled-truck-assignments" class="truck-assignment-rows"></div>
+          </div>
           <button class="btn-cancel" id="cancel-edit-btn" onclick="cancelEdit()">✕ Cancel edit</button>
           <button class="btn-add" id="add-btn" onclick="submitUnschedForm()">+ Add to map</button>
         </div>
@@ -258,14 +262,18 @@
   <div class="settings-backdrop" id="scheduled-crew-backdrop" onclick="closeScheduledCrewEditor()"></div>
   <div class="scheduled-crew-panel" id="scheduled-crew-panel" role="dialog" aria-modal="true" aria-labelledby="scheduled-crew-title">
     <div class="scheduled-crew-header">
-      <div><h2 id="scheduled-crew-title">Edit assigned crew</h2><p id="scheduled-crew-job"></p></div>
+      <div><h2 id="scheduled-crew-title">Edit crew and trucks</h2><p id="scheduled-crew-job"></p></div>
       <button class="settings-close-btn" onclick="closeScheduledCrewEditor()" title="Close">✕</button>
     </div>
     <div class="crew-btns" id="scheduled-crew-btns"></div>
-    <p class="scheduled-crew-help">Leave everyone unselected to keep this job scheduled without an assigned crew.</p>
+    <div class="truck-assignment-section">
+      <div class="unscheduled-crew-label">Truck assignments</div>
+      <div id="scheduled-truck-assignments" class="truck-assignment-rows"></div>
+    </div>
+    <p class="scheduled-crew-help">Truck assignments are optional, and crew members may share the same truck.</p>
     <div class="scheduled-crew-actions">
       <button class="settings-action" onclick="closeScheduledCrewEditor()">Cancel</button>
-      <button class="primary-action" id="save-scheduled-crew" onclick="saveScheduledCrew()">Save crew</button>
+      <button class="primary-action" id="save-scheduled-crew" onclick="saveScheduledCrew()">Save assignments</button>
     </div>
   </div>
 
@@ -285,7 +293,11 @@
     </div>
     <div class="unscheduled-crew-label">Crew (optional)</div>
     <div class="crew-btns" id="schedule-crew-btns"></div>
-    <p class="scheduled-crew-help">Leave everyone unselected to schedule without an assigned crew.</p>
+    <div class="truck-assignment-section">
+      <div class="unscheduled-crew-label">Truck assignments</div>
+      <div id="schedule-truck-assignments" class="truck-assignment-rows"></div>
+    </div>
+    <p class="scheduled-crew-help">Truck assignments are optional, and crew members may share the same truck.</p>
     <p class="form-status schedule-status" id="schedule-unscheduled-status" role="alert"></p>
     <div class="scheduled-crew-actions">
       <button class="settings-action" onclick="closeUnscheduledScheduler()">Cancel</button>

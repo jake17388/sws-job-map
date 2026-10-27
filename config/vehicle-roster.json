@@ -1,0 +1,44 @@
+[
+  {
+    "id": "2025-double-bucket",
+    "displayName": "2025 Double Bucket",
+    "surecamDeviceId": "33bb8790-2acc-4ae5-9729-c6435152cf6f",
+    "active": true
+  },
+  {
+    "id": "2016-flatbed",
+    "displayName": "2016 Flatbed",
+    "surecamDeviceId": "e6c84a15-6a26-4f5a-9f27-494dc3a15f9a",
+    "active": true
+  },
+  {
+    "id": "2018-big-crane",
+    "displayName": "2018 Big Crane",
+    "surecamDeviceId": "cbb1eae7-8270-4ded-ab87-910281b5800d",
+    "active": true
+  },
+  {
+    "id": "2019-single-bucket",
+    "displayName": "2019 Single Bucket",
+    "surecamDeviceId": "e7ee6ba9-1f74-4a76-b318-fae044c8a818",
+    "active": true
+  },
+  {
+    "id": "2023-single-bucket",
+    "displayName": "2023 Single Bucket",
+    "surecamDeviceId": "0f74b5cc-b7e8-41d6-a5fc-6daa201b138a",
+    "active": true
+  },
+  {
+    "id": "2022-small-crane",
+    "displayName": "2022 Small Crane",
+    "surecamDeviceId": "5e2c8f15-7b50-404a-baf3-538a2f51f301",
+    "active": true
+  },
+  {
+    "id": "2026-flatbed",
+    "displayName": "2026 Flatbed",
+    "surecamDeviceId": "3812774d-22d0-4a8e-9e35-22e277fa29f5",
+    "active": true
+  }
+]

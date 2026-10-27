@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.10.20.1';
+const APP_VERSION = '2026.10.27.1';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -29,11 +29,15 @@ let searchQuery = '';
 let editingId = null;
 const activeCrews = new Set(CREW);
 const selectedUnscheduledCrew = new Set();
+let selectedUnscheduledTruckAssignments = {};
 const selectedScheduledCrew = new Set();
+let selectedScheduledTruckAssignments = {};
 let editingScheduledIndex = null;
 const selectedScheduleCrew = new Set();
+let selectedScheduleTruckAssignments = {};
 let schedulingUnscheduledId = null;
 let scheduleSubmitting = false;
+let vehicleCatalog = [];
 
 // ── Local caches (geocode results + last-session data) ───────────────────────
 const GEO_CACHE_KEY = 'sws_geo_cache_v1';
@@ -343,6 +347,103 @@ function escapeHtml(value) {
     '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
   })[ch]);
 }
+
+function normalizedTruckAssignments(assignments, selectedCrew) {
+  const normalized = {};
+  CREW.forEach(name => {
+    const vehicleId = String(assignments && assignments[name] || '').trim();
+    if (selectedCrew.has(name) && vehicleId) normalized[name] = vehicleId;
+  });
+  return normalized;
+}
+
+function vehicleNameForId(vehicleId) {
+  const vehicle = vehicleCatalog.find(candidate => candidate.id === vehicleId);
+  return vehicle ? vehicle.name : vehicleId;
+}
+
+function renderTruckAssignmentRows(containerId, selectedCrew, assignments, changeHandlerName) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const crew = CREW.filter(name => selectedCrew.has(name));
+  if (!crew.length) {
+    container.innerHTML = '<div class="truck-assignment-empty">Select crew members to assign trucks.</div>';
+    return;
+  }
+  if (!vehicleCatalog.length) {
+    container.innerHTML = '<div class="truck-assignment-empty">Truck list is loading. Crew can still be saved without a truck.</div>';
+    return;
+  }
+  container.innerHTML = crew.map(name => {
+    const selectedId = assignments[name] || '';
+    const activeVehicles = vehicleCatalog.filter(vehicle => vehicle.active !== false);
+    const selectedVehicle = vehicleCatalog.find(vehicle => vehicle.id === selectedId);
+    const options = ['<option value="">No truck assigned</option>'];
+    activeVehicles.forEach(vehicle => {
+      options.push(`<option value="${escapeHtml(vehicle.id)}"${vehicle.id === selectedId ? ' selected' : ''}>${escapeHtml(vehicle.name)}</option>`);
+    });
+    if (selectedId && !selectedVehicle) {
+      options.push(`<option value="${escapeHtml(selectedId)}" selected>Unavailable truck (${escapeHtml(selectedId)})</option>`);
+    } else if (selectedVehicle && selectedVehicle.active === false) {
+      options.push(`<option value="${escapeHtml(selectedVehicle.id)}" selected>${escapeHtml(selectedVehicle.name)} (inactive)</option>`);
+    }
+    const selectId = `${containerId}-${name}`;
+    return `<div class="truck-assignment-row"><label for="${escapeHtml(selectId)}">${escapeHtml(name)}</label>` +
+      `<select id="${escapeHtml(selectId)}" onchange="${changeHandlerName}('${escapeHtml(name)}',this.value)">${options.join('')}</select></div>`;
+  }).join('');
+}
+
+function truckAssignmentsHTML(crew, assignments) {
+  const grouped = {};
+  (crew || []).forEach(name => {
+    const vehicleId = assignments && assignments[name];
+    if (!vehicleId) return;
+    if (!grouped[vehicleId]) grouped[vehicleId] = [];
+    grouped[vehicleId].push(name);
+  });
+  const rows = Object.keys(grouped).map(vehicleId =>
+    `<span class="truck-chip">🚚 ${escapeHtml(vehicleNameForId(vehicleId))} — ${grouped[vehicleId].map(escapeHtml).join(', ')}</span>`);
+  return rows.length ? `<div class="truck-summary">${rows.join('')}</div>` : '';
+}
+
+function setUnscheduledTruckAssignments(assignments) {
+  selectedUnscheduledTruckAssignments = normalizedTruckAssignments(assignments, selectedUnscheduledCrew);
+  renderTruckAssignmentRows('unscheduled-truck-assignments', selectedUnscheduledCrew, selectedUnscheduledTruckAssignments, 'setUnscheduledTruckAssignment');
+}
+function setUnscheduledTruckAssignment(name, vehicleId) {
+  if (!selectedUnscheduledCrew.has(name)) return;
+  if (vehicleId) selectedUnscheduledTruckAssignments[name] = vehicleId;
+  else delete selectedUnscheduledTruckAssignments[name];
+}
+function getUnscheduledTruckAssignments() {
+  return normalizedTruckAssignments(selectedUnscheduledTruckAssignments, selectedUnscheduledCrew);
+}
+
+function setScheduleTruckAssignments(assignments) {
+  selectedScheduleTruckAssignments = normalizedTruckAssignments(assignments, selectedScheduleCrew);
+  renderTruckAssignmentRows('schedule-truck-assignments', selectedScheduleCrew, selectedScheduleTruckAssignments, 'setScheduleTruckAssignment');
+}
+function setScheduleTruckAssignment(name, vehicleId) {
+  if (!selectedScheduleCrew.has(name)) return;
+  if (vehicleId) selectedScheduleTruckAssignments[name] = vehicleId;
+  else delete selectedScheduleTruckAssignments[name];
+}
+function getScheduleTruckAssignments() {
+  return normalizedTruckAssignments(selectedScheduleTruckAssignments, selectedScheduleCrew);
+}
+
+function setScheduledTruckAssignments(assignments) {
+  selectedScheduledTruckAssignments = normalizedTruckAssignments(assignments, selectedScheduledCrew);
+  renderTruckAssignmentRows('scheduled-truck-assignments', selectedScheduledCrew, selectedScheduledTruckAssignments, 'setScheduledTruckAssignment');
+}
+function setScheduledTruckAssignment(name, vehicleId) {
+  if (!selectedScheduledCrew.has(name)) return;
+  if (vehicleId) selectedScheduledTruckAssignments[name] = vehicleId;
+  else delete selectedScheduledTruckAssignments[name];
+}
+function getScheduledTruckAssignments() {
+  return normalizedTruckAssignments(selectedScheduledTruckAssignments, selectedScheduledCrew);
+}
 function fmt(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -432,19 +533,28 @@ function renderVehicleMarkers(vehicles) {
 }
 
 function applyVehicleSnapshot(data, fromCache) {
-  if (!data || !Array.isArray(data.vehicles) || !data.vehicles.length) return;
-  lastVehicles = data.vehicles;
-  vehicleSnapshotAt = data.snapshotAt || data.vehicles[0]?.updatedAt || null;
+  if (!data) return;
+  if (Array.isArray(data.vehicleCatalog) && data.vehicleCatalog.length) {
+    vehicleCatalog = data.vehicleCatalog;
+    renderTruckAssignmentRows('unscheduled-truck-assignments', selectedUnscheduledCrew, selectedUnscheduledTruckAssignments, 'setUnscheduledTruckAssignment');
+    renderTruckAssignmentRows('schedule-truck-assignments', selectedScheduleCrew, selectedScheduleTruckAssignments, 'setScheduleTruckAssignment');
+    renderTruckAssignmentRows('scheduled-truck-assignments', selectedScheduledCrew, selectedScheduledTruckAssignments, 'setScheduledTruckAssignment');
+  }
+  if (Array.isArray(data.vehicles) && data.vehicles.length) lastVehicles = data.vehicles;
+  vehicleSnapshotAt = data.snapshotAt || data.vehicles?.[0]?.updatedAt || null;
   vehicleDataStale = !!data.stale || !!fromCache;
   renderVehicleMarkers(lastVehicles);
   renderVehiclesPanel();
+  scheduledJobs.forEach(job => { if (job._iw) job._iw.setContent(scheduledCardHTML(job)); });
+  unscheduledJobs.forEach(job => { if (job._iw) job._iw.setContent(unschedCardHTML(job)); });
+  renderList();
 }
 
 function fetchVehicles() {
   if (!auth) return Promise.resolve();
   return scriptGet('getVehicles')
     .then(data => {
-      if (data && data.vehicles && data.vehicles.length) {
+      if (data && (data.vehicleCatalog || data.vehicles)) {
         writeCache(VEHICLE_CACHE_KEY, data);
         applyVehicleSnapshot(data, false);
       }
@@ -463,7 +573,7 @@ function refreshVehicles() {
     .map(id => document.getElementById(id)).filter(Boolean);
   buttons.forEach(btn => { btn.disabled = true; btn.classList.add('is-refreshing'); });
   vehicleRefreshInFlight = (auth ? scriptGet('refreshVehicles').then(data => {
-    if (data && data.vehicles && data.vehicles.length) {
+    if (data && (data.vehicleCatalog || data.vehicles)) {
       writeCache(VEHICLE_CACHE_KEY, data);
       applyVehicleSnapshot(data, false);
     }
@@ -752,6 +862,7 @@ function scheduledCardHTML(job) {
   const crewChips = crew.length > 0
     ? `<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">${crew.map(n => `<span style="font-size:10px;font-weight:700;color:${CREW_COLORS[n]||'#555'};background:${CREW_COLORS[n]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[n]||'#999'}44">${n}</span>`).join('')}</div>`
     : '';
+  const truckChips = truckAssignmentsHTML(job.crew || [], job.truck_assignments || {});
   const index = scheduledJobs.indexOf(job);
   const editAction = isAdmin() && index >= 0
     ? `<button class="scheduled-edit-btn" onclick="openScheduledCrewEditor(${index})">✎ Edit crew</button>`
@@ -762,11 +873,13 @@ function scheduledCardHTML(job) {
     <div style="font-size:11px;color:#888;margin-bottom:5px">${escapeHtml(job.addr)}</div>
     <div style="font-size:11px;font-weight:600;color:${SCHED_PIN}">${escapeHtml(job.type.toUpperCase())} · ${escapeHtml(dateStr)}</div>
     ${crewChips}
+    ${truckChips}
     ${editAction}
   </div>`;
 }
 function unschedCardHTML(job) {
   const crewChips = crewChipsHTML(job.crew || []);
+  const truckChips = truckAssignmentsHTML(job.crew || [], job.truck_assignments || {});
   const adminActions = isAdmin() ? `<div class="job-card-actions">
       <button onclick="closeJobCard();openUnscheduledScheduler('${escapeHtml(job.id)}')">Schedule</button>
       <button onclick="closeJobCard();editUnsched('${escapeHtml(job.id)}')">✎ Edit</button>
@@ -778,6 +891,7 @@ function unschedCardHTML(job) {
     <div style="font-size:11px;color:#888;margin-bottom:5px">${escapeHtml(job.address)}</div>
     <div style="font-size:11px;font-weight:600;color:${COLORS.unscheduled}">UNSCHEDULED · Added by ${escapeHtml(job.added_by || 'Unknown')}</div>
     ${crewChips}
+    ${truckChips}
     ${adminActions}
   </div>`;
 }
@@ -1004,6 +1118,7 @@ function renderList() {
             <span class="added-by">Added by ${escapeHtml(job.added_by || 'Unknown')}</span>
           </div>
           ${crewChipsHTML(job.crew || [])}
+          ${truckAssignmentsHTML(job.crew || [], job.truck_assignments || {})}
           ${errText}
         </div>
         ${isAdmin() ? `<button class="btn-edit" onclick="event.stopPropagation();editUnsched('${escapeHtml(job.id)}')" title="Edit">✎</button>
@@ -1029,6 +1144,7 @@ function renderList() {
         <div class="job-addr">${escapeHtml(job.addr)}</div>
         <div class="job-meta"><span class="badge ${job.type}">${job.type}</span>${dateStr}</div>
         ${(job.crew||[]).length>0?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${(job.crew||[]).map(n=>`<span style="font-size:10px;font-weight:700;color:${CREW_COLORS[n]||'#555'};background:${CREW_COLORS[n]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[n]||'#999'}55">${n}</span>`).join('')}</div>`:''}
+        ${truckAssignmentsHTML(job.crew || [], job.truck_assignments || {})}
         ${errText}
       </div>
       ${isAdmin() ? `<button class="btn-edit" onclick="event.stopPropagation();openScheduledCrewEditor(${idx})" title="Edit crew">✎</button>` : ''}
@@ -1102,19 +1218,26 @@ function addUnscheduled() {
   const title = document.getElementById('u-title').value.trim();
   const addr = document.getElementById('u-addr').value.trim();
   const crew = getSelectedUnscheduledCrew();
+  const truckAssignments = getUnscheduledTruckAssignments();
   if (!num || !addr) { alert('Job number and address are required.'); return; }
+  const request = {
+    action: 'addUnsched', job_num: num, title: title || num, address: addr, crew,
+    truck_assignments: getUnscheduledTruckAssignments(), added_by: currentUser,
+  };
 
   document.getElementById('u-num').value = '';
   document.getElementById('u-title').value = '';
   document.getElementById('u-addr').value = '';
   setUnscheduledCrew([]);
+  setUnscheduledTruckAssignments({});
   document.getElementById('u-num').focus();
   closeAddModal();
 
   // Optimistic insert: show the job (and geocode it) immediately, reconcile with the server in the background.
   const job = {
     id: 'temp-' + Date.now(), job_num: num, title: title || num, address: addr,
-    crew, added_by: currentUser, added: new Date().toISOString(), _status: 'pending', _marker: null, _iw: null,
+    crew, truck_assignments: truckAssignments, added_by: currentUser,
+    added: new Date().toISOString(), _status: 'pending', _marker: null, _iw: null,
   };
   unscheduledJobs.push(job);
   renderList();
@@ -1132,7 +1255,7 @@ function addUnscheduled() {
     });
   }
 
-  scriptPost({ action: 'addUnsched', job_num: num, title: title || num, address: addr, crew, added_by: currentUser })
+  scriptPost(request)
     .then(data => {
       if (!data || data.error || data.success === false) throw new Error(data && data.error || 'Save failed');
       job.id = String(data.id);
@@ -1264,12 +1387,14 @@ function initScheduleCrewButtons() {
 function toggleScheduleCrew(name) {
   if (!CREW.includes(name)) return;
   selectedScheduleCrew.has(name) ? selectedScheduleCrew.delete(name) : selectedScheduleCrew.add(name);
+  if (!selectedScheduleCrew.has(name)) delete selectedScheduleTruckAssignments[name];
   updateScheduleCrewButtons();
 }
 
 function setScheduleCrew(names) {
   selectedScheduleCrew.clear();
   (names || []).forEach(name => { if (CREW.includes(name)) selectedScheduleCrew.add(name); });
+  selectedScheduleTruckAssignments = normalizedTruckAssignments(selectedScheduleTruckAssignments, selectedScheduleCrew);
   updateScheduleCrewButtons();
 }
 
@@ -1281,6 +1406,7 @@ function updateScheduleCrewButtons() {
     button.classList.toggle('on', selected);
     button.setAttribute('aria-pressed', String(selected));
   });
+  renderTruckAssignmentRows('schedule-truck-assignments', selectedScheduleCrew, selectedScheduleTruckAssignments, 'setScheduleTruckAssignment');
 }
 
 function openUnscheduledScheduler(id) {
@@ -1289,6 +1415,7 @@ function openUnscheduledScheduler(id) {
   if (!job) return;
   schedulingUnscheduledId = String(id);
   setScheduleCrew(job.crew || []);
+  setScheduleTruckAssignments(job.truck_assignments || {});
   const defaultDate = document.getElementById('date-from').value || fmt(new Date());
   document.getElementById('schedule-unscheduled-summary').textContent = job.job_num;
   document.getElementById('schedule-job-name').textContent = job.title;
@@ -1309,6 +1436,7 @@ function closeUnscheduledScheduler() {
   if (scheduleSubmitting) return;
   schedulingUnscheduledId = null;
   setScheduleCrew([]);
+  setScheduleTruckAssignments({});
   document.getElementById('schedule-unscheduled-backdrop').classList.remove('show');
   document.getElementById('schedule-unscheduled-panel').classList.remove('show');
   document.getElementById('schedule-unscheduled-status').textContent = '';
@@ -1340,7 +1468,8 @@ function scheduleSelectedUnscheduled() {
   status.textContent = 'Creating calendar event…';
   scriptPost({
     action: 'scheduleUnsched', id: job.id, job_num: job.job_num, title: job.title,
-    address: job.address, start_date: startDate, end_date: endDate, crew, calendar: 'install',
+    address: job.address, start_date: startDate, end_date: endDate, crew,
+    truck_assignments: getScheduleTruckAssignments(), calendar: 'install',
   }).then(result => {
     if (!result || result.error || result.success === false) {
       const error = new Error(result && result.error || 'Scheduling failed');
@@ -1356,21 +1485,23 @@ function scheduleSelectedUnscheduled() {
     scheduleSubmitting = false;
     scheduleButton.disabled = false;
     scheduleButton.textContent = 'Schedule';
-    status.textContent = err.partial
-      ? 'Calendar event was created, but the unscheduled item could not be removed. Retry to reconcile it safely.'
-      : (err.message || 'Could not schedule this job. Try again.');
+    status.textContent = err.message || (err.partial
+      ? 'Calendar event was created, but the job could not be fully reconciled. Retry safely.'
+      : 'Could not schedule this job. Try again.');
   });
 }
 
 function toggleScheduledCrew(name) {
   if (!CREW.includes(name)) return;
   selectedScheduledCrew.has(name) ? selectedScheduledCrew.delete(name) : selectedScheduledCrew.add(name);
+  if (!selectedScheduledCrew.has(name)) delete selectedScheduledTruckAssignments[name];
   updateScheduledCrewButtons();
 }
 
 function setScheduledCrew(names) {
   selectedScheduledCrew.clear();
   (names || []).forEach(name => { if (CREW.includes(name)) selectedScheduledCrew.add(name); });
+  selectedScheduledTruckAssignments = normalizedTruckAssignments(selectedScheduledTruckAssignments, selectedScheduledCrew);
   updateScheduledCrewButtons();
 }
 
@@ -1386,6 +1517,7 @@ function updateScheduledCrewButtons() {
     button.classList.toggle('on', selected);
     button.setAttribute('aria-pressed', String(selected));
   });
+  renderTruckAssignmentRows('scheduled-truck-assignments', selectedScheduledCrew, selectedScheduledTruckAssignments, 'setScheduledTruckAssignment');
 }
 
 function openScheduledCrewEditor(index) {
@@ -1394,6 +1526,7 @@ function openScheduledCrewEditor(index) {
   if (!job || !job.event_id) return;
   editingScheduledIndex = index;
   setScheduledCrew(job.crew || []);
+  setScheduledTruckAssignments(job.truck_assignments || {});
   document.getElementById('scheduled-crew-job').textContent = `${job.num || ''} ${job.title}`.trim();
   document.getElementById('scheduled-crew-backdrop').classList.add('show');
   document.getElementById('scheduled-crew-panel').classList.add('show');
@@ -1404,11 +1537,12 @@ function openScheduledCrewEditor(index) {
 function closeScheduledCrewEditor() {
   editingScheduledIndex = null;
   setScheduledCrew([]);
+  setScheduledTruckAssignments({});
   document.getElementById('scheduled-crew-backdrop').classList.remove('show');
   document.getElementById('scheduled-crew-panel').classList.remove('show');
   const button = document.getElementById('save-scheduled-crew');
   button.disabled = false;
-  button.textContent = 'Save crew';
+  button.textContent = 'Save assignments';
 }
 
 function saveScheduledCrew() {
@@ -1419,10 +1553,14 @@ function saveScheduledCrew() {
   const button = document.getElementById('save-scheduled-crew');
   button.disabled = true;
   button.textContent = 'Saving…';
-  scriptPost({ action: 'updateScheduledCrew', event_id: job.event_id, type: job.type, crew: getSelectedScheduledCrew() })
+  scriptPost({
+    action: 'updateScheduledAssignments', event_id: job.event_id, type: job.type,
+    crew: getSelectedScheduledCrew(), truck_assignments: getScheduledTruckAssignments(),
+  })
     .then(result => {
       if (!result || result.error || result.success === false) throw new Error(result && result.error || 'Save failed');
       job.crew = result.crew || crew;
+      job.truck_assignments = result.truck_assignments || {};
       if (job._marker) job._marker.setIcon(makeIcon('•', SCHED_PIN, job.crew, COLORS[job.type] || COLORS.install));
       if (job._iw) job._iw.setContent(scheduledCardHTML(job));
       closeScheduledCrewEditor();
@@ -1430,7 +1568,7 @@ function saveScheduledCrew() {
     })
     .catch(err => {
       button.disabled = false;
-      button.textContent = 'Save crew';
+      button.textContent = 'Save assignments';
       alert('Failed to update the calendar event. Try again.\n' + (err && err.message ? err.message : ''));
     });
 }
@@ -1438,12 +1576,14 @@ function saveScheduledCrew() {
 function toggleUnscheduledCrew(name) {
   if (!CREW.includes(name)) return;
   selectedUnscheduledCrew.has(name) ? selectedUnscheduledCrew.delete(name) : selectedUnscheduledCrew.add(name);
+  if (!selectedUnscheduledCrew.has(name)) delete selectedUnscheduledTruckAssignments[name];
   updateUnscheduledCrewButtons();
 }
 
 function setUnscheduledCrew(names) {
   selectedUnscheduledCrew.clear();
   (names || []).forEach(name => { if (CREW.includes(name)) selectedUnscheduledCrew.add(name); });
+  selectedUnscheduledTruckAssignments = normalizedTruckAssignments(selectedUnscheduledTruckAssignments, selectedUnscheduledCrew);
   updateUnscheduledCrewButtons();
 }
 
@@ -1460,6 +1600,7 @@ function updateUnscheduledCrewButtons() {
       button.setAttribute('aria-pressed', String(selected));
     }
   });
+  renderTruckAssignmentRows('unscheduled-truck-assignments', selectedUnscheduledCrew, selectedUnscheduledTruckAssignments, 'setUnscheduledTruckAssignment');
 }
 
 function crewChipsHTML(crew) {
@@ -1530,6 +1671,7 @@ function editUnsched(id) {
   document.getElementById('u-title').value = job.title;
   document.getElementById('u-addr').value = job.address;
   setUnscheduledCrew(job.crew || []);
+  setUnscheduledTruckAssignments(job.truck_assignments || {});
   document.getElementById('add-btn').textContent = 'Save Changes';
   document.querySelector('.add-form-label').textContent = 'Edit Unscheduled Job';
   document.getElementById('cancel-edit-btn').style.display = 'block';
@@ -1549,6 +1691,7 @@ function cancelEdit() {
   document.getElementById('u-title').value = '';
   document.getElementById('u-addr').value = '';
   setUnscheduledCrew([]);
+  setUnscheduledTruckAssignments({});
   document.getElementById('add-btn').textContent = '+ Add to map';
   document.querySelector('.add-form-label').textContent = 'Add Unscheduled Job';
   document.getElementById('cancel-edit-btn').style.display = 'none';
@@ -1562,7 +1705,10 @@ function saveUnschedEdit() {
   if (!num || !addr) { alert('Job number and address are required.'); return; }
   const btn = document.getElementById('add-btn');
   btn.disabled = true; btn.textContent = 'Saving...';
-  scriptPost({ action: 'updateUnsched', id: editingId, job_num: num, title: title || num, address: addr, crew })
+  scriptPost({
+    action: 'updateUnsched', id: editingId, job_num: num, title: title || num, address: addr, crew,
+    truck_assignments: getUnscheduledTruckAssignments(),
+  })
     .then(result => { if (!result || result.error || result.success === false) throw new Error(result && result.error || 'Save failed'); cancelEdit(); closeAddModal(); loadUnscheduled(); })
     .catch(() => { btn.disabled = false; btn.textContent = 'Save Changes'; alert('Failed to save. Try again.'); });
 }

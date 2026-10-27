@@ -47,6 +47,9 @@ function fetchCalendarEvents(calId, type, start, end) {
     const startDate = event.getStartTime();
     const endDate = new Date(event.getEndTime());
     endDate.setDate(endDate.getDate() - 1);
+    const truckAssignments = normalizeStoredTruckAssignments_(
+      typeof event.getTag === 'function' ? event.getTag(TRUCK_ASSIGNMENTS_TAG) : '',
+    );
     jobs.push({
       type, num: jobNum, title: cleanTitle || title,
       event_id: event.getId(),
@@ -54,6 +57,7 @@ function fetchCalendarEvents(calId, type, start, end) {
       start: formatDate(startDate),
       end: formatDate(endDate),
       crew,
+      truck_assignments: truckAssignments,
     });
   });
   return jobs;
@@ -68,18 +72,61 @@ function calendarIdForJobType_(type) {
   return calendars[String(type || '').toLowerCase()] || null;
 }
 
-function updateScheduledCrew(data) {
+function updateScheduledAssignments(data) {
+  const lock = typeof LockService !== 'undefined' ? LockService.getScriptLock() : null;
+  if (lock) lock.waitLock(10000);
+  try {
   const calendarId = calendarIdForJobType_(data.type);
   if (!calendarId || !data.event_id) return { success: false, error: 'Invalid calendar event' };
   const calendar = CalendarApp.getCalendarById(calendarId);
   if (!calendar) return { success: false, error: 'Calendar not found' };
   const event = calendar.getEventById(String(data.event_id));
   if (!event) return { success: false, error: 'Calendar event not found' };
-  const crew = normalizeUnscheduledCrew_(data.crew);
+  const crewResult = requestedScheduleCrew_(data.crew);
+  if (crewResult.error) return { success: false, error: crewResult.error };
+  const crew = crewResult.crew;
+  let requestedAssignments = data.truck_assignments;
+  if (data.preserve_truck_assignments) {
+    const stored = normalizeStoredTruckAssignments_(
+      typeof event.getTag === 'function' ? event.getTag(TRUCK_ASSIGNMENTS_TAG) : '',
+    );
+    requestedAssignments = {};
+    crew.forEach(name => {
+      if (stored[name]) requestedAssignments[name] = stored[name];
+    });
+  }
+  const assignmentResult = validateTruckAssignments_(requestedAssignments, crew);
+  if (assignmentResult.error) return { success: false, error: assignmentResult.error };
   const baseTitle = event.getTitle().replace(/^\([^)]+\)\s*/, '').trim();
   const nextTitle = crew.length ? `(${crew.join('/')}) ${baseTitle}` : baseTitle;
-  event.setTitle(nextTitle);
-  return { success: true, crew, title: nextTitle };
+  const previousTitle = event.getTitle();
+  const previousTag = typeof event.getTag === 'function' ? event.getTag(TRUCK_ASSIGNMENTS_TAG) : '';
+  try {
+    event.setTitle(nextTitle);
+    applyTruckAssignmentsTag_(event, assignmentResult.assignments);
+  } catch (e) {
+    try {
+      event.setTitle(previousTitle);
+      if (previousTag && typeof event.setTag === 'function') event.setTag(TRUCK_ASSIGNMENTS_TAG, previousTag);
+      else if (!previousTag && typeof event.deleteTag === 'function') event.deleteTag(TRUCK_ASSIGNMENTS_TAG);
+    } catch (rollbackError) {
+      Logger.log('Scheduled assignment rollback failed: ' + rollbackError.message);
+    }
+    return { success: false, error: e.message };
+  }
+  return {
+    success: true,
+    crew,
+    truck_assignments: assignmentResult.assignments,
+    title: nextTitle,
+  };
+  } finally {
+    if (lock) lock.releaseLock();
+  }
+}
+
+function updateScheduledCrew(data) {
+  return updateScheduledAssignments({ ...data, preserve_truck_assignments: true });
 }
 
 // Run once from the Apps Script editor after adding Calendar write scope.

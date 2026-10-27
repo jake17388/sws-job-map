@@ -9,6 +9,7 @@ const unscheduledSource = readFileSync(new URL('../src/backend/05-unscheduled-jo
 const routingSource = readFileSync(new URL('../src/backend/03-routing.js', import.meta.url), 'utf8');
 const frontendHtml = readFileSync(new URL('../src/frontend/index.html', import.meta.url), 'utf8');
 const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
+const vehicleRoster = JSON.parse(readFileSync(new URL('../config/vehicle-roster.json', import.meta.url), 'utf8'));
 
 function makeBackend({ createError = null, deleteError = null } = {}) {
   const rows = [[
@@ -40,15 +41,22 @@ function makeBackend({ createError = null, deleteError = null } = {}) {
       getCalendarById: id => id ? ({
         createAllDayEvent(title, start, end, options) {
           if (createError) throw new Error(createError);
-          const event = { title, start, end, options, id: 'calendar-event-1' };
+          const tags = new Map();
+          const event = {
+            title, start, end, options, id: 'calendar-event-1', tags,
+            getId: () => 'calendar-event-1',
+            getTag: key => tags.get(key) || null,
+            setTag: (key, value) => tags.set(key, value),
+            deleteTag: key => tags.delete(key),
+          };
           created.push(event);
-          return { getId: () => event.id };
+          return event;
         },
       }) : null,
     },
   };
   vm.createContext(context);
-  vm.runInContext(`${configSource}\n${calendarSource}\n${unscheduledSource}`, context);
+  vm.runInContext(`const VEHICLE_ROSTER = ${JSON.stringify(vehicleRoster)};\n${configSource}\n${calendarSource}\n${unscheduledSource}`, context);
   return { context, rows, properties, created };
 }
 
@@ -93,6 +101,23 @@ test('multi-day scheduling uses standard crew priority and converts the inclusiv
   assert.equal(backend.created[0].end.getFullYear(), 2026);
   assert.equal(backend.created[0].end.getMonth(), 9);
   assert.equal(backend.created[0].end.getDate(), 9);
+});
+
+test('scheduling stores shared truck assignments as private Calendar metadata', () => {
+  const backend = makeBackend();
+  const result = backend.context.scheduleUnsched(validRequest({
+    crew: ['Johnny', 'Eli'],
+    truck_assignments: {
+      Johnny: '2018-big-crane',
+      Eli: '2018-big-crane',
+    },
+  }));
+
+  assert.equal(result.success, true);
+  assert.deepEqual(JSON.parse(backend.created[0].tags.get('sws_truck_assignments_v1')), {
+    Johnny: '2018-big-crane',
+    Eli: '2018-big-crane',
+  });
 });
 
 test('scheduling rejects unknown crew, invalid dates, identity changes, and non-install targets', () => {

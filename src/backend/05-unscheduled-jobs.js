@@ -18,9 +18,11 @@ function getUnscheduledSheet_() {
   return sheet;
 }
 
-function ensureUnscheduledCrewHeader_(sheet) {
-  const header = sheet.getRange(1, 7);
-  if (!header.getValue()) header.setValue('Crew');
+function ensureUnscheduledAssignmentHeaders_(sheet) {
+  const crewHeader = sheet.getRange(1, 7);
+  if (!crewHeader.getValue()) crewHeader.setValue('Crew');
+  const truckHeader = sheet.getRange(1, 8);
+  if (!truckHeader.getValue()) truckHeader.setValue('Truck Assignments');
 }
 
 function getUnsched() {
@@ -35,6 +37,7 @@ function getUnsched() {
     added: row[3],
     added_by: row[5] || '',
     crew: normalizeUnscheduledCrew_(row[6]),
+    truck_assignments: normalizeStoredTruckAssignments_(row[7]),
   })).filter(j => j.job_num);
   return { jobs };
 }
@@ -45,15 +48,20 @@ function addUnsched(data) {
     lock.waitLock(10000);
     const jobNum = normalizeJobNumber_(data.job_num);
     if (!jobNum) return { success: false, error: 'Job number must be 5 or 6 digits' };
+    const crewResult = requestedScheduleCrew_(data.crew);
+    if (crewResult.error) return { success: false, error: crewResult.error };
+    const assignmentResult = validateTruckAssignments_(data.truck_assignments, crewResult.crew);
+    if (assignmentResult.error) return { success: false, error: assignmentResult.error };
     const sheet = getUnscheduledSheet_();
-    ensureUnscheduledCrewHeader_(sheet);
+    ensureUnscheduledAssignmentHeaders_(sheet);
     const id = Date.now();
     sheet.appendRow([
       jobNum, data.title, data.address,
       new Date().toISOString(), id, data.added_by || 'Unknown',
-      normalizeUnscheduledCrew_(data.crew).join('/'),
+      crewResult.crew.join('/'),
+      serializeTruckAssignments_(assignmentResult.assignments),
     ]);
-    return { success: true, id };
+    return { success: true, id, crew: crewResult.crew, truck_assignments: assignmentResult.assignments };
   } catch(e) {
     return { success: false, error: e.message };
   } finally {
@@ -87,16 +95,21 @@ function updateUnsched(data) {
     lock.waitLock(10000);
     const jobNum = normalizeJobNumber_(data.job_num);
     if (!jobNum) return { success: false, error: 'Job number must be 5 or 6 digits' };
+    const crewResult = requestedScheduleCrew_(data.crew);
+    if (crewResult.error) return { success: false, error: crewResult.error };
+    const assignmentResult = validateTruckAssignments_(data.truck_assignments, crewResult.crew);
+    if (assignmentResult.error) return { success: false, error: assignmentResult.error };
     const sheet = getUnscheduledSheet_();
-    ensureUnscheduledCrewHeader_(sheet);
+    ensureUnscheduledAssignmentHeaders_(sheet);
     const rows = sheet.getDataRange().getValues();
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][4]) === String(data.id)) {
         sheet.getRange(i + 1, 1).setValue(jobNum);
         sheet.getRange(i + 1, 2).setValue(data.title);
         sheet.getRange(i + 1, 3).setValue(data.address);
-        sheet.getRange(i + 1, 7).setValue(normalizeUnscheduledCrew_(data.crew).join('/'));
-        return { success: true };
+        sheet.getRange(i + 1, 7).setValue(crewResult.crew.join('/'));
+        sheet.getRange(i + 1, 8).setValue(serializeTruckAssignments_(assignmentResult.assignments));
+        return { success: true, crew: crewResult.crew, truck_assignments: assignmentResult.assignments };
       }
     }
     return { success: false, error: 'Row not found' };
@@ -133,6 +146,21 @@ function scheduleReceiptKey_(id) {
   return `SCHEDULED_UNSCHED_${String(id)}`;
 }
 
+function reconcileScheduledReceipt_(receipt) {
+  const calendarId = calendarIdForJobType_(receipt.type);
+  const calendar = calendarId ? CalendarApp.getCalendarById(calendarId) : null;
+  if (!calendar) return { success: false, error: 'Calendar not found' };
+  if (typeof calendar.getEventById !== 'function') return { success: true };
+  const event = calendar.getEventById(String(receipt.event_id));
+  if (!event) return { success: false, error: 'Calendar event not found' };
+  try {
+    applyTruckAssignmentsTag_(event, normalizeStoredTruckAssignments_(receipt.truck_assignments));
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 function scheduleUnsched(data) {
   const lock = LockService.getScriptLock();
   try {
@@ -146,6 +174,10 @@ function scheduleUnsched(data) {
     const savedReceipt = properties.getProperty(receiptKey);
     if (savedReceipt) {
       const receipt = JSON.parse(savedReceipt);
+      const metadata = reconcileScheduledReceipt_(receipt);
+      if (!metadata.success) {
+        return { ...receipt, success: false, partial: true, error: `Calendar event exists, but truck assignments could not be saved: ${metadata.error}` };
+      }
       const cleanup = removeScheduledRow_(id);
       if (!cleanup.success) {
         return { ...receipt, success: false, partial: true, error: `Calendar event exists, but unscheduled cleanup failed: ${cleanup.error}` };
@@ -179,6 +211,8 @@ function scheduleUnsched(data) {
     if (endResult.date < startResult.date) return { success: false, error: 'End date cannot be before start date' };
     const crewResult = requestedScheduleCrew_(data.crew);
     if (crewResult.error) return { success: false, error: crewResult.error };
+    const assignmentResult = validateTruckAssignments_(data.truck_assignments, crewResult.crew);
+    if (assignmentResult.error) return { success: false, error: assignmentResult.error };
 
     const calendar = CalendarApp.getCalendarById(INSTALL_CAL_ID);
     if (!calendar) return { success: false, error: 'Install calendar not found' };
@@ -191,10 +225,17 @@ function scheduleUnsched(data) {
       type: 'install',
       title: eventTitle,
       crew: crewResult.crew,
+      truck_assignments: assignmentResult.assignments,
       start: formatDate(startResult.date),
       end: formatDate(endResult.date),
     };
     properties.setProperty(receiptKey, JSON.stringify(receipt));
+
+    try {
+      applyTruckAssignmentsTag_(event, assignmentResult.assignments);
+    } catch (metadataError) {
+      return { ...receipt, success: false, partial: true, error: `Calendar event created, but truck assignments could not be saved: ${metadataError.message}` };
+    }
 
     try {
       sheet.deleteRow(rowIndex + 1);

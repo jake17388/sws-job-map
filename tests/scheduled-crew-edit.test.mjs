@@ -20,12 +20,13 @@ test('scheduled jobs expose a stable calendar event identifier', () => {
   assert.match(calendarSource, /event_id:\s*event\.getId\(\)/);
 });
 
-test('the backend updates only crew prefixes on allowed calendars', () => {
-  assert.match(calendarSource, /function updateScheduledCrew\(data\)/);
-  assert.match(calendarSource, /normalizeUnscheduledCrew_\(data\.crew\)/);
+test('the backend updates crew prefixes and truck metadata only on allowed calendars', () => {
+  assert.match(calendarSource, /function updateScheduledAssignments\(data\)/);
+  assert.match(calendarSource, /requestedScheduleCrew_\(data\.crew\)/);
+  assert.match(calendarSource, /validateTruckAssignments_\(requestedAssignments, crew\)/);
   assert.ok(calendarSource.includes("replace(/^\\([^)]+\\)\\s*/, '')"));
   assert.match(calendarSource, /event\.setTitle\(nextTitle\)/);
-  assert.match(routingSource, /data\.action === 'updateScheduledCrew'/);
+  assert.match(routingSource, /data\.action === 'updateScheduledAssignments'/);
   assert.match(routingSource, /isAdmin_\(actor\)/);
 });
 
@@ -40,7 +41,7 @@ test('scheduled job cards provide an optional crew editor', () => {
   assert.match(frontendHtml, /id="scheduled-crew-btns"/);
   assert.match(frontendSource, /function openScheduledCrewEditor\(index\)/);
   assert.match(frontendSource, /function saveScheduledCrew\(\)/);
-  assert.match(frontendSource, /action:\s*'updateScheduledCrew'/);
+  assert.match(frontendSource, /action:\s*'updateScheduledAssignments'/);
 });
 
 test('clearing all scheduled crew remains a valid save', () => {

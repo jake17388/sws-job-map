@@ -7,26 +7,15 @@
 // Trigger: cacheSurecamVehicles() every 1 min via setupVehicleTrigger().
 const SC_BASE = 'https://view.surecam.com';
 const SC_ACCT = '01127';
-const SC_NAMES = {
-  '33bb8790-2acc-4ae5-9729-c6435152cf6f': '2025 Double Bucket',
-  'e6c84a15-6a26-4f5a-9f27-494dc3a15f9a': '2016 Flatbed',
-  'cbb1eae7-8270-4ded-ab87-910281b5800d': '2018 Big Crane',
-  'e7ee6ba9-1f74-4a76-b318-fae044c8a818': '2019 Single Bucket',
-  '0f74b5cc-b7e8-41d6-a5fc-6daa201b138a': '2023 Single Bucket',
-  '5e2c8f15-7b50-404a-baf3-538a2f51f301': '2022 Small Crane',
-  '3812774d-22d0-4a8e-9e35-22e277fa29f5': '2026 Flatbed',
-};
+
+function vehicleForSurecamDevice_(deviceId) {
+  return VEHICLE_ROSTER.find(vehicle => String(vehicle.surecamDeviceId) === String(deviceId)) || null;
+}
 
 function setSurecamDeviceIds() {
-  var ids = [
-    '33bb8790-2acc-4ae5-9729-c6435152cf6f', // 2025 Double Bucket
-    'e6c84a15-6a26-4f5a-9f27-494dc3a15f9a', // 2016 FLATBED
-    'cbb1eae7-8270-4ded-ab87-910281b5800d', // 2018 BIG CRANE
-    'e7ee6ba9-1f74-4a76-b318-fae044c8a818', // 2019 SINGLE BUCKET
-    '0f74b5cc-b7e8-41d6-a5fc-6daa201b138a', // 2023 SINGLE BUCKET
-    '5e2c8f15-7b50-404a-baf3-538a2f51f301', // 2022 SMALL CRANE
-    '3812774d-22d0-4a8e-9e35-22e277fa29f5', // 2026 FLATBED
-  ];
+  var ids = VEHICLE_ROSTER
+    .filter(function(vehicle) { return vehicle.active !== false && vehicle.surecamDeviceId; })
+    .map(function(vehicle) { return String(vehicle.surecamDeviceId); });
   PropertiesService.getScriptProperties().setProperty('SC_DEVICE_IDS', JSON.stringify(ids));
   Logger.log('Stored ' + ids.length + ' device IDs.');
 }
@@ -114,14 +103,17 @@ function storeVehicleSnapshot_(vehicles, snapshotAt) {
   var clean = (vehicles || []).slice(0, 50).filter(function(v) {
     return v && v.deviceId && isFinite(Number(v.lat)) && isFinite(Number(v.lng));
   }).map(function(v) {
-    return {
+    var rosterVehicle = vehicleForSurecamDevice_(v.deviceId);
+    var cleanVehicle = {
       deviceId: String(v.deviceId),
-      name: String(v.name || v.deviceId),
+      name: String(rosterVehicle ? rosterVehicle.displayName : (v.name || v.deviceId)),
       status: String(v.status || 'unknown'),
       lat: Number(v.lat),
       lng: Number(v.lng),
       updatedAt: String(v.updatedAt || snapshotAt),
     };
+    if (rosterVehicle) cleanVehicle.vehicleId = String(rosterVehicle.id);
+    return cleanVehicle;
   });
   if (!clean.length) return false;
   var snapshot = { vehicles: clean, snapshotAt: String(snapshotAt || new Date().toISOString()) };
@@ -200,7 +192,11 @@ function cacheSurecamVehicles() {
   Logger.log('SC: parsed ' + vehicles.length + ' of ' + ids.length + ' tracked vehicles from live page');
 
   vehicles.forEach(function(v) {
-    if (SC_NAMES[v.deviceId]) v.name = SC_NAMES[v.deviceId];
+    var rosterVehicle = vehicleForSurecamDevice_(v.deviceId);
+    if (rosterVehicle) {
+      v.vehicleId = String(rosterVehicle.id);
+      v.name = String(rosterVehicle.displayName);
+    }
   });
 
   if (vehicles.length) {

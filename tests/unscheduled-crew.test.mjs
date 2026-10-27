@@ -55,7 +55,7 @@ test('editing an unscheduled job reveals the editor before focusing its fields',
 test('the backend reads and stores crew in the seventh sheet column', () => {
   assert.match(backendSource, /crew:\s*normalizeUnscheduledCrew_\(row\[6\]\)/);
   assert.match(backendSource, /setValue\('Crew'\)/);
-  assert.match(backendSource, /normalizeUnscheduledCrew_\(data\.crew\)\.join\('\/'\)/);
+  assert.match(backendSource, /crewResult\.crew\.join\('\/'\)/);
   assert.match(backendSource, /getRange\(i \+ 1, 7\)\.setValue/);
 });
 
