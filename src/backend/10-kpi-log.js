@@ -29,6 +29,105 @@ function vehicleNameForKpi_(vehicleId) {
   return vehicle ? String(vehicle.displayName) : '';
 }
 
+function normalizeDriveAddress_(value) {
+  return String(value || '')
+    .replace(/\s*\|\s*/g, ', ')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function adjustedDriveMinutes_(durationSeconds) {
+  const seconds = Number(durationSeconds);
+  if (!Number.isFinite(seconds) || seconds <= 0) return '';
+  return Math.round((seconds / 60) * INSTALL_TRUCK_DRIVE_FACTOR);
+}
+
+function driveEstimateCache_() {
+  if (typeof CacheService === 'undefined') return null;
+  try { return CacheService.getScriptCache(); }
+  catch (error) { return null; }
+}
+
+function driveEstimateCacheKey_(normalizedAddress) {
+  if (typeof Utilities !== 'undefined') {
+    const digest = Utilities.computeDigest(
+      Utilities.DigestAlgorithm.SHA_256,
+      normalizedAddress,
+      Utilities.Charset.UTF_8,
+    );
+    const hex = digest
+      .map(byte => ((byte + 256) % 256).toString(16).padStart(2, '0'))
+      .join('');
+    return `install_drive_v1:${hex}`;
+  }
+  let hash = 2166136261;
+  for (let index = 0; index < normalizedAddress.length; index += 1) {
+    hash ^= normalizedAddress.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `install_drive_v1:${normalizedAddress.length}:${(hash >>> 0).toString(16)}`;
+}
+
+function readDriveEstimateCache_(cache, key) {
+  if (!cache) return null;
+  try { return cache.get(key); }
+  catch (error) { return null; }
+}
+
+function writeDriveEstimateCache_(cache, key, value) {
+  if (!cache) return;
+  try { cache.put(key, String(value), 21600); }
+  catch (error) {
+    if (typeof Logger !== 'undefined') Logger.log(`Drive estimate cache write failed: ${error.message}`);
+  }
+}
+
+function routeDriveMinutes_(address) {
+  if (typeof Maps === 'undefined') return '';
+  const directions = Maps.newDirectionFinder()
+    .setOrigin(INSTALL_SHOP_ADDRESS)
+    .setDestination(address)
+    .setMode(Maps.DirectionFinder.Mode.DRIVING)
+    .getDirections();
+  const legs = directions && directions.routes && directions.routes[0]
+    ? directions.routes[0].legs || []
+    : [];
+  const seconds = legs.reduce((total, leg) => total + Number(leg && leg.duration && leg.duration.value || 0), 0);
+  return adjustedDriveMinutes_(seconds);
+}
+
+function estimateDriveMinutesByAddress_(jobs) {
+  const estimates = new Map();
+  const cache = driveEstimateCache_();
+  (jobs || []).forEach(job => {
+    const address = String(job && job.addr || '').replace(/\s+/g, ' ').trim();
+    const normalizedAddress = normalizeDriveAddress_(address);
+    if (!normalizedAddress || estimates.has(normalizedAddress)) return;
+    const cacheKey = driveEstimateCacheKey_(normalizedAddress);
+    const cached = readDriveEstimateCache_(cache, cacheKey);
+    if (cached != null && cached !== '') {
+      const cachedMinutes = Number(cached);
+      if (Number.isFinite(cachedMinutes) && cachedMinutes > 0) {
+        estimates.set(normalizedAddress, cachedMinutes);
+        return;
+      }
+    }
+    let minutes = '';
+    try {
+      minutes = routeDriveMinutes_(address);
+      if (minutes !== '') writeDriveEstimateCache_(cache, cacheKey, minutes);
+    } catch (error) {
+      if (typeof Logger !== 'undefined') {
+        Logger.log(`Drive estimate failed for ${address}: ${error.message}`);
+      }
+    }
+    estimates.set(normalizedAddress, minutes);
+  });
+  return estimates;
+}
+
 function inclusiveDateStrings_(startValue, endValue) {
   const startResult = parseScheduleDate_(startValue, 'start');
   const endResult = parseScheduleDate_(endValue || startValue, 'end');
@@ -42,7 +141,7 @@ function inclusiveDateStrings_(startValue, endValue) {
   return dates;
 }
 
-function buildKpiSeedRows_(jobs) {
+function buildKpiSeedRows_(jobs, driveMinutesByAddress) {
   const seeds = [];
   (jobs || []).forEach(job => {
     if (String(job.type || '').toLowerCase() !== 'install' || !job.event_id) return;
@@ -62,6 +161,10 @@ function buildKpiSeedRows_(jobs) {
         values[2] = String(job.num || '');
         values[3] = String(job.title || '');
         values[4] = vehicleNameForKpi_((job.truck_assignments || {})[crewMember]);
+        const driveEstimate = driveMinutesByAddress && typeof driveMinutesByAddress.get === 'function'
+          ? driveMinutesByAddress.get(normalizeDriveAddress_(job.addr))
+          : '';
+        values[6] = driveEstimate == null ? '' : driveEstimate;
         values[9] = 'Pending';
         values[KPI_KEY_COLUMN - 1] = key;
         seeds.push({ key, values });
@@ -71,7 +174,7 @@ function buildKpiSeedRows_(jobs) {
   return seeds;
 }
 
-function planKpiSync_(jobs, existingRows) {
+function planKpiSync_(jobs, existingRows, driveMinutesByAddress) {
   const rowsByKey = new Map();
   (existingRows || []).forEach((row, index) => {
     const key = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
@@ -79,7 +182,8 @@ function planKpiSync_(jobs, existingRows) {
   });
   const rowsToAppend = [];
   const rowsToUpdate = [];
-  buildKpiSeedRows_(jobs).forEach(seed => {
+  const rowsToDriveUpdate = [];
+  buildKpiSeedRows_(jobs, driveMinutesByAddress).forEach(seed => {
     const existing = rowsByKey.get(seed.key);
     if (!existing) {
       rowsToAppend.push(seed.values);
@@ -93,8 +197,13 @@ function planKpiSync_(jobs, existingRows) {
       return String(current == null ? '' : current) !== String(value == null ? '' : value);
     });
     if (changed) rowsToUpdate.push({ index: existing.index, values: scheduleValues });
+    const currentDrive = existing.row[6];
+    const estimatedDrive = seed.values[6];
+    if ((currentDrive == null || String(currentDrive).trim() === '') && estimatedDrive !== '') {
+      rowsToDriveUpdate.push({ index: existing.index, value: estimatedDrive });
+    }
   });
-  return { rowsToAppend, rowsToUpdate };
+  return { rowsToAppend, rowsToUpdate, rowsToDriveUpdate };
 }
 
 function syncInstallJobsToKpi_(jobs) {
@@ -103,13 +212,17 @@ function syncInstallJobsToKpi_(jobs) {
   try {
     const sheet = getKpiSheet_();
     ensureKpiKeyColumn_(sheet);
+    const driveMinutesByAddress = estimateDriveMinutesByAddress_(jobs);
     const lastRow = Math.max(sheet.getLastRow(), KPI_HEADER_ROW);
     const existingRows = lastRow >= KPI_FIRST_DATA_ROW
       ? sheet.getRange(KPI_FIRST_DATA_ROW, 1, lastRow - KPI_FIRST_DATA_ROW + 1, KPI_COLUMN_COUNT).getValues()
       : [];
-    const plan = planKpiSync_(jobs, existingRows);
+    const plan = planKpiSync_(jobs, existingRows, driveMinutesByAddress);
     plan.rowsToUpdate.forEach(update => {
       sheet.getRange(KPI_FIRST_DATA_ROW + update.index, 1, 1, 5).setValues([update.values]);
+    });
+    plan.rowsToDriveUpdate.forEach(update => {
+      sheet.getRange(KPI_FIRST_DATA_ROW + update.index, 7).setValue(update.value);
     });
     if (plan.rowsToAppend.length) {
       sheet.getRange(lastRow + 1, 1, plan.rowsToAppend.length, KPI_COLUMN_COUNT)
@@ -119,6 +232,7 @@ function syncInstallJobsToKpi_(jobs) {
       success: true,
       created: plan.rowsToAppend.length,
       filled: plan.rowsToUpdate.length,
+      estimated_drive_filled: plan.rowsToDriveUpdate.length,
     };
   } finally {
     if (lock) lock.releaseLock();
