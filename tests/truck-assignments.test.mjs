@@ -10,9 +10,15 @@ const routingSource = readFileSync(new URL('../src/backend/03-routing.js', impor
 const frontendHtml = readFileSync(new URL('../src/frontend/index.html', import.meta.url), 'utf8');
 const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
 
+const INSTALL_CAL_ID_FOR_TEST = 'summitwestsigns.com_5ehu6it6pfpcg2g9ifpcuv6gd8@group.calendar.google.com';
+const SERVICE_CAL_ID_FOR_TEST = 'summitwestsigns.com_plamgq5u79k125mvl50ie49fu0@group.calendar.google.com';
+const EXCAV_CAL_ID_FOR_TEST = 'c_86ccbe589549562e734ff696a2cebbefc071fe607283d4a7cac31c0c36d1155c@group.calendar.google.com';
+
 const rosterFixture = [
   { id: 'big-crane', displayName: 'Big Crane', surecamDeviceId: 'device-big', active: true },
   { id: 'flatbed', displayName: 'Flatbed', surecamDeviceId: 'device-flat', active: true },
+  { id: 'small-crane', displayName: 'Small Crane', surecamDeviceId: 'device-small', active: true },
+  { id: '2019-bucket', displayName: '2019 Bucket', surecamDeviceId: 'device-2019', active: true },
   { id: 'retired-bucket', displayName: 'Retired Bucket', surecamDeviceId: 'device-old', active: false },
 ];
 
@@ -139,6 +145,66 @@ test('scheduled assignment updates save crew and trucks together', () => {
     Johnny: 'big-crane',
     Eli: 'big-crane',
   });
+});
+
+test('scheduled assignment updates propagate each crew truck to every overlapping job that day', () => {
+  function event(id, title, startDay, assignments = {}) {
+    let currentTitle = title;
+    const tags = new Map();
+    if (Object.keys(assignments).length) {
+      tags.set('sws_truck_assignments_v1', JSON.stringify(assignments));
+    }
+    return {
+      id,
+      tags,
+      getId: () => id,
+      getTitle: () => currentTitle,
+      setTitle: value => { currentTitle = value; },
+      getStartTime: () => new Date(2026, 9, startDay),
+      getEndTime: () => new Date(2026, 9, startDay + 1),
+      getTag: key => tags.get(key) || null,
+      setTag: (key, value) => { tags.set(key, value); },
+      deleteTag: key => { tags.delete(key); },
+    };
+  }
+
+  const target = event('target', '(Eli/Jerry) 123456 Main Job', 5);
+  const eliJob = event('eli-job', '(Eli) 123457 Second Job', 5, { Eli: 'flatbed' });
+  const jerryJob = event('jerry-job', '(Jerry/Johnny) 123458 Service Job', 5, { Johnny: 'big-crane' });
+  const nextDayJob = event('next-day', '(Eli) 123459 Tomorrow Job', 6);
+  const calendars = new Map([
+    [INSTALL_CAL_ID_FOR_TEST, {
+      getEventById: id => id === 'target' ? target : null,
+      getEvents: () => [target, eliJob],
+    }],
+    [SERVICE_CAL_ID_FOR_TEST, { getEvents: () => [jerryJob] }],
+    [EXCAV_CAL_ID_FOR_TEST, { getEvents: () => [nextDayJob] }],
+  ]);
+  const context = assignmentContext({
+    CalendarApp: { getCalendarById: id => calendars.get(id) || null },
+    LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+  });
+
+  const result = context.updateScheduledAssignments({
+    type: 'install',
+    event_id: 'target',
+    crew: ['Eli', 'Jerry'],
+    truck_assignments: { Eli: 'small-crane', Jerry: '2019-bucket' },
+  });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(JSON.parse(target.tags.get('sws_truck_assignments_v1')), {
+    Eli: 'small-crane',
+    Jerry: '2019-bucket',
+  });
+  assert.deepEqual(JSON.parse(eliJob.tags.get('sws_truck_assignments_v1')), {
+    Eli: 'small-crane',
+  });
+  assert.deepEqual(JSON.parse(jerryJob.tags.get('sws_truck_assignments_v1')), {
+    Jerry: '2019-bucket',
+    Johnny: 'big-crane',
+  });
+  assert.equal(nextDayJob.tags.has('sws_truck_assignments_v1'), false);
 });
 
 test('unscheduled jobs reserve column eight for truck assignment JSON', () => {
