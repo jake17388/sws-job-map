@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.02.2';
+const APP_VERSION = '2026.11.02.3';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
