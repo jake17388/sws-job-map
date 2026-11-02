@@ -1,6 +1,6 @@
 // ── Install KPI log ──────────────────────────────────────────────────────────
-const KPI_HEADER_ROW = 17;
-const KPI_FIRST_DATA_ROW = 18;
+const KPI_HEADER_ROW = 3;
+const KPI_FIRST_DATA_ROW = 4;
 const KPI_COLUMN_COUNT = 26;
 const KPI_KEY_COLUMN = 26;
 const KPI_KEY_HEADER = 'Calendar KPI Key';
