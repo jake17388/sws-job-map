@@ -38,10 +38,11 @@ function normalizeDriveAddress_(value) {
     .toLowerCase();
 }
 
-function adjustedDriveMinutes_(durationSeconds) {
+function adjustedDriveHours_(durationSeconds) {
   const seconds = Number(durationSeconds);
   if (!Number.isFinite(seconds) || seconds <= 0) return '';
-  return Math.round((seconds / 60) * INSTALL_TRUCK_DRIVE_FACTOR);
+  const hours = (seconds / 3600) * INSTALL_TRUCK_DRIVE_FACTOR * INSTALL_ROUND_TRIP_FACTOR;
+  return Math.round(hours * 100) / 100;
 }
 
 function driveEstimateCache_() {
@@ -60,14 +61,14 @@ function driveEstimateCacheKey_(normalizedAddress) {
     const hex = digest
       .map(byte => ((byte + 256) % 256).toString(16).padStart(2, '0'))
       .join('');
-    return `install_drive_v1:${hex}`;
+    return `install_drive_v2:${hex}`;
   }
   let hash = 2166136261;
   for (let index = 0; index < normalizedAddress.length; index += 1) {
     hash ^= normalizedAddress.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return `install_drive_v1:${normalizedAddress.length}:${(hash >>> 0).toString(16)}`;
+  return `install_drive_v2:${normalizedAddress.length}:${(hash >>> 0).toString(16)}`;
 }
 
 function readDriveEstimateCache_(cache, key) {
@@ -84,7 +85,7 @@ function writeDriveEstimateCache_(cache, key, value) {
   }
 }
 
-function routeDriveMinutes_(address) {
+function routeDriveHours_(address) {
   if (typeof Maps === 'undefined') return '';
   const directions = Maps.newDirectionFinder()
     .setOrigin(INSTALL_SHOP_ADDRESS)
@@ -95,10 +96,10 @@ function routeDriveMinutes_(address) {
     ? directions.routes[0].legs || []
     : [];
   const seconds = legs.reduce((total, leg) => total + Number(leg && leg.duration && leg.duration.value || 0), 0);
-  return adjustedDriveMinutes_(seconds);
+  return adjustedDriveHours_(seconds);
 }
 
-function estimateDriveMinutesByAddress_(jobs) {
+function estimateDriveHoursByAddress_(jobs) {
   const estimates = new Map();
   const cache = driveEstimateCache_();
   (jobs || []).forEach(job => {
@@ -108,22 +109,22 @@ function estimateDriveMinutesByAddress_(jobs) {
     const cacheKey = driveEstimateCacheKey_(normalizedAddress);
     const cached = readDriveEstimateCache_(cache, cacheKey);
     if (cached != null && cached !== '') {
-      const cachedMinutes = Number(cached);
-      if (Number.isFinite(cachedMinutes) && cachedMinutes > 0) {
-        estimates.set(normalizedAddress, cachedMinutes);
+      const cachedHours = Number(cached);
+      if (Number.isFinite(cachedHours) && cachedHours > 0) {
+        estimates.set(normalizedAddress, cachedHours);
         return;
       }
     }
-    let minutes = '';
+    let hours = '';
     try {
-      minutes = routeDriveMinutes_(address);
-      if (minutes !== '') writeDriveEstimateCache_(cache, cacheKey, minutes);
+      hours = routeDriveHours_(address);
+      if (hours !== '') writeDriveEstimateCache_(cache, cacheKey, hours);
     } catch (error) {
       if (typeof Logger !== 'undefined') {
         Logger.log(`Drive estimate failed for ${address}: ${error.message}`);
       }
     }
-    estimates.set(normalizedAddress, minutes);
+    estimates.set(normalizedAddress, hours);
   });
   return estimates;
 }
@@ -141,7 +142,7 @@ function inclusiveDateStrings_(startValue, endValue) {
   return dates;
 }
 
-function buildKpiSeedRows_(jobs, driveMinutesByAddress) {
+function buildKpiSeedRows_(jobs, driveHoursByAddress) {
   const seeds = [];
   (jobs || []).forEach(job => {
     if (String(job.type || '').toLowerCase() !== 'install' || !job.event_id) return;
@@ -161,11 +162,11 @@ function buildKpiSeedRows_(jobs, driveMinutesByAddress) {
         values[2] = String(job.num || '');
         values[3] = String(job.title || '');
         values[4] = vehicleNameForKpi_((job.truck_assignments || {})[crewMember]);
-        const driveEstimate = driveMinutesByAddress && typeof driveMinutesByAddress.get === 'function'
-          ? driveMinutesByAddress.get(normalizeDriveAddress_(job.addr))
+        const driveEstimate = driveHoursByAddress && typeof driveHoursByAddress.get === 'function'
+          ? driveHoursByAddress.get(normalizeDriveAddress_(job.addr))
           : '';
         values[6] = driveEstimate == null ? '' : driveEstimate;
-        values[9] = 'Pending';
+        values[9] = false;
         values[KPI_KEY_COLUMN - 1] = key;
         seeds.push({ key, values });
       });
@@ -174,7 +175,7 @@ function buildKpiSeedRows_(jobs, driveMinutesByAddress) {
   return seeds;
 }
 
-function planKpiSync_(jobs, existingRows, driveMinutesByAddress) {
+function planKpiSync_(jobs, existingRows, driveHoursByAddress) {
   const rowsByKey = new Map();
   (existingRows || []).forEach((row, index) => {
     const key = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
@@ -183,7 +184,7 @@ function planKpiSync_(jobs, existingRows, driveMinutesByAddress) {
   const rowsToAppend = [];
   const rowsToUpdate = [];
   const rowsToDriveUpdate = [];
-  buildKpiSeedRows_(jobs, driveMinutesByAddress).forEach(seed => {
+  buildKpiSeedRows_(jobs, driveHoursByAddress).forEach(seed => {
     const existing = rowsByKey.get(seed.key);
     if (!existing) {
       rowsToAppend.push(seed.values);
@@ -212,12 +213,12 @@ function syncInstallJobsToKpi_(jobs) {
   try {
     const sheet = getKpiSheet_();
     ensureKpiKeyColumn_(sheet);
-    const driveMinutesByAddress = estimateDriveMinutesByAddress_(jobs);
+    const driveHoursByAddress = estimateDriveHoursByAddress_(jobs);
     const lastRow = Math.max(sheet.getLastRow(), KPI_HEADER_ROW);
     const existingRows = lastRow >= KPI_FIRST_DATA_ROW
       ? sheet.getRange(KPI_FIRST_DATA_ROW, 1, lastRow - KPI_FIRST_DATA_ROW + 1, KPI_COLUMN_COUNT).getValues()
       : [];
-    const plan = planKpiSync_(jobs, existingRows, driveMinutesByAddress);
+    const plan = planKpiSync_(jobs, existingRows, driveHoursByAddress);
     plan.rowsToUpdate.forEach(update => {
       sheet.getRange(KPI_FIRST_DATA_ROW + update.index, 1, 1, 5).setValues([update.values]);
     });

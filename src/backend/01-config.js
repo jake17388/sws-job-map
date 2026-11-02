@@ -4,6 +4,7 @@ const KPI_SHEET_ID = '1pBYUoM3gxQoSjnrihwcKcTZHqO_BGXiWo3aZnzuat2A';
 const KPI_SHEET_NAME = 'Install Log';
 const INSTALL_SHOP_ADDRESS = '4049 E Presidio St, Mesa, AZ 85215';
 const INSTALL_TRUCK_DRIVE_FACTOR = 1.05;
+const INSTALL_ROUND_TRIP_FACTOR = 2;
 const ADMIN_USER_NAME = 'Jake Banks';
 
 const INSTALL_CAL_ID = 'summitwestsigns.com_5ehu6it6pfpcg2g9ifpcuv6gd8@group.calendar.google.com';
