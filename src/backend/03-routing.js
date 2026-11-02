@@ -86,5 +86,9 @@ function doPost(e) {
     if (!isAdmin_(actor)) return json({ error: 'forbidden' });
     return json(syncInstallCalendarToKpi(data));
   }
+  if (data.action === 'refreshKpiJobTotals') {
+    if (!isAdmin_(actor)) return json({ error: 'forbidden' });
+    return json(refreshKpiJobTotals());
+  }
   return json({ error: 'unknown action' });
 }

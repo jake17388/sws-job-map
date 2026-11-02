@@ -1,8 +1,10 @@
 // ── Install KPI log ──────────────────────────────────────────────────────────
 const KPI_HEADER_ROW = 3;
 const KPI_FIRST_DATA_ROW = 4;
-const KPI_COLUMN_COUNT = 26;
-const KPI_KEY_COLUMN = 26;
+const KPI_COLUMN_COUNT = 27;
+const KPI_TOTAL_JOB_HOURS_COLUMN = 7;
+const KPI_DRIVE_HOURS_COLUMN = 8;
+const KPI_KEY_COLUMN = 27;
 const KPI_KEY_HEADER = 'Calendar KPI Key';
 
 function getKpiSheet_() {
@@ -142,7 +144,7 @@ function inclusiveDateStrings_(startValue, endValue) {
   return dates;
 }
 
-function buildKpiSeedRows_(jobs, driveHoursByAddress) {
+function buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber) {
   const seeds = [];
   (jobs || []).forEach(job => {
     if (String(job.type || '').toLowerCase() !== 'install' || !job.event_id) return;
@@ -162,11 +164,17 @@ function buildKpiSeedRows_(jobs, driveHoursByAddress) {
         values[2] = String(job.num || '');
         values[3] = String(job.title || '');
         values[4] = vehicleNameForKpi_((job.truck_assignments || {})[crewMember]);
+        const jobNum = String(job.num || '');
+        const totalJobHours = jobHoursByNumber && typeof jobHoursByNumber.has === 'function'
+          && jobHoursByNumber.has(jobNum)
+          ? jobHoursByNumber.get(jobNum)
+          : '';
+        values[KPI_TOTAL_JOB_HOURS_COLUMN - 1] = totalJobHours;
         const driveEstimate = driveHoursByAddress && typeof driveHoursByAddress.get === 'function'
           ? driveHoursByAddress.get(normalizeDriveAddress_(job.addr))
           : '';
-        values[6] = driveEstimate == null ? '' : driveEstimate;
-        values[9] = false;
+        values[KPI_DRIVE_HOURS_COLUMN - 1] = driveEstimate == null ? '' : driveEstimate;
+        values[10] = false;
         values[KPI_KEY_COLUMN - 1] = key;
         seeds.push({ key, values });
       });
@@ -175,7 +183,7 @@ function buildKpiSeedRows_(jobs, driveHoursByAddress) {
   return seeds;
 }
 
-function planKpiSync_(jobs, existingRows, driveHoursByAddress) {
+function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber) {
   const rowsByKey = new Map();
   (existingRows || []).forEach((row, index) => {
     const key = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
@@ -183,8 +191,9 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress) {
   });
   const rowsToAppend = [];
   const rowsToUpdate = [];
+  const rowsToJobHoursUpdate = [];
   const rowsToDriveUpdate = [];
-  buildKpiSeedRows_(jobs, driveHoursByAddress).forEach(seed => {
+  buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber).forEach(seed => {
     const existing = rowsByKey.get(seed.key);
     if (!existing) {
       rowsToAppend.push(seed.values);
@@ -198,13 +207,35 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress) {
       return String(current == null ? '' : current) !== String(value == null ? '' : value);
     });
     if (changed) rowsToUpdate.push({ index: existing.index, values: scheduleValues });
-    const currentDrive = existing.row[6];
-    const estimatedDrive = seed.values[6];
+    const currentJobHours = existing.row[KPI_TOTAL_JOB_HOURS_COLUMN - 1];
+    const estimatedJobHours = seed.values[KPI_TOTAL_JOB_HOURS_COLUMN - 1];
+    if (estimatedJobHours !== ''
+        && ((currentJobHours == null || String(currentJobHours).trim() === '')
+          || Number(currentJobHours) !== Number(estimatedJobHours))) {
+      rowsToJobHoursUpdate.push({ index: existing.index, value: estimatedJobHours });
+    }
+    const currentDrive = existing.row[KPI_DRIVE_HOURS_COLUMN - 1];
+    const estimatedDrive = seed.values[KPI_DRIVE_HOURS_COLUMN - 1];
     if ((currentDrive == null || String(currentDrive).trim() === '') && estimatedDrive !== '') {
       rowsToDriveUpdate.push({ index: existing.index, value: estimatedDrive });
     }
   });
-  return { rowsToAppend, rowsToUpdate, rowsToDriveUpdate };
+  return { rowsToAppend, rowsToUpdate, rowsToJobHoursUpdate, rowsToDriveUpdate };
+}
+
+function planKpiJobHoursBackfill_(existingRows, jobHoursByNumber) {
+  let updated = 0;
+  const values = (existingRows || []).map(row => {
+    const jobNum = String((row || [])[2] || '').trim();
+    const current = (row || [])[KPI_TOTAL_JOB_HOURS_COLUMN - 1];
+    if (!jobHoursByNumber || typeof jobHoursByNumber.has !== 'function' || !jobHoursByNumber.has(jobNum)) {
+      return [current == null ? '' : current];
+    }
+    const total = jobHoursByNumber.get(jobNum);
+    if (Number(current) !== Number(total) || current === '') updated += 1;
+    return [total];
+  });
+  return { values, updated };
 }
 
 function syncInstallJobsToKpi_(jobs) {
@@ -214,16 +245,27 @@ function syncInstallJobsToKpi_(jobs) {
     const sheet = getKpiSheet_();
     ensureKpiKeyColumn_(sheet);
     const driveHoursByAddress = estimateDriveHoursByAddress_(jobs);
+    let jobHoursByNumber = new Map();
+    try {
+      jobHoursByNumber = squarecoilInstallHoursByJob_(
+        Array.from(new Set((jobs || []).map(job => String(job && job.num || '')).filter(Boolean)))
+      );
+    } catch (error) {
+      if (typeof Logger !== 'undefined') Logger.log(`Squarecoil install hours failed: ${error.message}`);
+    }
     const lastRow = Math.max(sheet.getLastRow(), KPI_HEADER_ROW);
     const existingRows = lastRow >= KPI_FIRST_DATA_ROW
       ? sheet.getRange(KPI_FIRST_DATA_ROW, 1, lastRow - KPI_FIRST_DATA_ROW + 1, KPI_COLUMN_COUNT).getValues()
       : [];
-    const plan = planKpiSync_(jobs, existingRows, driveHoursByAddress);
+    const plan = planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber);
     plan.rowsToUpdate.forEach(update => {
       sheet.getRange(KPI_FIRST_DATA_ROW + update.index, 1, 1, 5).setValues([update.values]);
     });
+    plan.rowsToJobHoursUpdate.forEach(update => {
+      sheet.getRange(KPI_FIRST_DATA_ROW + update.index, KPI_TOTAL_JOB_HOURS_COLUMN).setValue(update.value);
+    });
     plan.rowsToDriveUpdate.forEach(update => {
-      sheet.getRange(KPI_FIRST_DATA_ROW + update.index, 7).setValue(update.value);
+      sheet.getRange(KPI_FIRST_DATA_ROW + update.index, KPI_DRIVE_HOURS_COLUMN).setValue(update.value);
     });
     if (plan.rowsToAppend.length) {
       sheet.getRange(lastRow + 1, 1, plan.rowsToAppend.length, KPI_COLUMN_COUNT)
@@ -233,7 +275,42 @@ function syncInstallJobsToKpi_(jobs) {
       success: true,
       created: plan.rowsToAppend.length,
       filled: plan.rowsToUpdate.length,
+      estimated_job_hours_filled: plan.rowsToJobHoursUpdate.length,
       estimated_drive_filled: plan.rowsToDriveUpdate.length,
+    };
+  } finally {
+    if (lock) lock.releaseLock();
+  }
+}
+
+function refreshKpiJobTotals() {
+  if (!isSquarecoilEstimateConfigured_()) {
+    return { success: false, error: 'Squarecoil credentials are not configured' };
+  }
+  const lock = typeof LockService !== 'undefined' ? LockService.getScriptLock() : null;
+  if (lock) lock.waitLock(10000);
+  try {
+    const sheet = getKpiSheet_();
+    ensureKpiKeyColumn_(sheet);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < KPI_FIRST_DATA_ROW) return { success: true, jobs: 0, rows_updated: 0 };
+    const existingRows = sheet
+      .getRange(KPI_FIRST_DATA_ROW, 1, lastRow - KPI_FIRST_DATA_ROW + 1, KPI_COLUMN_COUNT)
+      .getValues();
+    const jobNums = Array.from(new Set(existingRows
+      .map(row => String(row[2] || '').trim())
+      .filter(jobNum => /^\d{5,6}$/.test(jobNum))));
+    const jobHoursByNumber = squarecoilInstallHoursByJob_(jobNums, true);
+    const plan = planKpiJobHoursBackfill_(existingRows, jobHoursByNumber);
+    if (plan.values.length) {
+      sheet.getRange(KPI_FIRST_DATA_ROW, KPI_TOTAL_JOB_HOURS_COLUMN, plan.values.length, 1)
+        .setValues(plan.values);
+    }
+    return {
+      success: true,
+      jobs: jobNums.length,
+      jobs_resolved: jobHoursByNumber.size,
+      rows_updated: plan.updated,
     };
   } finally {
     if (lock) lock.releaseLock();

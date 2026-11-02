@@ -253,6 +253,26 @@ test('sync planning fills a blank drive estimate without overwriting other KPI f
   assert.equal(existing[10], false);
 });
 
+test('sync planning writes a legitimate zero-hour Squarecoil total into a blank cell', () => {
+  const context = backendContext();
+  const existing = Array(27).fill('');
+  existing[0] = new Date(2026, 10, 2, 12);
+  existing[1] = 'Johnny';
+  existing[2] = '123456';
+  existing[3] = 'Monument Sign';
+  existing[4] = '2022 Crane';
+  existing[10] = false;
+  existing[26] = 'event-1|2026-11-02|Johnny';
+
+  const plan = context.planKpiSync_([
+    job({ start: '2026-11-02', end: '2026-11-02', crew: ['Johnny'] }),
+  ], [existing], new Map(), new Map([['123456', 0]]));
+
+  assert.deepEqual(Array.from(plan.rowsToJobHoursUpdate, update => ({ index: update.index, value: update.value })), [
+    { index: 0, value: 0 },
+  ]);
+});
+
 test('job-hour backfill repeats each Squarecoil total on every matching KPI row', () => {
   const context = backendContext();
   const rows = [
