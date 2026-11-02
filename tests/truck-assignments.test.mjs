@@ -48,6 +48,11 @@ test('the vehicle catalog matches the complete active truck list', () => {
   assert.ok(roster.every(vehicle => vehicle.active === true));
 });
 
+test('vehicle roster changes trigger the Apps Script deployment workflow', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /config\/vehicle-roster\.json/);
+});
+
 test('truck validation permits shared and separate trucks while preserving crew order', () => {
   const context = assignmentContext();
   const result = context.validateTruckAssignments_({
