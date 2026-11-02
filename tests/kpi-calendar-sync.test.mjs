@@ -7,6 +7,12 @@ const configSource = readFileSync(new URL('../src/backend/01-config.js', import.
 const calendarSource = readFileSync(new URL('../src/backend/04-calendar-jobs.js', import.meta.url), 'utf8');
 const unscheduledSource = readFileSync(new URL('../src/backend/05-unscheduled-jobs.js', import.meta.url), 'utf8');
 const kpiSource = readFileSync(new URL('../src/backend/10-kpi-log.js', import.meta.url), 'utf8');
+let squarecoilSource = '';
+try {
+  squarecoilSource = readFileSync(new URL('../src/backend/11-squarecoil-estimates.js', import.meta.url), 'utf8');
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+}
 const routingSource = readFileSync(new URL('../src/backend/03-routing.js', import.meta.url), 'utf8');
 const currentJobsSource = readFileSync(new URL('../src/backend/06-current-jobs-sheet.js', import.meta.url), 'utf8');
 const frontendHtml = readFileSync(new URL('../src/frontend/index.html', import.meta.url), 'utf8');
@@ -20,7 +26,7 @@ const roster = [
 function backendContext(globals = {}) {
   const context = vm.createContext({ console, Date, ...globals });
   vm.runInContext(
-    `const VEHICLE_ROSTER = ${JSON.stringify(roster)};\n${configSource}\n${calendarSource}\n${unscheduledSource}\n${kpiSource}`,
+    `const VEHICLE_ROSTER = ${JSON.stringify(roster)};\n${configSource}\n${calendarSource}\n${unscheduledSource}\n${kpiSource}\n${squarecoilSource}`,
     context,
   );
   return context;
@@ -42,7 +48,7 @@ function job(overrides = {}) {
 
 test('multi-day install events expand to one unchecked row per date and crew member', () => {
   const context = backendContext();
-  const seeds = context.buildKpiSeedRows_([job()]);
+  const seeds = context.buildKpiSeedRows_([job()], new Map(), new Map([['123456', 42]]));
 
   assert.equal(seeds.length, 4);
   assert.deepEqual(Array.from(seeds, seed => seed.key), [
@@ -57,9 +63,10 @@ test('multi-day install events expand to one unchecked row per date and crew mem
   assert.equal(seeds[0].values[2], '123456');
   assert.equal(seeds[0].values[3], 'Monument Sign');
   assert.equal(seeds[0].values[4], '2022 Crane');
-  assert.equal(seeds[0].values[8], '');
-  assert.equal(seeds[0].values[9], false);
-  assert.equal(seeds[0].values[25], 'event-1|2026-11-02|Johnny');
+  assert.equal(seeds[0].values[6], 42);
+  assert.equal(seeds[0].values[9], '');
+  assert.equal(seeds[0].values[10], false);
+  assert.equal(seeds[0].values[26], 'event-1|2026-11-02|Johnny');
 });
 
 test('events without crew do not create KPI rows', () => {
@@ -147,7 +154,37 @@ test('new KPI rows receive the calculated drive estimate in column G', () => {
   const seeds = context.buildKpiSeedRows_([
     job({ addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
   ], estimates);
-  assert.equal(seeds[0].values[6], 2.1);
+  assert.equal(seeds[0].values[7], 2.1);
+});
+
+test('Squarecoil estimate pages sum install labor and exclude project management', () => {
+  const context = backendContext();
+  const html = `
+    <table>
+      <tr><th>Description</th><th>Notes</th><th>Hours</th><th>Rate</th><th>Amount</th></tr>
+      <tr><td>Project management</td><td></td><td>2</td><td></td><td></td></tr>
+      <tr><td>Installation</td><td></td><td>12</td><td></td><td></td></tr>
+      <tr><td>Install (2)</td><td></td><td>1.5</td><td></td><td></td></tr>
+      <tr><td>Installation&nbsp; work truck</td><td></td><td>12</td><td></td><td></td></tr>
+      <tr><td>Installation Bucket truck</td><td></td><td>12</td><td></td><td></td></tr>
+      <tr><td>Installation Crane Truck</td><td></td><td>0</td><td></td><td></td></tr>
+      <tr><td>Loading / Unloading</td><td></td><td>2</td><td></td><td></td></tr>
+      <tr><td>Electrician</td><td></td><td>4</td><td></td><td></td></tr>
+      <tr><td>Total</td><td></td><td>45.5</td><td></td><td></td></tr>
+    </table>`;
+
+  assert.equal(context.squarecoilInstallHoursFromEstimateHtml_(html), 39.5);
+});
+
+test('Squarecoil estimate list parsing returns unique estimate ids for the job', () => {
+  const context = backendContext();
+  const html = `
+    <a href="project_estimates.php?id=260242&amp;estimateid=19811">260242-03</a>
+    <a href='project_estimates.php?estimateid=19812&amp;id=260242'>260242-04</a>
+    <a href="project_estimates.php?id=260242&amp;estimateid=19811">duplicate</a>
+    <a href="project_estimates.php?id=999999&amp;estimateid=77">other job</a>`;
+
+  assert.deepEqual(Array.from(context.squarecoilEstimateIdsFromHtml_(html, '260242')), ['19811', '19812']);
 });
 
 test('the split Install Log starts with its assignment section and row-three header', () => {
@@ -164,27 +201,32 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
   existing[3] = 'Monument Sign';
   existing[4] = '2022 Crane';
   existing[6] = 90;
-  existing[7] = 4.5;
-  existing[8] = 3.75;
-  existing[9] = true;
-  existing[10] = 'Waiting on electrical';
-  existing[25] = 'event-1|2026-11-02|Johnny';
+  existing[7] = 2.1;
+  existing[8] = 4.5;
+  existing[9] = 3.75;
+  existing[10] = true;
+  existing[11] = 'Waiting on electrical';
+  existing[26] = 'event-1|2026-11-02|Johnny';
 
   const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
   const plan = context.planKpiSync_([
     job({ start: '2026-11-02', end: '2026-11-02', addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
-  ], [existing], estimates);
+  ], [existing], estimates, new Map([['123456', 42]]));
 
   assert.equal(plan.rowsToAppend.length, 1);
   assert.equal(plan.rowsToAppend[0][1], 'Eli');
   assert.equal(plan.rowsToUpdate.length, 1);
   assert.equal(plan.rowsToDriveUpdate.length, 0);
+  assert.deepEqual(Array.from(plan.rowsToJobHoursUpdate, update => ({ index: update.index, value: update.value })), [
+    { index: 0, value: 42 },
+  ]);
   assert.equal(plan.rowsToUpdate[0].values[0].getHours(), 12);
-  assert.equal(plan.rowsToAppend[0][6], 2.1);
-  assert.equal(existing[6], 90);
-  assert.equal(existing[8], 3.75);
-  assert.equal(existing[9], true);
-  assert.equal(existing[10], 'Waiting on electrical');
+  assert.equal(plan.rowsToAppend[0][6], 42);
+  assert.equal(plan.rowsToAppend[0][7], 2.1);
+  assert.equal(existing[8], 4.5);
+  assert.equal(existing[9], 3.75);
+  assert.equal(existing[10], true);
+  assert.equal(existing[11], 'Waiting on electrical');
 });
 
 test('sync planning fills a blank drive estimate without overwriting other KPI fields', () => {
@@ -195,20 +237,20 @@ test('sync planning fills a blank drive estimate without overwriting other KPI f
   existing[2] = '123456';
   existing[3] = 'Monument Sign';
   existing[4] = '2022 Crane';
-  existing[7] = 4.5;
-  existing[9] = false;
-  existing[25] = 'event-1|2026-11-02|Johnny';
+  existing[8] = 4.5;
+  existing[10] = false;
+  existing[26] = 'event-1|2026-11-02|Johnny';
   const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
 
   const plan = context.planKpiSync_([
     job({ start: '2026-11-02', end: '2026-11-02', crew: ['Johnny'], addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
-  ], [existing], estimates);
+  ], [existing], estimates, new Map());
 
   assert.deepEqual(Array.from(plan.rowsToDriveUpdate, update => ({ index: update.index, value: update.value })), [
     { index: 0, value: 2.1 },
   ]);
-  assert.equal(existing[7], 4.5);
-  assert.equal(existing[9], false);
+  assert.equal(existing[8], 4.5);
+  assert.equal(existing[10], false);
 });
 
 test('only the admin-only KPI sync route is exposed', () => {
