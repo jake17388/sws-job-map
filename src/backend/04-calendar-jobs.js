@@ -18,7 +18,50 @@ function getJobs(e) {
   const installJobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', start, end);
   const serviceJobs = fetchCalendarEvents(SERVICE_CAL_ID, 'service', start, end);
   const excavJobs   = fetchCalendarEvents(EXCAV_CAL_ID,   'excavation', start, end);
-  return { jobs: [...installJobs, ...serviceJobs, ...excavJobs], timestamp: new Date().toISOString(), fetchedFrom: formatDate(start), fetchedTo: formatDate(end) };
+  const jobs = harmonizeLoadedDailyTruckAssignments_([...installJobs, ...serviceJobs, ...excavJobs]);
+  return { jobs, timestamp: new Date().toISOString(), fetchedFrom: formatDate(start), fetchedTo: formatDate(end) };
+}
+
+function jobDateKeys_(job) {
+  const startMatch = String(job.start || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const endMatch = String(job.end || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!startMatch || !endMatch) return [];
+  const current = new Date(+startMatch[1], +startMatch[2] - 1, +startMatch[3]);
+  const end = new Date(+endMatch[1], +endMatch[2] - 1, +endMatch[3]);
+  const dates = [];
+  while (current <= end && dates.length < 366) {
+    dates.push(formatDate(current));
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
+}
+
+function harmonizeLoadedDailyTruckAssignments_(jobs) {
+  const dailyAssignments = new Map();
+  jobs.forEach(job => {
+    const dates = jobDateKeys_(job);
+    Object.entries(job.truck_assignments || {}).forEach(([name, vehicleId]) => {
+      dates.forEach(date => {
+        const key = `${date}|${name}`;
+        if (!dailyAssignments.has(key)) dailyAssignments.set(key, new Set());
+        dailyAssignments.get(key).add(vehicleId);
+      });
+    });
+  });
+
+  return jobs.map(job => {
+    const dates = jobDateKeys_(job);
+    const assignments = { ...(job.truck_assignments || {}) };
+    (job.crew || []).forEach(name => {
+      const dailyVehicleIds = new Set();
+      dates.forEach(date => {
+        const ids = dailyAssignments.get(`${date}|${name}`);
+        if (ids) ids.forEach(vehicleId => dailyVehicleIds.add(vehicleId));
+      });
+      if (dailyVehicleIds.size === 1) assignments[name] = [...dailyVehicleIds][0];
+    });
+    return { ...job, truck_assignments: assignments };
+  });
 }
 
 function fetchCalendarEvents(calId, type, start, end) {
@@ -72,6 +115,98 @@ function calendarIdForJobType_(type) {
   return calendars[String(type || '').toLowerCase()] || null;
 }
 
+function scheduledJobCalendarIds_() {
+  return [INSTALL_CAL_ID, SERVICE_CAL_ID, EXCAV_CAL_ID];
+}
+
+function crewFromCalendarTitle_(title) {
+  const match = String(title || '').match(/^\(([^)]+)\)/);
+  if (!match) return [];
+  const normalized = normalizeCrew(match[1].split(/[\/,&]/).map(name => name.trim()).filter(Boolean));
+  return CREW_NAMES.filter(name => normalized.includes(name));
+}
+
+function calendarEventRange_(event) {
+  if (!event || typeof event.getStartTime !== 'function' || typeof event.getEndTime !== 'function') return null;
+  const start = new Date(event.getStartTime());
+  const end = new Date(event.getEndTime());
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return null;
+  return { start, end };
+}
+
+function calendarEventsOverlap_(event, range) {
+  const candidate = calendarEventRange_(event);
+  return !!candidate && candidate.start < range.end && candidate.end > range.start;
+}
+
+function eventAssignmentUpdate_(event, assignments) {
+  return {
+    event,
+    assignments,
+    previousTag: typeof event.getTag === 'function' ? event.getTag(TRUCK_ASSIGNMENTS_TAG) || '' : '',
+  };
+}
+
+function collectDailyTruckAssignmentUpdates_(sourceCalendarId, sourceEvent, sourceCrew, sourceAssignments) {
+  const updates = [eventAssignmentUpdate_(sourceEvent, sourceAssignments)];
+  const range = calendarEventRange_(sourceEvent);
+  if (!range) return updates;
+
+  const sourceId = typeof sourceEvent.getId === 'function' ? String(sourceEvent.getId()) : '';
+  scheduledJobCalendarIds_().forEach(calendarId => {
+    const calendar = CalendarApp.getCalendarById(calendarId);
+    if (!calendar || typeof calendar.getEvents !== 'function') return;
+    calendar.getEvents(range.start, range.end).forEach(event => {
+      const eventId = typeof event.getId === 'function' ? String(event.getId()) : '';
+      if (calendarId === sourceCalendarId && sourceId && eventId === sourceId) return;
+      if (!calendarEventsOverlap_(event, range)) return;
+      const eventCrew = crewFromCalendarTitle_(event.getTitle());
+      if (!eventCrew.length) return;
+
+      const current = normalizeStoredTruckAssignments_(
+        typeof event.getTag === 'function' ? event.getTag(TRUCK_ASSIGNMENTS_TAG) : '',
+      );
+      const next = { ...current };
+      sourceCrew.forEach(name => {
+        if (!eventCrew.includes(name)) return;
+        if (sourceAssignments[name]) next[name] = sourceAssignments[name];
+        else delete next[name];
+      });
+      if (serializeTruckAssignments_(next) !== serializeTruckAssignments_(current)) {
+        updates.push(eventAssignmentUpdate_(event, next));
+      }
+    });
+  });
+  return updates;
+}
+
+function restoreTruckAssignmentTag_(update) {
+  if (update.previousTag && typeof update.event.setTag === 'function') {
+    update.event.setTag(TRUCK_ASSIGNMENTS_TAG, update.previousTag);
+  } else if (!update.previousTag && typeof update.event.deleteTag === 'function') {
+    update.event.deleteTag(TRUCK_ASSIGNMENTS_TAG);
+  }
+}
+
+function applyTruckAssignmentUpdates_(updates) {
+  const applied = [];
+  try {
+    updates.forEach(update => {
+      applied.push(update);
+      applyTruckAssignmentsTag_(update.event, update.assignments);
+    });
+  } catch (error) {
+    applied.reverse().forEach(update => {
+      try { restoreTruckAssignmentTag_(update); }
+      catch (rollbackError) {
+        if (typeof Logger !== 'undefined') Logger.log('Truck assignment rollback failed: ' + rollbackError.message);
+      }
+    });
+    throw error;
+  }
+  return updates.length;
+}
+
 function updateScheduledAssignments(data) {
   const lock = typeof LockService !== 'undefined' ? LockService.getScriptLock() : null;
   if (lock) lock.waitLock(10000);
@@ -100,15 +235,19 @@ function updateScheduledAssignments(data) {
   const baseTitle = event.getTitle().replace(/^\([^)]+\)\s*/, '').trim();
   const nextTitle = crew.length ? `(${crew.join('/')}) ${baseTitle}` : baseTitle;
   const previousTitle = event.getTitle();
-  const previousTag = typeof event.getTag === 'function' ? event.getTag(TRUCK_ASSIGNMENTS_TAG) : '';
+  let updatedEventCount = 0;
   try {
+    const updates = collectDailyTruckAssignmentUpdates_(
+      calendarId,
+      event,
+      crew,
+      assignmentResult.assignments,
+    );
     event.setTitle(nextTitle);
-    applyTruckAssignmentsTag_(event, assignmentResult.assignments);
+    updatedEventCount = applyTruckAssignmentUpdates_(updates);
   } catch (e) {
     try {
       event.setTitle(previousTitle);
-      if (previousTag && typeof event.setTag === 'function') event.setTag(TRUCK_ASSIGNMENTS_TAG, previousTag);
-      else if (!previousTag && typeof event.deleteTag === 'function') event.deleteTag(TRUCK_ASSIGNMENTS_TAG);
     } catch (rollbackError) {
       Logger.log('Scheduled assignment rollback failed: ' + rollbackError.message);
     }
@@ -119,6 +258,7 @@ function updateScheduledAssignments(data) {
     crew,
     truck_assignments: assignmentResult.assignments,
     title: nextTitle,
+    propagated_event_count: Math.max(0, updatedEventCount - 1),
   };
   } finally {
     if (lock) lock.releaseLock();

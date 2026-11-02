@@ -154,8 +154,11 @@ function reconcileScheduledReceipt_(receipt) {
   const event = calendar.getEventById(String(receipt.event_id));
   if (!event) return { success: false, error: 'Calendar event not found' };
   try {
-    applyTruckAssignmentsTag_(event, normalizeStoredTruckAssignments_(receipt.truck_assignments));
-    return { success: true };
+    const assignments = normalizeStoredTruckAssignments_(receipt.truck_assignments);
+    const crew = normalizeUnscheduledCrew_(receipt.crew);
+    const updates = collectDailyTruckAssignmentUpdates_(calendarId, event, crew, assignments);
+    const updatedEventCount = applyTruckAssignmentUpdates_(updates);
+    return { success: true, propagated_event_count: Math.max(0, updatedEventCount - 1) };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -231,8 +234,15 @@ function scheduleUnsched(data) {
     };
     properties.setProperty(receiptKey, JSON.stringify(receipt));
 
+    let updatedEventCount = 0;
     try {
-      applyTruckAssignmentsTag_(event, assignmentResult.assignments);
+      const updates = collectDailyTruckAssignmentUpdates_(
+        INSTALL_CAL_ID,
+        event,
+        crewResult.crew,
+        assignmentResult.assignments,
+      );
+      updatedEventCount = applyTruckAssignmentUpdates_(updates);
     } catch (metadataError) {
       return { ...receipt, success: false, partial: true, error: `Calendar event created, but truck assignments could not be saved: ${metadataError.message}` };
     }
@@ -242,7 +252,7 @@ function scheduleUnsched(data) {
     } catch (cleanupError) {
       return { ...receipt, success: false, partial: true, error: `Calendar event created, but unscheduled cleanup failed: ${cleanupError.message}` };
     }
-    return { ...receipt, success: true };
+    return { ...receipt, success: true, propagated_event_count: Math.max(0, updatedEventCount - 1) };
   } catch (e) {
     return { success: false, error: e.message };
   } finally {

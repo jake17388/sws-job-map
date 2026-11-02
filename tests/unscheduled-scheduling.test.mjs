@@ -11,7 +11,10 @@ const frontendHtml = readFileSync(new URL('../src/frontend/index.html', import.m
 const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
 const vehicleRoster = JSON.parse(readFileSync(new URL('../config/vehicle-roster.json', import.meta.url), 'utf8'));
 
-function makeBackend({ createError = null, deleteError = null } = {}) {
+const INSTALL_CAL_ID_FOR_TEST = 'summitwestsigns.com_5ehu6it6pfpcg2g9ifpcuv6gd8@group.calendar.google.com';
+const SERVICE_CAL_ID_FOR_TEST = 'summitwestsigns.com_plamgq5u79k125mvl50ie49fu0@group.calendar.google.com';
+
+function makeBackend({ createError = null, deleteError = null, calendarEvents = {} } = {}) {
   const rows = [[
     'Job #', 'Job Name', 'Address', 'Added', 'ID', 'Added By', 'Crew',
   ], [
@@ -19,6 +22,7 @@ function makeBackend({ createError = null, deleteError = null } = {}) {
   ]];
   const properties = new Map();
   const created = [];
+  const eventsByCalendar = new Map(Object.entries(calendarEvents));
   const sheet = {
     getDataRange: () => ({ getValues: () => rows.map(row => [...row]) }),
     deleteRow(index) {
@@ -39,17 +43,28 @@ function makeBackend({ createError = null, deleteError = null } = {}) {
     },
     CalendarApp: {
       getCalendarById: id => id ? ({
+        getEvents: () => eventsByCalendar.get(id) || [],
+        getEventById: eventId => [...created, ...(eventsByCalendar.get(id) || [])]
+          .find(event => String(event.getId()) === String(eventId)) || null,
         createAllDayEvent(title, start, end, options) {
           if (createError) throw new Error(createError);
           const tags = new Map();
+          let currentTitle = title;
           const event = {
             title, start, end, options, id: 'calendar-event-1', tags,
             getId: () => 'calendar-event-1',
+            getTitle: () => currentTitle,
+            setTitle: value => { currentTitle = value; },
+            getStartTime: () => start,
+            getEndTime: () => end,
             getTag: key => tags.get(key) || null,
             setTag: (key, value) => tags.set(key, value),
             deleteTag: key => tags.delete(key),
           };
           created.push(event);
+          const calendarJobs = eventsByCalendar.get(id) || [];
+          calendarJobs.push(event);
+          eventsByCalendar.set(id, calendarJobs);
           return event;
         },
       }) : null,
@@ -117,6 +132,48 @@ test('scheduling stores shared truck assignments as private Calendar metadata', 
   assert.deepEqual(JSON.parse(backend.created[0].tags.get('sws_truck_assignments_v1')), {
     Johnny: '2018-big-crane',
     Eli: '2018-big-crane',
+  });
+});
+
+test('scheduling propagates each crew truck to their other jobs on the same day', () => {
+  function existingEvent(id, title, assignments = {}) {
+    const tags = new Map();
+    if (Object.keys(assignments).length) tags.set('sws_truck_assignments_v1', JSON.stringify(assignments));
+    return {
+      getId: () => id,
+      getTitle: () => title,
+      getStartTime: () => new Date(2026, 9, 5),
+      getEndTime: () => new Date(2026, 9, 6),
+      getTag: key => tags.get(key) || null,
+      setTag: (key, value) => tags.set(key, value),
+      deleteTag: key => tags.delete(key),
+      tags,
+    };
+  }
+
+  const eliJob = existingEvent('eli-job', '(Eli) 123457 Second Job', { Eli: '2016-flatbed' });
+  const jerryJob = existingEvent('jerry-job', '(Jerry) 123458 Service Job');
+  const backend = makeBackend({
+    calendarEvents: {
+      [INSTALL_CAL_ID_FOR_TEST]: [eliJob],
+      [SERVICE_CAL_ID_FOR_TEST]: [jerryJob],
+    },
+  });
+
+  const result = backend.context.scheduleUnsched(validRequest({
+    crew: ['Eli', 'Jerry'],
+    truck_assignments: {
+      Eli: '2022-small-crane',
+      Jerry: '2019-single-bucket',
+    },
+  }));
+
+  assert.equal(result.success, true);
+  assert.deepEqual(JSON.parse(eliJob.tags.get('sws_truck_assignments_v1')), {
+    Eli: '2022-small-crane',
+  });
+  assert.deepEqual(JSON.parse(jerryJob.tags.get('sws_truck_assignments_v1')), {
+    Jerry: '2019-single-bucket',
   });
 });
 

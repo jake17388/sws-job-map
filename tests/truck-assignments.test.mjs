@@ -117,6 +117,39 @@ test('scheduled jobs read truck assignments from a private Calendar tag', () => 
   });
 });
 
+test('job loading fills existing daily truck assignments onto every same-day job', () => {
+  function event(id, title, assignments = {}) {
+    return {
+      getTitle: () => title,
+      getLocation: () => '100 Main St',
+      getStartTime: () => new Date(2026, 9, 5),
+      getEndTime: () => new Date(2026, 9, 6),
+      getId: () => id,
+      getTag: key => key === 'sws_truck_assignments_v1' && Object.keys(assignments).length
+        ? JSON.stringify(assignments)
+        : null,
+    };
+  }
+
+  const assigned = event('assigned', '(Eli) 123456 Main Job', { Eli: 'small-crane' });
+  const sameDay = event('same-day', '(Eli/Jerry) 123457 Second Job');
+  const calendars = new Map([
+    [INSTALL_CAL_ID_FOR_TEST, { getEvents: () => [assigned] }],
+    [SERVICE_CAL_ID_FOR_TEST, { getEvents: () => [sameDay] }],
+    [EXCAV_CAL_ID_FOR_TEST, { getEvents: () => [] }],
+  ]);
+  const context = assignmentContext({
+    CalendarApp: { getCalendarById: id => calendars.get(id) || null },
+  });
+
+  const jobs = context.getJobs({ parameter: { from: '2026-10-05', to: '2026-10-05' } }).jobs;
+  const loaded = jobs.find(job => job.event_id === 'same-day');
+
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.truck_assignments)), {
+    Eli: 'small-crane',
+  });
+});
+
 test('scheduled assignment updates save crew and trucks together', () => {
   let title = '(Johnny) 123456 Monument Sign';
   const tags = new Map();
@@ -269,4 +302,8 @@ test('all crew editing surfaces expose truck assignment controls', () => {
 test('job cards and lists include a truck assignment summary', () => {
   assert.match(frontendSource, /function truckAssignmentsHTML\(/);
   assert.match(frontendSource, /truckAssignmentsHTML\(job\.crew\s*\|\|\s*\[\],\s*job\.truck_assignments/);
+});
+
+test('the scheduled assignment editor reloads all jobs after daily propagation', () => {
+  assert.match(frontendSource, /closeScheduledCrewEditor\(\);\s*return loadJobs\(\);/);
 });
