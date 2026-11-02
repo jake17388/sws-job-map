@@ -1,5 +1,7 @@
 const SHEET_ID = '1CTh3Fd3zvC0XDLTruuNz7RSLdgpVxy0TtCL9fZ2_9JU';
 const UNSCHEDULED_SHEET_GID = 0;
+const KPI_SHEET_ID = '1pBYUoM3gxQoSjnrihwcKcTZHqO_BGXiWo3aZnzuat2A';
+const KPI_SHEET_NAME = 'Install Log';
 const ADMIN_USER_NAME = 'Jake Banks';
 
 const INSTALL_CAL_ID = 'summitwestsigns.com_5ehu6it6pfpcg2g9ifpcuv6gd8@group.calendar.google.com';

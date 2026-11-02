@@ -3,12 +3,19 @@ function refreshCurrentJobs() {
   const start = new Date();
   const end = new Date(start); end.setDate(end.getDate() + 60);
 
+  const installJobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', start, end);
   const allJobs = [
-    ...fetchCalendarEvents(INSTALL_CAL_ID, 'Install', start, end),
+    ...installJobs,
     ...fetchCalendarEvents(SERVICE_CAL_ID, 'Service', start, end),
     ...fetchCalendarEvents(EXCAV_CAL_ID,   'Excavation', start, end),
   ];
   allJobs.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
+
+  try {
+    syncInstallJobsToKpi_(installJobs);
+  } catch (e) {
+    Logger.log('Install KPI sync failed during Current Jobs refresh: ' + e.message);
+  }
 
   const ss = SpreadsheetApp.openById(SHEET_ID);
   const sheet = ss.getSheetByName('Current Jobs');

@@ -45,7 +45,7 @@ test('multi-day install events expand to one pending row per date and crew membe
   const seeds = context.buildKpiSeedRows_([job()]);
 
   assert.equal(seeds.length, 4);
-  assert.deepEqual(seeds.map(seed => seed.key), [
+  assert.deepEqual(Array.from(seeds, seed => seed.key), [
     'event-1|2026-11-02|Johnny',
     'event-1|2026-11-02|Eli',
     'event-1|2026-11-03|Johnny',
@@ -135,5 +135,6 @@ test('scheduled install cards expose the KPI editor and automatic sync', () => {
   assert.match(frontendSource, /action:\s*'syncInstallKpi'/);
   assert.match(frontendSource, /action:\s*'getKpiEntry'/);
   assert.match(frontendSource, /action:\s*'saveKpiEntry'/);
+  assert.match(frontendSource, /requestId !== kpiLoadRequestId/);
   assert.match(frontendSource, /Daily KPI/);
 });

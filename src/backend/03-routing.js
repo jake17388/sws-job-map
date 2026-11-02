@@ -82,5 +82,17 @@ function doPost(e) {
     if (!isAdmin_(actor)) return json({ error: 'forbidden' });
     return json(updateScheduledAssignments(data));
   }
+  if (data.action === 'syncInstallKpi') {
+    if (!isAdmin_(actor)) return json({ error: 'forbidden' });
+    return json(syncInstallCalendarToKpi(data));
+  }
+  if (data.action === 'getKpiEntry') {
+    if (!isAdmin_(actor)) return json({ error: 'forbidden' });
+    return json(getKpiEntry(data));
+  }
+  if (data.action === 'saveKpiEntry') {
+    if (!isAdmin_(actor)) return json({ error: 'forbidden' });
+    return json(saveKpiEntry(data));
+  }
   return json({ error: 'unknown action' });
 }
