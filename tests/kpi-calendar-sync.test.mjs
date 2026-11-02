@@ -94,33 +94,12 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
   assert.equal(existing[10], 'Waiting on electrical');
 });
 
-test('KPI entry validation accepts sheet statuses and non-negative estimates', () => {
-  const context = backendContext();
-  const valid = context.validateKpiEntry_({
-    event_id: 'event-1', work_date: '2026-11-02', crew_member: 'Johnny',
-    estimated_drive_minutes: '90', estimated_work_hours: '4.5',
-    expected_work: 'Install cabinet', completion_status: 'Partial', notes: 'Waiting on electrical',
-  });
-
-  assert.equal(valid.error, undefined);
-  assert.equal(valid.value.estimated_drive_minutes, 90);
-  assert.equal(valid.value.estimated_work_hours, 4.5);
-
-  for (const [overrides, message] of [
-    [{ completion_status: 'Maybe' }, 'completion status'],
-    [{ estimated_drive_minutes: '-1' }, 'drive minutes'],
-    [{ estimated_work_hours: '-0.5' }, 'work hours'],
-    [{ crew_member: 'Unknown' }, 'crew member'],
-  ]) {
-    const result = context.validateKpiEntry_({ ...valid.value, ...overrides });
-    assert.match(result.error, new RegExp(message, 'i'));
-  }
-});
-
-test('KPI sync and entry routes remain admin-only', () => {
-  for (const action of ['syncInstallKpi', 'getKpiEntry', 'saveKpiEntry']) {
-    assert.match(routingSource, new RegExp(`data\\.action === '${action}'`));
-  }
+test('only the admin-only KPI sync route is exposed', () => {
+  assert.match(routingSource, /data\.action === 'syncInstallKpi'/);
+  assert.doesNotMatch(routingSource, /data\.action === 'getKpiEntry'/);
+  assert.doesNotMatch(routingSource, /data\.action === 'saveKpiEntry'/);
+  assert.doesNotMatch(kpiSource, /function getKpiEntry\(/);
+  assert.doesNotMatch(kpiSource, /function saveKpiEntry\(/);
   assert.doesNotMatch(routingSource, /data\.role/);
 });
 
@@ -128,15 +107,11 @@ test('the daily Current Jobs refresh also seeds KPI rows', () => {
   assert.match(currentJobsSource, /syncInstallJobsToKpi_\(installJobs\)/);
 });
 
-test('scheduled install cards expose the KPI editor and automatic sync', () => {
-  assert.match(frontendHtml, /id="kpi-entry-panel"/);
-  assert.match(frontendHtml, /id="kpi-work-date"/);
-  assert.match(frontendHtml, /id="kpi-crew-member"/);
-  assert.match(frontendHtml, /id="kpi-completion-status"/);
-  assert.match(frontendSource, /function openKpiEntry\(index\)/);
+test('scheduled jobs sync to the Sheet without KPI entry controls', () => {
   assert.match(frontendSource, /action:\s*'syncInstallKpi'/);
-  assert.match(frontendSource, /action:\s*'getKpiEntry'/);
-  assert.match(frontendSource, /action:\s*'saveKpiEntry'/);
-  assert.match(frontendSource, /requestId !== kpiLoadRequestId/);
-  assert.match(frontendSource, /Daily KPI/);
+  assert.doesNotMatch(frontendHtml, /id="kpi-entry-panel"/);
+  assert.doesNotMatch(frontendSource, /function openKpiEntry\(/);
+  assert.doesNotMatch(frontendSource, /action:\s*'getKpiEntry'/);
+  assert.doesNotMatch(frontendSource, /action:\s*'saveKpiEntry'/);
+  assert.doesNotMatch(frontendSource, />Daily KPI</);
 });
