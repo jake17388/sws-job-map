@@ -38,6 +38,7 @@ let selectedScheduleTruckAssignments = {};
 let schedulingUnscheduledId = null;
 let scheduleSubmitting = false;
 let vehicleCatalog = [];
+let availableAppVersion = null;
 
 // ── Local caches (geocode results + last-session data) ───────────────────────
 const GEO_CACHE_KEY = 'sws_geo_cache_v1';
@@ -324,9 +325,13 @@ function checkForUpdate(manual) {
     .then(r => r.json())
     .then(data => {
       if (data.version && data.version !== APP_VERSION) {
+        availableAppVersion = data.version;
+        const requestedVersion = new URL(window.location.href).searchParams.get('v');
+        if (!manual && requestedVersion !== data.version) applyUpdate(data.version);
         document.getElementById('update-banner').classList.add('show');
         if (manual && checkLink) checkLink.textContent = 'Update available — see banner above';
       } else if (manual && checkLink) {
+        availableAppVersion = null;
         checkLink.textContent = "You're up to date";
         setTimeout(() => { checkLink.textContent = 'Check for updates'; }, 2500);
       }
@@ -338,11 +343,24 @@ function checkForUpdate(manual) {
       }
     });
 }
-function applyUpdate() {
+function applyUpdate(version) {
   const url = new URL(window.location.href);
-  url.searchParams.set('v', Date.now());
-  window.location.href = url.toString();
+  url.searchParams.set('v', version || availableAppVersion || APP_VERSION);
+  window.location.replace(url.toString());
 }
+function normalizeVersionedAppUrl_() {
+  const current = new URL(window.location.href);
+  const requestedVersion = current.searchParams.get('v');
+  if (!requestedVersion) return;
+  const legacyTimestamp = /^\d{10,}$/.test(requestedVersion);
+  if (requestedVersion !== APP_VERSION && !legacyTimestamp) return;
+  const canonical = new URL(current.toString());
+  canonical.searchParams.delete('v');
+  fetch(canonical.toString(), { cache: 'reload', credentials: 'same-origin' })
+    .catch(() => null)
+    .finally(() => window.history.replaceState(null, '', canonical.toString()));
+}
+normalizeVersionedAppUrl_();
 function signOut() {
   localStorage.removeItem(AUTH_KEY);
   auth = null;
