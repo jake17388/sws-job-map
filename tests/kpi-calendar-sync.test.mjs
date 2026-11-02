@@ -40,7 +40,7 @@ function job(overrides = {}) {
   };
 }
 
-test('multi-day install events expand to one pending row per date and crew member', () => {
+test('multi-day install events expand to one unchecked row per date and crew member', () => {
   const context = backendContext();
   const seeds = context.buildKpiSeedRows_([job()]);
 
@@ -57,7 +57,8 @@ test('multi-day install events expand to one pending row per date and crew membe
   assert.equal(seeds[0].values[2], '123456');
   assert.equal(seeds[0].values[3], 'Monument Sign');
   assert.equal(seeds[0].values[4], '2022 Crane');
-  assert.equal(seeds[0].values[9], 'Pending');
+  assert.equal(seeds[0].values[8], '');
+  assert.equal(seeds[0].values[9], false);
   assert.equal(seeds[0].values[25], 'event-1|2026-11-02|Johnny');
 });
 
@@ -66,11 +67,11 @@ test('events without crew do not create KPI rows', () => {
   assert.deepEqual(Array.from(context.buildKpiSeedRows_([job({ crew: [] })])), []);
 });
 
-test('drive estimates add five percent and round to whole minutes', () => {
+test('drive estimates add five percent, include the return trip, and use decimal hours', () => {
   const context = backendContext();
-  assert.equal(context.adjustedDriveMinutes_(3600), 63);
-  assert.equal(context.adjustedDriveMinutes_(1810), 32);
-  assert.equal(context.adjustedDriveMinutes_(0), '');
+  assert.equal(context.adjustedDriveHours_(3600), 2.1);
+  assert.equal(context.adjustedDriveHours_(1810), 1.06);
+  assert.equal(context.adjustedDriveHours_(0), '');
 });
 
 test('calendar addresses are routed once per unique destination', () => {
@@ -90,13 +91,13 @@ test('calendar addresses are routed once per unique destination', () => {
       newDirectionFinder: () => directions,
     },
   });
-  const estimates = context.estimateDriveMinutesByAddress_([
+  const estimates = context.estimateDriveHoursByAddress_([
     job({ addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
     job({ event_id: 'event-2', addr: ' 1150 N Dobson Rd,   Chandler, AZ 85224 ' }),
   ]);
 
   assert.equal(requestCount, 1);
-  assert.equal(estimates.get('1150 n dobson rd, chandler, az 85224'), 63);
+  assert.equal(estimates.get('1150 n dobson rd, chandler, az 85224'), 2.1);
 });
 
 test('missing directions leave the drive estimate blank', () => {
@@ -109,7 +110,7 @@ test('missing directions leave the drive estimate blank', () => {
       }),
     },
   });
-  const estimates = context.estimateDriveMinutesByAddress_([job({ addr: 'Unknown address' })]);
+  const estimates = context.estimateDriveHoursByAddress_([job({ addr: 'Unknown address' })]);
   assert.equal(estimates.get('unknown address'), '');
 });
 
@@ -124,10 +125,10 @@ test('drive estimate cache failures do not interrupt routing', () => {
       }),
     },
   });
-  const estimates = context.estimateDriveMinutesByAddress_([
+  const estimates = context.estimateDriveHoursByAddress_([
     job({ addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
   ]);
-  assert.equal(estimates.get('1150 n dobson rd, chandler, az 85224'), 63);
+  assert.equal(estimates.get('1150 n dobson rd, chandler, az 85224'), 2.1);
 });
 
 test('drive estimate cache keys include the entire normalized address', () => {
@@ -137,15 +138,16 @@ test('drive estimate cache keys include the entire normalized address', () => {
     context.driveEstimateCacheKey_(`${sharedPrefix}suite a`),
     context.driveEstimateCacheKey_(`${sharedPrefix}suite b`),
   );
+  assert.match(context.driveEstimateCacheKey_('mesa'), /^install_drive_v2:/);
 });
 
 test('new KPI rows receive the calculated drive estimate in column G', () => {
   const context = backendContext();
-  const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 63]]);
+  const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
   const seeds = context.buildKpiSeedRows_([
     job({ addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
   ], estimates);
-  assert.equal(seeds[0].values[6], 63);
+  assert.equal(seeds[0].values[6], 2.1);
 });
 
 test('the split Install Log starts with its assignment section and row-three header', () => {
@@ -163,12 +165,12 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
   existing[4] = '2022 Crane';
   existing[6] = 90;
   existing[7] = 4.5;
-  existing[8] = 'Install cabinet';
-  existing[9] = 'Partial';
+  existing[8] = 3.75;
+  existing[9] = true;
   existing[10] = 'Waiting on electrical';
   existing[25] = 'event-1|2026-11-02|Johnny';
 
-  const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 63]]);
+  const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
   const plan = context.planKpiSync_([
     job({ start: '2026-11-02', end: '2026-11-02', addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
   ], [existing], estimates);
@@ -178,9 +180,10 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
   assert.equal(plan.rowsToUpdate.length, 1);
   assert.equal(plan.rowsToDriveUpdate.length, 0);
   assert.equal(plan.rowsToUpdate[0].values[0].getHours(), 12);
-  assert.equal(plan.rowsToAppend[0][6], 63);
+  assert.equal(plan.rowsToAppend[0][6], 2.1);
   assert.equal(existing[6], 90);
-  assert.equal(existing[9], 'Partial');
+  assert.equal(existing[8], 3.75);
+  assert.equal(existing[9], true);
   assert.equal(existing[10], 'Waiting on electrical');
 });
 
@@ -193,19 +196,19 @@ test('sync planning fills a blank drive estimate without overwriting other KPI f
   existing[3] = 'Monument Sign';
   existing[4] = '2022 Crane';
   existing[7] = 4.5;
-  existing[9] = 'Partial';
+  existing[9] = false;
   existing[25] = 'event-1|2026-11-02|Johnny';
-  const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 63]]);
+  const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
 
   const plan = context.planKpiSync_([
     job({ start: '2026-11-02', end: '2026-11-02', crew: ['Johnny'], addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
   ], [existing], estimates);
 
   assert.deepEqual(Array.from(plan.rowsToDriveUpdate, update => ({ index: update.index, value: update.value })), [
-    { index: 0, value: 63 },
+    { index: 0, value: 2.1 },
   ]);
   assert.equal(existing[7], 4.5);
-  assert.equal(existing[9], 'Partial');
+  assert.equal(existing[9], false);
 });
 
 test('only the admin-only KPI sync route is exposed', () => {
