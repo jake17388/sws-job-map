@@ -5,7 +5,10 @@ on:
     branches: [main]
     paths:
       - 'src/backend/**'
+      - 'config/vehicle-roster.json'
+      - 'scripts/build-backend.mjs'
       - 'appsscript.json'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy:
