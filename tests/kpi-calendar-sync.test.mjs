@@ -113,6 +113,32 @@ test('missing directions leave the drive estimate blank', () => {
   assert.equal(estimates.get('unknown address'), '');
 });
 
+test('drive estimate cache failures do not interrupt routing', () => {
+  const context = backendContext({
+    CacheService: { getScriptCache: () => ({ get() { throw new Error('cache unavailable'); } }) },
+    Maps: {
+      DirectionFinder: { Mode: { DRIVING: 'DRIVING' } },
+      newDirectionFinder: () => ({
+        setOrigin() { return this; }, setDestination() { return this; }, setMode() { return this; },
+        getDirections() { return { routes: [{ legs: [{ duration: { value: 3600 } }] }] }; },
+      }),
+    },
+  });
+  const estimates = context.estimateDriveMinutesByAddress_([
+    job({ addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
+  ]);
+  assert.equal(estimates.get('1150 n dobson rd, chandler, az 85224'), 63);
+});
+
+test('drive estimate cache keys include the entire normalized address', () => {
+  const context = backendContext();
+  const sharedPrefix = '123 very long destination '.repeat(12);
+  assert.notEqual(
+    context.driveEstimateCacheKey_(`${sharedPrefix}suite a`),
+    context.driveEstimateCacheKey_(`${sharedPrefix}suite b`),
+  );
+});
+
 test('new KPI rows receive the calculated drive estimate in column G', () => {
   const context = backendContext();
   const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 63]]);
