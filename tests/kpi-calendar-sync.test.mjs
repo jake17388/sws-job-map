@@ -66,6 +66,11 @@ test('events without crew do not create KPI rows', () => {
   assert.deepEqual(Array.from(context.buildKpiSeedRows_([job({ crew: [] })])), []);
 });
 
+test('the split Install Log starts with its assignment section and row-three header', () => {
+  assert.match(kpiSource, /const KPI_HEADER_ROW = 3;/);
+  assert.match(kpiSource, /const KPI_FIRST_DATA_ROW = 4;/);
+});
+
 test('sync planning is idempotent and preserves entered KPI results', () => {
   const context = backendContext();
   const existing = Array(26).fill('');
