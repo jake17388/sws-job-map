@@ -148,7 +148,7 @@ test('drive estimate cache keys include the entire normalized address', () => {
   assert.match(context.driveEstimateCacheKey_('mesa'), /^install_drive_v2:/);
 });
 
-test('new KPI rows receive the calculated drive estimate in column G', () => {
+test('new KPI rows receive the calculated drive estimate in column H', () => {
   const context = backendContext();
   const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
   const seeds = context.buildKpiSeedRows_([
@@ -253,8 +253,22 @@ test('sync planning fills a blank drive estimate without overwriting other KPI f
   assert.equal(existing[10], false);
 });
 
+test('job-hour backfill repeats each Squarecoil total on every matching KPI row', () => {
+  const context = backendContext();
+  const rows = [
+    ['', '', '260242', '', '', '', ''],
+    ['', '', '260242', '', '', '', ''],
+    ['', '', '999999', '', '', '', 7],
+  ];
+  const plan = context.planKpiJobHoursBackfill_(rows, new Map([['260242', 102]]));
+
+  assert.deepEqual(Array.from(plan.values, row => row[0]), [102, 102, 7]);
+  assert.equal(plan.updated, 2);
+});
+
 test('only the admin-only KPI sync route is exposed', () => {
   assert.match(routingSource, /data\.action === 'syncInstallKpi'/);
+  assert.match(routingSource, /data\.action === 'refreshKpiJobTotals'/);
   assert.doesNotMatch(routingSource, /data\.action === 'getKpiEntry'/);
   assert.doesNotMatch(routingSource, /data\.action === 'saveKpiEntry'/);
   assert.doesNotMatch(kpiSource, /function getKpiEntry\(/);
