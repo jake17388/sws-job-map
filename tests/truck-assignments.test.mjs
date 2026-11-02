@@ -34,6 +34,20 @@ test('a shared roster file is the single vehicle catalog source', () => {
   assert.equal(new Set(roster.map(vehicle => vehicle.id)).size, roster.length);
 });
 
+test('the vehicle catalog matches the complete active truck list', () => {
+  const roster = JSON.parse(readFileSync(new URL('../config/vehicle-roster.json', import.meta.url), 'utf8'));
+  assert.deepEqual(roster.map(vehicle => vehicle.displayName), [
+    '2016 Flatbed',
+    '2018 Altec Crane',
+    '2019 Single Bucket',
+    '2022 Altec Crane',
+    '2023 Single Bucket',
+    '2025 Double Bucket',
+    '2026 Flatbed',
+  ]);
+  assert.ok(roster.every(vehicle => vehicle.active === true));
+});
+
 test('truck validation permits shared and separate trucks while preserving crew order', () => {
   const context = assignmentContext();
   const result = context.validateTruckAssignments_({
