@@ -52,6 +52,7 @@ test('multi-day install events expand to one pending row per date and crew membe
     'event-1|2026-11-03|Eli',
   ]);
   assert.equal(seeds[0].values[0] instanceof Date, true);
+  assert.equal(seeds[0].values[0].getHours(), 12);
   assert.equal(seeds[0].values[1], 'Johnny');
   assert.equal(seeds[0].values[2], '123456');
   assert.equal(seeds[0].values[3], 'Monument Sign');
@@ -86,7 +87,8 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
 
   assert.equal(plan.rowsToAppend.length, 1);
   assert.equal(plan.rowsToAppend[0][1], 'Eli');
-  assert.equal(plan.rowsToUpdate.length, 0);
+  assert.equal(plan.rowsToUpdate.length, 1);
+  assert.equal(plan.rowsToUpdate[0].values[0].getHours(), 12);
   assert.equal(existing[6], 90);
   assert.equal(existing[9], 'Partial');
   assert.equal(existing[10], 'Waiting on electrical');

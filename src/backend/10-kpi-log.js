@@ -54,7 +54,11 @@ function buildKpiSeedRows_(jobs) {
       crew.forEach(crewMember => {
         const key = kpiKey_(job.event_id, workDate, crewMember);
         const values = Array(KPI_COLUMN_COUNT).fill('');
-        values[0] = dateResult.date;
+        const sheetDate = new Date(dateResult.date);
+        // The Apps Script project uses Phoenix time while the KPI workbook uses
+        // Los Angeles time. Midday keeps the calendar date stable in both zones.
+        sheetDate.setHours(12, 0, 0, 0);
+        values[0] = sheetDate;
         values[1] = crewMember;
         values[2] = String(job.num || '');
         values[3] = String(job.title || '');
@@ -83,14 +87,12 @@ function planKpiSync_(jobs, existingRows) {
       rowsByKey.set(seed.key, { index: -1, row: seed.values });
       return;
     }
-    const scheduleValues = existing.row.slice(0, 5);
-    let changed = false;
-    for (let column = 0; column < 5; column += 1) {
-      if ((scheduleValues[column] === '' || scheduleValues[column] == null) && seed.values[column] !== '') {
-        scheduleValues[column] = seed.values[column];
-        changed = true;
-      }
-    }
+    const scheduleValues = seed.values.slice(0, 5);
+    const changed = scheduleValues.some((value, column) => {
+      const current = existing.row[column];
+      if (value instanceof Date) return !(current instanceof Date) || current.getTime() !== value.getTime();
+      return String(current == null ? '' : current) !== String(value == null ? '' : value);
+    });
     if (changed) rowsToUpdate.push({ index: existing.index, values: scheduleValues });
   });
   return { rowsToAppend, rowsToUpdate };
