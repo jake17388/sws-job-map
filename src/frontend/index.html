@@ -277,28 +277,6 @@
     </div>
   </div>
 
-  <div class="settings-backdrop" id="kpi-entry-backdrop" onclick="closeKpiEntry()"></div>
-  <div class="scheduled-crew-panel kpi-entry-panel" id="kpi-entry-panel" role="dialog" aria-modal="true" aria-labelledby="kpi-entry-title">
-    <div class="scheduled-crew-header">
-      <div><h2 id="kpi-entry-title">Daily KPI</h2><p id="kpi-entry-job"></p></div>
-      <button class="settings-close-btn" onclick="closeKpiEntry()" title="Close">✕</button>
-    </div>
-    <div class="kpi-entry-grid">
-      <label>Work date<select class="user-field" id="kpi-work-date" onchange="loadKpiEntry()"></select></label>
-      <label>Crew member<select class="user-field" id="kpi-crew-member" onchange="loadKpiEntry()"></select></label>
-      <label>Est. drive (min)<input class="user-field" id="kpi-drive-minutes" type="number" min="0" step="1" inputmode="numeric"></label>
-      <label>Est. work (hr)<input class="user-field" id="kpi-work-hours" type="number" min="0" step="0.25" inputmode="decimal"></label>
-    </div>
-    <label class="kpi-wide-field">Expected work<textarea class="user-field" id="kpi-expected-work" rows="3" placeholder="What should be completed today?"></textarea></label>
-    <label class="kpi-wide-field">Work completed?<select class="user-field" id="kpi-completion-status"><option>Pending</option><option>Yes</option><option>Partial</option><option>No</option></select></label>
-    <label class="kpi-wide-field">Notes / reason<textarea class="user-field" id="kpi-notes" rows="3" placeholder="Explain Partial or No when needed"></textarea></label>
-    <p class="form-status kpi-entry-status" id="kpi-entry-status" role="alert"></p>
-    <div class="scheduled-crew-actions">
-      <button class="settings-action" onclick="closeKpiEntry()">Cancel</button>
-      <button class="primary-action" id="save-kpi-entry" onclick="saveKpiEntry()">Save KPI</button>
-    </div>
-  </div>
-
   <div class="settings-backdrop" id="schedule-unscheduled-backdrop" onclick="closeUnscheduledScheduler()"></div>
   <div class="scheduled-crew-panel schedule-unscheduled-panel" id="schedule-unscheduled-panel" role="dialog" aria-modal="true" aria-labelledby="schedule-unscheduled-title">
     <div class="scheduled-crew-header">

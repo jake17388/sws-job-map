@@ -148,18 +148,6 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .schedule-status { min-height:18px; margin:0 0 8px; color:#b42318; }
 @media (max-width:480px) { .schedule-date-fields { grid-template-columns:1fr; } }
 .scheduled-edit-btn { margin-top:9px; padding:6px 9px; border:1px solid #d9e2ee; border-radius:6px; background:#fff; color:#1e4589; font:600 11px 'DM Sans',sans-serif; cursor:pointer; }
-.scheduled-card-actions { display:flex; flex-wrap:wrap; gap:7px; margin-top:9px; }
-.scheduled-card-actions .scheduled-edit-btn { margin-top:0; }
-.scheduled-kpi-btn { border-color:#b8dfc7; background:#f0fbf4; color:#177343; }
-.kpi-entry-panel { max-height:min(760px,calc(100vh - 28px)); overflow-y:auto; }
-.kpi-entry-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.kpi-entry-grid label,.kpi-wide-field { display:block; color:#7b8ba5; font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
-.kpi-entry-grid .user-field,.kpi-wide-field .user-field { margin:5px 0 12px; color:#273650; font-size:13px; font-weight:400; letter-spacing:normal; text-transform:none; }
-.kpi-wide-field textarea { resize:vertical; min-height:72px; }
-.kpi-entry-status { min-height:18px; margin:0 0 8px; }
-.kpi-entry-status.error { color:#b42318; }
-.kpi-entry-status.success { color:#177343; }
-@media (max-width:480px) { .kpi-entry-grid { grid-template-columns:1fr; gap:0; } }
 .settings-panel {
   display: none; position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 110%);
   width: min(360px, calc(100% - 24px)); background: #fff; border-radius: 16px 16px 0 0;

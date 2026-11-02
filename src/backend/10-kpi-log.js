@@ -4,7 +4,6 @@ const KPI_FIRST_DATA_ROW = 18;
 const KPI_COLUMN_COUNT = 26;
 const KPI_KEY_COLUMN = 26;
 const KPI_KEY_HEADER = 'Calendar KPI Key';
-const KPI_STATUSES = ['Yes', 'Partial', 'No', 'Pending'];
 
 function getKpiSheet_() {
   const spreadsheet = SpreadsheetApp.openById(KPI_SHEET_ID);
@@ -139,102 +138,4 @@ function syncInstallCalendarToKpi(data) {
   end.setHours(23, 59, 59, 999);
   const jobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', fromResult.date, end);
   return syncInstallJobsToKpi_(jobs);
-}
-
-function findKpiEntryByKey_(sheet, key) {
-  const lastRow = sheet.getLastRow();
-  if (lastRow < KPI_FIRST_DATA_ROW) return null;
-  const rows = sheet.getRange(KPI_FIRST_DATA_ROW, 1, lastRow - KPI_FIRST_DATA_ROW + 1, KPI_COLUMN_COUNT).getValues();
-  for (let index = 0; index < rows.length; index += 1) {
-    if (String(rows[index][KPI_KEY_COLUMN - 1] || '') === key) {
-      return { rowNumber: KPI_FIRST_DATA_ROW + index, values: rows[index] };
-    }
-  }
-  return null;
-}
-
-function nonNegativeKpiNumber_(value, label) {
-  if (value === '' || value == null) return { value: '' };
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) return { error: `${label} must be zero or greater` };
-  return { value: parsed };
-}
-
-function validateKpiEntry_(data) {
-  const eventId = String(data.event_id || '').trim();
-  if (!eventId) return { error: 'Invalid calendar event' };
-  const dateResult = parseScheduleDate_(data.work_date, 'work');
-  if (dateResult.error) return { error: dateResult.error };
-  const crewMember = String(data.crew_member || '').trim();
-  if (!CREW_NAMES.includes(crewMember)) return { error: 'Invalid crew member' };
-  const drive = nonNegativeKpiNumber_(data.estimated_drive_minutes, 'Estimated drive minutes');
-  if (drive.error) return { error: drive.error };
-  const work = nonNegativeKpiNumber_(data.estimated_work_hours, 'Estimated work hours');
-  if (work.error) return { error: work.error };
-  const completionStatus = String(data.completion_status || 'Pending').trim();
-  if (!KPI_STATUSES.includes(completionStatus)) return { error: 'Invalid completion status' };
-  const expectedWork = String(data.expected_work || '').trim();
-  const notes = String(data.notes || '').trim();
-  if (expectedWork.length > 2000) return { error: 'Expected work is too long' };
-  if (notes.length > 4000) return { error: 'Notes are too long' };
-  return {
-    value: {
-      event_id: eventId,
-      work_date: formatDate(dateResult.date),
-      crew_member: crewMember,
-      estimated_drive_minutes: drive.value,
-      estimated_work_hours: work.value,
-      expected_work: expectedWork,
-      completion_status: completionStatus,
-      notes,
-    },
-  };
-}
-
-function getKpiEntry(data) {
-  const validation = validateKpiEntry_({
-    ...data,
-    estimated_drive_minutes: '',
-    estimated_work_hours: '',
-    expected_work: '',
-    completion_status: 'Pending',
-    notes: '',
-  });
-  if (validation.error) return { success: false, error: validation.error };
-  const value = validation.value;
-  const entry = findKpiEntryByKey_(getKpiSheet_(), kpiKey_(value.event_id, value.work_date, value.crew_member));
-  if (!entry) return { success: false, error: 'KPI row not found. Refresh the jobs and try again.' };
-  return {
-    success: true,
-    entry: {
-      estimated_drive_minutes: entry.values[6],
-      estimated_work_hours: entry.values[7],
-      expected_work: entry.values[8],
-      completion_status: entry.values[9] || 'Pending',
-      notes: entry.values[10],
-    },
-  };
-}
-
-function saveKpiEntry(data) {
-  const validation = validateKpiEntry_(data);
-  if (validation.error) return { success: false, error: validation.error };
-  const lock = typeof LockService !== 'undefined' ? LockService.getScriptLock() : null;
-  if (lock) lock.waitLock(10000);
-  try {
-    const value = validation.value;
-    const sheet = getKpiSheet_();
-    const entry = findKpiEntryByKey_(sheet, kpiKey_(value.event_id, value.work_date, value.crew_member));
-    if (!entry) return { success: false, error: 'KPI row not found. Refresh the jobs and try again.' };
-    sheet.getRange(entry.rowNumber, 7, 1, 5).setValues([[
-      value.estimated_drive_minutes,
-      value.estimated_work_hours,
-      value.expected_work,
-      value.completion_status,
-      value.notes,
-    ]]);
-    return { success: true, entry: value };
-  } finally {
-    if (lock) lock.releaseLock();
-  }
 }

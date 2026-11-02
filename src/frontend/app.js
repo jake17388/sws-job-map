@@ -33,8 +33,6 @@ let selectedUnscheduledTruckAssignments = {};
 const selectedScheduledCrew = new Set();
 let selectedScheduledTruckAssignments = {};
 let editingScheduledIndex = null;
-let editingKpiIndex = null;
-let kpiLoadRequestId = 0;
 const selectedScheduleCrew = new Set();
 let selectedScheduleTruckAssignments = {};
 let schedulingUnscheduledId = null;
@@ -878,10 +876,7 @@ function scheduledCardHTML(job) {
   const truckChips = truckAssignmentsHTML(job.crew || [], job.truck_assignments || {});
   const index = scheduledJobs.indexOf(job);
   const editAction = isAdmin() && index >= 0
-    ? `<div class="scheduled-card-actions">
-        <button class="scheduled-edit-btn" onclick="openScheduledCrewEditor(${index})">✎ Edit crew</button>
-        ${job.type === 'install' && crew.length ? `<button class="scheduled-edit-btn scheduled-kpi-btn" onclick="openKpiEntry(${index})">Daily KPI</button>` : ''}
-      </div>`
+    ? `<button class="scheduled-edit-btn" onclick="openScheduledCrewEditor(${index})">✎ Edit crew</button>`
     : '';
   return `<div style="font-family:'DM Sans',sans-serif;min-width:200px;padding:3px 0">
     <div style="font-size:10px;color:#aaa;font-weight:700;letter-spacing:.05em;font-family:'DM Mono',monospace">${escapeHtml(job.num)}</div>
@@ -1163,7 +1158,7 @@ function renderList() {
         ${truckAssignmentsHTML(job.crew || [], job.truck_assignments || {})}
         ${errText}
       </div>
-      ${isAdmin() ? `${job.type === 'install' && (job.crew || []).length ? `<button class="btn-edit" onclick="event.stopPropagation();openKpiEntry(${idx})" title="Daily KPI">KPI</button>` : ''}<button class="btn-edit" onclick="event.stopPropagation();openScheduledCrewEditor(${idx})" title="Edit crew">✎</button>` : ''}
+      ${isAdmin() ? `<button class="btn-edit" onclick="event.stopPropagation();openScheduledCrewEditor(${idx})" title="Edit crew">✎</button>` : ''}
     </div>`);
   });
   list.innerHTML = rows.length ? rows.join('') : '<div class="no-results">No jobs match current filters</div>';
@@ -1559,130 +1554,6 @@ function closeScheduledCrewEditor() {
   const button = document.getElementById('save-scheduled-crew');
   button.disabled = false;
   button.textContent = 'Save assignments';
-}
-
-function kpiWorkDates_(job) {
-  const dates = [];
-  const start = new Date(`${job.start}T12:00:00`);
-  const end = new Date(`${job.end || job.start}T12:00:00`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return dates;
-  const cursor = new Date(start);
-  while (cursor <= end) {
-    dates.push(fmt(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return dates;
-}
-
-function setKpiStatus_(message, kind) {
-  const status = document.getElementById('kpi-entry-status');
-  status.textContent = message || '';
-  status.classList.toggle('error', kind === 'error');
-  status.classList.toggle('success', kind === 'success');
-}
-
-function openKpiEntry(index) {
-  if (!isAdmin()) return;
-  const job = scheduledJobs[index];
-  if (!job || job.type !== 'install' || !job.event_id || !(job.crew || []).length) return;
-  editingKpiIndex = index;
-  document.getElementById('kpi-entry-job').textContent = `${job.num || ''} ${job.title}`.trim();
-  const workDates = kpiWorkDates_(job);
-  const today = fmt(new Date());
-  document.getElementById('kpi-work-date').innerHTML = workDates
-    .map(date => `<option value="${escapeHtml(date)}" ${date === today ? 'selected' : ''}>${escapeHtml(fmtDate(date))}</option>`)
-    .join('');
-  document.getElementById('kpi-crew-member').innerHTML = (job.crew || [])
-    .map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
-    .join('');
-  document.getElementById('kpi-entry-backdrop').classList.add('show');
-  document.getElementById('kpi-entry-panel').classList.add('show');
-  closeJobCard();
-  if (infoWindowOpen) { infoWindowOpen.close(); infoWindowOpen = null; }
-  setKpiStatus_('Preparing KPI rows…');
-  document.getElementById('save-kpi-entry').disabled = true;
-  scriptPost({ action: 'syncInstallKpi', from: job.start, to: job.end || job.start })
-    .then(result => {
-      if (!result || result.error || result.success === false) throw new Error(result && result.error || 'KPI sync failed');
-      return loadKpiEntry();
-    })
-    .catch(error => {
-      setKpiStatus_(error && error.message ? error.message : 'Could not prepare KPI rows.', 'error');
-      document.getElementById('save-kpi-entry').disabled = false;
-    });
-}
-
-function closeKpiEntry() {
-  editingKpiIndex = null;
-  kpiLoadRequestId += 1;
-  document.getElementById('kpi-entry-backdrop').classList.remove('show');
-  document.getElementById('kpi-entry-panel').classList.remove('show');
-  setKpiStatus_('');
-  const button = document.getElementById('save-kpi-entry');
-  button.disabled = false;
-  button.textContent = 'Save KPI';
-}
-
-function loadKpiEntry() {
-  if (!isAdmin() || editingKpiIndex === null) return Promise.resolve();
-  const job = scheduledJobs[editingKpiIndex];
-  if (!job) return Promise.resolve();
-  const workDate = document.getElementById('kpi-work-date').value;
-  const crewMember = document.getElementById('kpi-crew-member').value;
-  const requestId = ++kpiLoadRequestId;
-  const button = document.getElementById('save-kpi-entry');
-  button.disabled = true;
-  button.textContent = 'Loading…';
-  setKpiStatus_('Loading entry…');
-  return scriptPost({
-    action: 'getKpiEntry', event_id: job.event_id,
-    work_date: workDate, crew_member: crewMember,
-  }).then(result => {
-    if (requestId !== kpiLoadRequestId) return;
-    if (!result || result.error || result.success === false) throw new Error(result && result.error || 'KPI entry not found');
-    const entry = result.entry || {};
-    document.getElementById('kpi-drive-minutes').value = entry.estimated_drive_minutes ?? '';
-    document.getElementById('kpi-work-hours').value = entry.estimated_work_hours ?? '';
-    document.getElementById('kpi-expected-work').value = entry.expected_work || '';
-    document.getElementById('kpi-completion-status').value = entry.completion_status || 'Pending';
-    document.getElementById('kpi-notes').value = entry.notes || '';
-    setKpiStatus_('');
-  }).catch(error => {
-    if (requestId !== kpiLoadRequestId) return;
-    setKpiStatus_(error && error.message ? error.message : 'Could not load KPI entry.', 'error');
-  }).finally(() => {
-    if (requestId !== kpiLoadRequestId) return;
-    button.disabled = false;
-    button.textContent = 'Save KPI';
-  });
-}
-
-function saveKpiEntry() {
-  if (!isAdmin() || editingKpiIndex === null) return;
-  const job = scheduledJobs[editingKpiIndex];
-  if (!job) return;
-  const button = document.getElementById('save-kpi-entry');
-  button.disabled = true;
-  button.textContent = 'Saving…';
-  setKpiStatus_('');
-  scriptPost({
-    action: 'saveKpiEntry', event_id: job.event_id,
-    work_date: document.getElementById('kpi-work-date').value,
-    crew_member: document.getElementById('kpi-crew-member').value,
-    estimated_drive_minutes: document.getElementById('kpi-drive-minutes').value,
-    estimated_work_hours: document.getElementById('kpi-work-hours').value,
-    expected_work: document.getElementById('kpi-expected-work').value,
-    completion_status: document.getElementById('kpi-completion-status').value,
-    notes: document.getElementById('kpi-notes').value,
-  }).then(result => {
-    if (!result || result.error || result.success === false) throw new Error(result && result.error || 'Save failed');
-    setKpiStatus_('Saved to the KPI tracker.', 'success');
-  }).catch(error => {
-    setKpiStatus_(error && error.message ? error.message : 'Could not save KPI entry.', 'error');
-  }).finally(() => {
-    button.disabled = false;
-    button.textContent = 'Save KPI';
-  });
 }
 
 function saveScheduledCrew() {
