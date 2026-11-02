@@ -15,6 +15,7 @@ try {
 }
 const routingSource = readFileSync(new URL('../src/backend/03-routing.js', import.meta.url), 'utf8');
 const currentJobsSource = readFileSync(new URL('../src/backend/06-current-jobs-sheet.js', import.meta.url), 'utf8');
+const triggerSource = readFileSync(new URL('../src/backend/08-current-jobs-sheet-cont.js', import.meta.url), 'utf8');
 const frontendHtml = readFileSync(new URL('../src/frontend/index.html', import.meta.url), 'utf8');
 const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
 
@@ -298,6 +299,56 @@ test('only the admin-only KPI sync route is exposed', () => {
 
 test('the daily Current Jobs refresh also seeds KPI rows', () => {
   assert.match(currentJobsSource, /syncInstallJobsToKpi_\(installJobs\)/);
+});
+
+test('an hourly trigger keeps the KPI log current with the install calendar', () => {
+  const deleted = [];
+  const created = [];
+  const synced = [];
+  const triggers = [
+    { getHandlerFunction: () => 'refreshInstallKpiFromCalendar_' },
+    { getHandlerFunction: () => 'refreshCurrentJobs' },
+  ];
+  const context = vm.createContext({
+    Date,
+    INSTALL_CAL_ID: 'install-calendar',
+    ScriptApp: {
+      getProjectTriggers: () => triggers,
+      deleteTrigger: trigger => deleted.push(trigger.getHandlerFunction()),
+      newTrigger(handler) {
+        const plan = { handler };
+        created.push(plan);
+        return {
+          timeBased() { plan.timeBased = true; return this; },
+          everyHours(hours) { plan.hours = hours; return this; },
+          create() { plan.created = true; return this; },
+        };
+      },
+    },
+    fetchCalendarEvents(calendarId, type) {
+      assert.equal(calendarId, 'install-calendar');
+      assert.equal(type, 'install');
+      return [job()];
+    },
+    syncInstallJobsToKpi_(jobs) {
+      synced.push(jobs);
+      return { success: true, created: jobs.length };
+    },
+  });
+  vm.runInContext(triggerSource, context);
+
+  const result = context.setupInstallKpiSyncTrigger();
+
+  assert.deepEqual(deleted, ['refreshInstallKpiFromCalendar_']);
+  assert.deepEqual(created, [{
+    handler: 'refreshInstallKpiFromCalendar_',
+    timeBased: true,
+    hours: 1,
+    created: true,
+  }]);
+  assert.equal(synced.length, 1);
+  assert.equal(synced[0].length, 1);
+  assert.equal(result.created, 1);
 });
 
 test('scheduled jobs sync to the Sheet without KPI entry controls', () => {
