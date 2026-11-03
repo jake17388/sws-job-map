@@ -99,7 +99,7 @@ test('SquareCoil batch requests retry sequentially when the session is rejected'
 
   const responses = context.squarecoilEstimateGetBatch_(['project_estimates.php?id=261170'], 'session=abc');
 
-  assert.equal(responses[0], authenticatedResponse);
+  assert.match(responses[0].getContentText(), /estimateid=23304/);
   assert.equal(sequentialRequests.length, 1);
   assert.match(sequentialRequests[0].url, /project_estimates\.php\?id=261170$/);
   assert.equal(sequentialRequests[0].options.headers.Cookie, 'session=abc');

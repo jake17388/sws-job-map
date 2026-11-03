@@ -90,6 +90,11 @@ function squarecoilEstimateGet_(path, cookie) {
   });
 }
 
+function squarecoilEstimateNeedsSequentialRetry_(response) {
+  if (!response || response.getResponseCode() !== 200) return true;
+  return /<form[^>]+action=["']login\.php/i.test(response.getContentText());
+}
+
 function squarecoilEstimateGetBatch_(paths, cookie) {
   const results = [];
   for (let index = 0; index < paths.length; index += SQUARECOIL_ESTIMATE_BATCH_SIZE) {
@@ -108,7 +113,13 @@ function squarecoilEstimateGetBatch_(paths, cookie) {
     let responses;
     try { responses = UrlFetchApp.fetchAll(requests); }
     catch (error) { responses = chunk.map(() => null); }
-    responses.forEach(response => results.push(response));
+    responses.forEach((response, responseIndex) => {
+      if (squarecoilEstimateNeedsSequentialRetry_(response)) {
+        try { response = squarecoilEstimateGet_(chunk[responseIndex], cookie); }
+        catch (error) { response = null; }
+      }
+      results.push(response);
+    });
   }
   return results;
 }
