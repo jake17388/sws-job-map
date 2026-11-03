@@ -19,6 +19,36 @@ function isSquarecoilEstimateConfigured_() {
   return !!(credentials.username && credentials.password);
 }
 
+function squarecoilEstimateConnectionStatus_() {
+  return { configured: isSquarecoilEstimateConfigured_() };
+}
+
+function saveSquarecoilEstimateCredentials_(usernameValue, passwordValue) {
+  const username = String(usernameValue || '').trim();
+  const password = String(passwordValue || '');
+  if (!username || !password) {
+    return {
+      success: false,
+      configured: false,
+      error: 'Enter both the Squarecoil username and password.',
+    };
+  }
+  try {
+    squarecoilEstimateLogin_(username, password);
+  } catch (error) {
+    return {
+      success: false,
+      configured: false,
+      error: 'Squarecoil rejected the credentials. Check the username and password.',
+    };
+  }
+  PropertiesService.getScriptProperties().setProperties({
+    SQUARECOIL_USERNAME: username,
+    SQUARECOIL_PASSWORD: password,
+  }, false);
+  return { success: true, configured: true };
+}
+
 function squarecoilEstimateResponseHeader_(response, name) {
   const headers = response.getAllHeaders ? response.getAllHeaders() : response.getHeaders();
   const wanted = String(name).toLowerCase();

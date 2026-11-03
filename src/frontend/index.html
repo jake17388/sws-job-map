@@ -324,6 +324,11 @@
         <button class="primary-action" onclick="saveAccountInfo()">Save my info</button><p class="form-status" id="account-status"></p>
       </section>
       <section class="settings-card management-card"><h2>Management</h2><p class="settings-help">Manage people and permissions.</p><button class="settings-action" onclick="openUserManagement()">User Management</button></section>
+      <section class="settings-card integration-card" id="squarecoil-settings-card" hidden><div class="card-title-row"><div><h2>SquareCoil Connection</h2><p class="settings-help">Connect SquareCoil so estimated install hours stay current.</p></div><span class="status-pill status-pill-neutral" id="squarecoil-status-pill">Checking…</span></div>
+        <div class="integration-fields"><label>Username<input id="squarecoil-username" autocomplete="username"></label><label>Password<input id="squarecoil-password" type="password" autocomplete="current-password"></label></div>
+        <p class="field-hint">Credentials are verified with SquareCoil, stored only in Apps Script properties, and never displayed again.</p>
+        <button class="primary-action" id="squarecoil-save-button" onclick="saveSquarecoilSettings()">Connect and sync hours</button><p class="form-status" id="squarecoil-settings-status" role="status"></p>
+      </section>
       <section class="settings-card health-card"><div class="card-title-row"><div><h2>System Health</h2><p class="settings-help">Backup, recovery, and integration status for administrators.</p></div><span class="status-pill">Healthy</span></div><div class="health-row"><span>Tracking sheet</span><span>Connected</span></div><div class="health-row"><span>Last operational failure</span><span>None</span></div><button class="settings-action" onclick="checkSystemHealth(this)">Check system health</button></section>
     </div>
     <button class="settings-action danger signout-action" onclick="closeSettings();signOut()">Sign out</button>

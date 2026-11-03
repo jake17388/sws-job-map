@@ -93,12 +93,12 @@ test('Squarecoil status and credential updates are admin-only routes', () => {
     { error: 'unauthorized' },
   );
   assert.deepEqual(
-    context.doPost({ postData: { contents: JSON.stringify({
+    JSON.parse(JSON.stringify(context.doPost({ postData: { contents: JSON.stringify({
       action: 'saveSquarecoilEstimateCredentials',
       token: 'viewer-token',
       username: 'viewer',
       password: 'secret-value',
-    }) } }),
+    }) } }))),
     { error: 'forbidden' },
   );
   assert.deepEqual(

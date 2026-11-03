@@ -15,6 +15,9 @@ function doGet(e) {
   const action = params.action;
   const actor = resolveActor_(params.token);
   if (action === 'getUsers') return actor && isAdmin_(actor) ? json({users:listUsers_()}) : json(UNAUTHORIZED);
+  if (action === 'getSquarecoilEstimateStatus') {
+    return actor && isAdmin_(actor) ? json(squarecoilEstimateConnectionStatus_()) : json(UNAUTHORIZED);
+  }
 
   if (action === 'getJobs' || action === 'getUnsched') {
     if (!actor) return json(UNAUTHORIZED);
@@ -89,6 +92,10 @@ function doPost(e) {
   if (data.action === 'refreshKpiJobTotals') {
     if (!isAdmin_(actor)) return json({ error: 'forbidden' });
     return json(refreshKpiJobTotals());
+  }
+  if (data.action === 'saveSquarecoilEstimateCredentials') {
+    if (!isAdmin_(actor)) return json({ error: 'forbidden' });
+    return json(saveSquarecoilEstimateCredentials_(data.username, data.password));
   }
   return json({ error: 'unknown action' });
 }

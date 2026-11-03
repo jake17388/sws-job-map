@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.02.7';
+const APP_VERSION = '2026.11.03.1';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -239,6 +239,9 @@ function openSettings() {
   document.getElementById('settings-version-text').textContent = APP_VERSION;
   document.getElementById('zoom-label').textContent = ZOOM_STEPS[textZoomIdx] + '%';
   document.getElementById('account-name').value = currentUser || '';
+  const squarecoilCard = document.getElementById('squarecoil-settings-card');
+  squarecoilCard.hidden = !isAdmin();
+  if (isAdmin()) loadSquarecoilSettings();
   document.getElementById('settings-backdrop').classList.add('show');
   document.getElementById('settings-panel').classList.add('show');
 }
@@ -257,6 +260,52 @@ function loadManagedUsers() { scriptGet('getUsers').then(users => { document.get
 function addManagedUser() { const name=document.getElementById('new-user-name').value.trim(), pin=document.getElementById('new-user-pin').value.trim(), status=document.getElementById('user-management-status'); if(!name || !/^\d{6}$/.test(pin)){status.textContent='Enter a name and a 6-digit PIN.';return;} scriptPost({action:'addUser',name,pin,role:document.getElementById('new-user-role').value}).then(()=>{status.textContent='User added';loadManagedUsers();}).catch(()=>status.textContent='Could not add user.'); }
 function updateManagedUser(oldPin,name,role,pin){ const nextPin=pin||oldPin; if(!name||!/^[0-9]{6}$/.test(nextPin))return; scriptPost({action:'updateUser',oldPin,name,pin:nextPin,role}).then(loadManagedUsers); }
 function removeManagedUser(pin){ if(confirm('Remove this user?')) scriptPost({action:'removeUser',pin}).then(loadManagedUsers); }
+function loadSquarecoilSettings() {
+  if (!isAdmin()) return;
+  const pill = document.getElementById('squarecoil-status-pill');
+  pill.textContent = 'Checking…';
+  pill.classList.add('status-pill-neutral');
+  scriptGet('getSquarecoilEstimateStatus').then(result => {
+    pill.textContent = result.configured ? 'Connected' : 'Not connected';
+    pill.classList.toggle('status-pill-neutral', !result.configured);
+  }).catch(() => {
+    pill.textContent = 'Unavailable';
+    pill.classList.add('status-pill-neutral');
+  });
+}
+function saveSquarecoilSettings() {
+  if (!isAdmin()) return;
+  const username = document.getElementById('squarecoil-username').value.trim();
+  const passwordInput = document.getElementById('squarecoil-password');
+  const password = passwordInput.value;
+  const status = document.getElementById('squarecoil-settings-status');
+  const button = document.getElementById('squarecoil-save-button');
+  if (!username || !password) {
+    status.textContent = 'Enter both the SquareCoil username and password.';
+    return;
+  }
+  button.disabled = true;
+  status.textContent = 'Verifying credentials…';
+  scriptPost({ action: 'saveSquarecoilEstimateCredentials', username, password })
+    .then(result => {
+      if (!result.success) throw new Error(result.error || 'SquareCoil could not be connected.');
+      document.getElementById('squarecoil-password').value = '';
+      status.textContent = 'Connected. Refreshing estimated job hours…';
+      loadSquarecoilSettings();
+      return scriptPost({ action: 'refreshKpiJobTotals' });
+    })
+    .then(refresh => {
+      status.textContent = refresh && refresh.success
+        ? `Connected. Updated ${refresh.rows_updated || 0} KPI rows.`
+        : 'Connected. The hourly sync will retry the job-hour refresh.';
+    })
+    .catch(error => {
+      status.textContent = error && error.message
+        ? error.message
+        : 'SquareCoil could not be connected.';
+    })
+    .finally(() => { button.disabled = false; });
+}
 function checkSystemHealth(button) { button.textContent = 'System healthy'; setTimeout(() => { button.textContent = 'Check system health'; }, 2500); }
 function closeSettings() {
   document.getElementById('settings-backdrop').classList.remove('show');
