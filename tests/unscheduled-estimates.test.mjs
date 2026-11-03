@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 const backendSource = readFileSync(new URL('../src/backend/05-unscheduled-jobs.js', import.meta.url), 'utf8');
+const squarecoilSource = readFileSync(new URL('../src/backend/11-squarecoil-estimates.js', import.meta.url), 'utf8');
 const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
 
 function backendContext({ rows, estimateTotals, estimateError } = {}) {
@@ -70,4 +71,36 @@ test('unscheduled list rows and map cards display estimated install hours', () =
   assert.match(frontendSource, /id="item-unsched-\$\{i\}"[\s\S]*estimatedInstallHoursHTML\(job/);
   assert.match(frontendSource, /Est\. total job hrs:/);
   assert.match(frontendSource, /estimated_install_hours/);
+});
+
+test('SquareCoil batch requests retry sequentially when the session is rejected', () => {
+  const batchResponse = {
+    getResponseCode: () => 200,
+    getContentText: () => '<form action="login.php"><input name="username"></form>',
+  };
+  const authenticatedResponse = {
+    getResponseCode: () => 200,
+    getContentText: () => '<a href="project_estimates.php?id=261170&estimateid=23304">261170-03</a>',
+  };
+  const sequentialRequests = [];
+  const context = vm.createContext({
+    console,
+    Map,
+    Set,
+    UrlFetchApp: {
+      fetchAll: () => [batchResponse],
+      fetch: (url, options) => {
+        sequentialRequests.push({ url, options });
+        return authenticatedResponse;
+      },
+    },
+  });
+  vm.runInContext(squarecoilSource, context);
+
+  const responses = context.squarecoilEstimateGetBatch_(['project_estimates.php?id=261170'], 'session=abc');
+
+  assert.equal(responses[0], authenticatedResponse);
+  assert.equal(sequentialRequests.length, 1);
+  assert.match(sequentialRequests[0].url, /project_estimates\.php\?id=261170$/);
+  assert.equal(sequentialRequests[0].options.headers.Cookie, 'session=abc');
 });
