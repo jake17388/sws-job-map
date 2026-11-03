@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.03.1';
+const APP_VERSION = '2026.11.03.2';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -937,6 +937,15 @@ function scheduledCardHTML(job) {
     ${editAction}
   </div>`;
 }
+function estimatedInstallHoursHTML(job) {
+  const raw = job.estimated_install_hours;
+  const hours = raw === null || raw === '' ? NaN : Number(raw);
+  const known = Number.isFinite(hours);
+  const display = known ? String(Math.round(hours * 100) / 100) : '—';
+  const stateClass = !known ? ' unavailable' : hours === 0 ? ' zero' : '';
+  return `<span class="estimated-hours${stateClass}">Est. total job hrs: ${display}</span>`;
+}
+
 function unschedCardHTML(job) {
   const crewChips = crewChipsHTML(job.crew || []);
   const truckChips = truckAssignmentsHTML(job.crew || [], job.truck_assignments || {});
@@ -950,6 +959,7 @@ function unschedCardHTML(job) {
     <div style="font-weight:700;font-size:13px;margin:3px 0;color:#1a1a1a">${escapeHtml(job.title)}</div>
     <div style="font-size:11px;color:#888;margin-bottom:5px">${escapeHtml(job.address)}</div>
     <div style="font-size:11px;font-weight:600;color:${COLORS.unscheduled}">UNSCHEDULED · Added by ${escapeHtml(job.added_by || 'Unknown')}</div>
+    <div class="job-card-estimate">${estimatedInstallHoursHTML(job)}</div>
     ${crewChips}
     ${truckChips}
     ${adminActions}
@@ -1176,6 +1186,7 @@ function renderList() {
           <div class="job-meta">
             <span class="badge unscheduled">unscheduled</span>
             <span class="added-by">Added by ${escapeHtml(job.added_by || 'Unknown')}</span>
+            ${estimatedInstallHoursHTML(job)}
           </div>
           ${crewChipsHTML(job.crew || [])}
           ${truckAssignmentsHTML(job.crew || [], job.truck_assignments || {})}
@@ -1297,7 +1308,8 @@ function addUnscheduled() {
   const job = {
     id: 'temp-' + Date.now(), job_num: num, title: title || num, address: addr,
     crew, truck_assignments: truckAssignments, added_by: currentUser,
-    added: new Date().toISOString(), _status: 'pending', _marker: null, _iw: null,
+    added: new Date().toISOString(), estimated_install_hours: null,
+    _status: 'pending', _marker: null, _iw: null,
   };
   unscheduledJobs.push(job);
   renderList();
@@ -1322,6 +1334,7 @@ function addUnscheduled() {
       if (job._iw) job._iw.setContent(unschedCardHTML(job));
       writeCache(UNSCHED_CACHE_KEY, { jobs: unscheduledJobs });
       renderList();
+      return loadUnscheduled();
     })
     .catch(err => {
       if (job._marker) job._marker.setMap(null);

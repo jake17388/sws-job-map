@@ -25,6 +25,24 @@ function ensureUnscheduledAssignmentHeaders_(sheet) {
   if (!truckHeader.getValue()) truckHeader.setValue('Truck Assignments');
 }
 
+function attachUnscheduledEstimatedHours_(jobs) {
+  const totals = new Map();
+  if (typeof squarecoilInstallHoursByJob_ === 'function') {
+    try {
+      const resolved = squarecoilInstallHoursByJob_(jobs.map(job => job.job_num), false);
+      resolved.forEach((hours, jobNum) => totals.set(String(jobNum), hours));
+    } catch (error) {
+      console.warn('Could not load SquareCoil estimates for unscheduled jobs:', error.message);
+    }
+  }
+  return jobs.map(job => ({
+    ...job,
+    estimated_install_hours: totals.has(String(job.job_num))
+      ? totals.get(String(job.job_num))
+      : null,
+  }));
+}
+
 function getUnsched() {
   const sheet = getUnscheduledSheet_();
   const data = sheet.getDataRange().getValues();
@@ -39,7 +57,7 @@ function getUnsched() {
     crew: normalizeUnscheduledCrew_(row[6]),
     truck_assignments: normalizeStoredTruckAssignments_(row[7]),
   })).filter(j => j.job_num);
-  return { jobs };
+  return { jobs: attachUnscheduledEstimatedHours_(jobs) };
 }
 
 function addUnsched(data) {
