@@ -14,18 +14,6 @@ function doGet(e) {
   const params = (e && e.parameter) || {};
   const action = params.action;
   const actor = resolveActor_(params.token);
-  if (action === 'getWorkloadEstimates') {
-    if (!actor) return json(UNAUTHORIZED);
-    const nums = Array.from(new Set(String(params.nums || '').split(',').filter(num => /^\d{5,6}$/.test(num)))).slice(0, 60);
-    try {
-      const totals = squarecoilInstallHoursByJob_(nums, false);
-      return json({ estimates: Object.fromEntries(totals) });
-    } catch (error) {
-      console.warn('Could not load workload estimates:', error.message);
-      return json({ estimates: {}, warning: 'Job estimates are unavailable. Hours remain unknown.' });
-    }
-  }
-
   if (action === 'getUsers') return actor && isAdmin_(actor) ? json({users:listUsers_()}) : json(UNAUTHORIZED);
   if (action === 'getSquarecoilEstimateStatus') {
     return actor && isAdmin_(actor) ? json(squarecoilEstimateConnectionStatus_()) : json(UNAUTHORIZED);
