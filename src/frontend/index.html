@@ -55,6 +55,13 @@
   </div>
 </div>
  
+<div class="settings-backdrop" id="workload-backdrop" onclick="closeWorkload()"></div>
+<section class="scheduled-crew-panel workload-panel" id="workload-panel" role="dialog" aria-modal="true" aria-labelledby="workload-title" tabindex="-1">
+  <div class="scheduled-crew-header"><div><h2 id="workload-title">Daily crew workload</h2><p id="workload-range"></p></div><button class="settings-close-btn" onclick="closeWorkload()" aria-label="Close workload">✕</button></div>
+  <p class="workload-help">Planning estimate: total job labor-hours are split evenly across its loaded installation dates and assigned crew. Travel is excluded. More than 7 hours per person per day is flagged for review. Missing estimates stay unknown. Crew and job-type filters apply; search does not.</p>
+  <p class="workload-status" id="workload-status" role="status"></p>
+  <div class="workload-table-wrap" id="workload-body"></div>
+</section>
 <!-- Main App -->
 <div id="app">
   <header>
@@ -89,6 +96,7 @@
       <button class="day-nav-label" id="day-nav-label" onclick="openCalendar()" title="Pick a date or range">Today</button>
       <button class="day-nav-btn" onclick="shiftDay(1)" title="Next day">›</button>
     </div>
+    <button class="workload-launch" onclick="openWorkload()">Crew workload</button>
     <input type="date" id="date-from" style="display:none">
     <input type="date" id="date-to" style="display:none">
     <div class="date-warn" id="date-warn">⚠ Dates exceed loaded range — hit Refresh to load</div>
@@ -313,6 +321,7 @@
     </div>
     <div class="settings-grid">
       <section class="settings-card display-card"><h2>Display</h2><p class="settings-help">Adjust how the job map looks on this device.</p>
+        <label class="settings-row sidebar-width-control">Sidebar width<input id="sidebar-width" type="range" min="330" max="560" step="10" value="380" oninput="setSidebarWidth(this.value)" aria-label="Desktop sidebar width"></label>
         <div class="settings-row"><span>Version</span><span id="settings-version-text"></span></div>
         <div class="settings-row"><span>Text size</span><div class="zoom-controls"><button class="zoom-btn" onclick="adjustZoom(-1)">−</button><span class="zoom-label" id="zoom-label">100%</span><button class="zoom-btn" onclick="adjustZoom(1)">+</button><button class="zoom-reset-btn" onclick="resetZoom()">Reset</button></div></div>
         <div class="settings-row"><label for="theme-select">Theme</label><select id="theme-select" onchange="setTheme(this.value)"><option value="light">Light</option><option value="dark">Dark</option></select></div>

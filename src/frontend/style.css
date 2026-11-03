@@ -357,6 +357,24 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
 .modal-handle { display: none; }
 .job-card { display: none; }
 
+/* Shared by desktop map popups and the mobile job detail sheet. */
+.job-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.job-card-actions button {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 36px; padding: 8px 12px; border: 1px solid #d9e2ee; border-radius: 8px;
+  background: #f3f6fb; color: var(--navy); font: 600 12px/1.2 'DM Sans', sans-serif;
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.job-card-actions button:first-child { background: var(--navy); border-color: var(--navy); color: #fff; }
+.job-card-actions button.danger { background: #fff; border-color: #f0cbd2; color: #b42340; }
+@media (hover: hover) {
+  .job-card-actions button:hover { background: #e5edf9; border-color: #b8caea; }
+  .job-card-actions button:first-child:hover { background: var(--navy-deep); border-color: var(--navy-deep); }
+  .job-card-actions button.danger:hover { background: #fff0f3; border-color: #df9baa; }
+}
+.job-card-actions button:active { filter: brightness(.94); }
+.job-card-actions button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
 /* ════════════════════════════════════════════════════════════════════════
    Mobile layout (phones / narrow viewports)
    ════════════════════════════════════════════════════════════════════════ */
@@ -428,12 +446,7 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
     transform: translateY(110%); transition: transform 0.22s ease;
   }
   .job-card.open { transform: translateY(0); }
-  .job-card-actions { display: flex; gap: 8px; margin-top: 10px; }
-  .job-card-actions button {
-    flex: 1; padding: 9px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer;
-    font-family: 'DM Sans', sans-serif; -webkit-tap-highlight-color: transparent; border: 1px solid #e8e8e8; background: #fff;
-  }
-  .job-card-actions .danger { color: #e74c3c; border-color: #f5d0d0; }
+  .job-card-actions button { flex: 1 1 auto; min-height: 44px; }
 
   /* Touch target sizing */
   .btn-edit, .btn-remove, .btn-retry { min-width: 36px; min-height: 36px; font-size: 16px; display: flex; align-items: center; justify-content: center; }
@@ -443,4 +456,40 @@ button, .job-item, .day-nav-label { -webkit-tap-highlight-color: transparent; }
   .hdr-btn { padding: 7px 12px; }
 
   .job-list { padding-bottom: 84px; }
+}
+
+/* Legible job details and a configurable desktop sidebar. */
+:root { --sidebar-width: 380px; }
+@media (min-width:769px) { .sidebar, .date-bar { width:min(var(--sidebar-width), 48vw); } }
+.job-item { padding:12px 14px; }
+.job-num { color:#52627b; font-size:11px; }
+.job-title { font-size:13px; line-height:1.4; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere; }
+.job-addr { color:#657188; font-size:12px; }
+.job-meta, .added-by { color:#657188; }
+.added-by { font-size:10px; }
+.filter-label { color:#657188; }
+.filter-reset { color:#52627b; }
+.btn-edit { color:#a33350; }
+.btn-remove { color:#8b5964; }
+.sidebar-width-control { gap:12px; }
+.sidebar-width-control input { width:55%; }
+.workload-launch { margin:0 0 2px; padding:8px 10px; border:1px solid #d9e2ee; border-radius:8px; background:#f3f6fb; color:var(--navy); font:600 12px 'DM Sans',sans-serif; cursor:pointer; }
+.workload-panel { width:min(980px,calc(100% - 28px)); max-height:calc(100dvh - 28px); overflow:auto; }
+.workload-help { color:#52627b; font-size:12px; line-height:1.6; margin:12px 0; }
+.workload-table-wrap { overflow:auto; }
+.workload-table { border-collapse:collapse; width:100%; font-size:12px; }
+.workload-table th { background:#edf3f9; text-align:left; color:#334155; }
+.workload-table th,.workload-table td { padding:10px; border-bottom:1px solid #d9e2ee; vertical-align:top; }
+.workload-table td:first-child { white-space:nowrap; }
+.workload-table ul { padding-left:16px; }
+.workload-table li + li { margin-top:6px; }
+.workload-warning { color:#9a3412; font-weight:700; }
+.workload-status { color:#52627b; font-size:12px; margin:10px 0; }
+@media(max-width:768px) {
+  /* The fixed form must not inherit the Map tab's hidden sidebar. */
+  .main.mobile-view-map .unsched-add.modal-open { visibility:visible; pointer-events:auto; }
+  .mobile-list-search { width:calc(100% - 28px); }
+  .sidebar-width-control { display:none; }
+  .workload-launch { min-height:40px; }
+  .workload-panel { padding:16px; }
 }

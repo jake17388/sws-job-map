@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.03.2';
+const APP_VERSION = '2026.11.03.3';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -743,6 +743,7 @@ function initMap() {
   initScheduledCrewButtons();
   initScheduleCrewButtons();
   initTextZoom();
+  setSidebarWidth(localStorage.getItem('sws_sidebar_width') || 380);
   initHomeMarker();
   const today = new Date();
   document.getElementById('date-from').value = fmt(today);
@@ -1154,6 +1155,7 @@ function applyFilters() {
     }
   });
   renderList(); updateCount();
+  if (document.getElementById('workload-panel').classList.contains('show')) renderWorkload();
 }
 
 function getVisibleScheduled() {
@@ -1848,3 +1850,109 @@ function saveUnschedEdit() {
 // the first fetch and an expired one bounces back to the PIN screen
 setTheme(localStorage.getItem('sws_theme') || 'light');
 if (auth && auth.token) enterApp();
+
+// ── Daily crew workload ──────────────────────────────────────────────────────
+const workloadEstimates = new Map();
+let workloadRequest = 0;
+let workloadReturnFocus = null;
+function setSidebarWidth(value) {
+  const width = Math.max(330, Math.min(560, Number(value) || 380));
+  document.documentElement.style.setProperty('--sidebar-width', width + 'px');
+  localStorage.setItem('sws_sidebar_width', String(width));
+  const slider = document.getElementById('sidebar-width');
+  if (slider) slider.value = width;
+  if (map && typeof google !== 'undefined') google.maps.event.trigger(map, 'resize');
+}
+function workloadDates(start, end) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(end || '')) return [];
+  const [y,m,d] = start.split('-').map(Number);
+  const current = new Date(y,m-1,d), dates = [];
+  while (fmt(current) <= end && dates.length < 366) {
+    dates.push(fmt(current)); current.setDate(current.getDate()+1);
+  }
+  return dates;
+}
+function workloadHours(value) {
+  return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+}
+// Split each job total across unique person/date slots, never once per event.
+function buildWorkloadRows(jobs, from, to, types, crewNames, estimates) {
+  const dates = workloadDates(from,to).slice(0,31), groups = new Map(), rows = new Map();
+  jobs.forEach((job,index) => {
+    const key = job.type === 'install' && job.num ? 'install:' + job.num : job.type + ':' + (job.event_id || index);
+    if (!groups.has(key)) groups.set(key,{job, slots:new Map()});
+    const group = groups.get(key);
+    workloadDates(job.start,job.end).forEach(date => {
+      (job.crew && job.crew.length ? [...new Set(job.crew)] : ['Unassigned']).forEach(name => {
+        const slotKey = date + '|' + name;
+        if (!group.slots.has(slotKey)) group.slots.set(slotKey,{date,name,trucks:new Set()});
+        const truck = (job.truck_assignments || {})[name];
+        if (truck) group.slots.get(slotKey).trucks.add(truck);
+      });
+    });
+  });
+  groups.forEach(({job,slots}) => {
+    if (!types.includes(job.type)) return;
+    const rawHours = workloadHours(job.estimated_install_hours);
+    const total = job.type === 'install' ? (rawHours ?? workloadHours(estimates.get(String(job.num)))) : null;
+    const portion = total === null ? null : total / slots.size;
+    slots.forEach(({date,name,trucks}) => {
+      if (!dates.includes(date) || (name !== 'Unassigned' && !crewNames.includes(name))) return;
+      const key = date + '|' + name;
+      if (!rows.has(key)) rows.set(key,{date,name,hours:0,unknown:0,jobs:[],trucks:new Set()});
+      const row = rows.get(key);
+      if (portion === null) row.unknown++; else row.hours += portion;
+      row.jobs.push({num:String(job.num || ''),title:job.title,hours:portion});
+      trucks.forEach(truck => row.trucks.add(truck));
+    });
+  });
+  // Empty crew rows make available capacity visible as well as busy days.
+  dates.forEach(date => crewNames.forEach(name => {
+    const key = date+'|'+name;
+    if (!rows.has(key)) rows.set(key,{date,name,hours:0,unknown:0,jobs:[],trucks:new Set()});
+  }));
+  return [...rows.values()].sort((a,b) => a.date.localeCompare(b.date) || (crewNames.indexOf(a.name) < 0 ? 999 : crewNames.indexOf(a.name)) - (crewNames.indexOf(b.name) < 0 ? 999 : crewNames.indexOf(b.name)));
+}
+function workloadHoursLabel(hours) { return Number(hours.toFixed(2)).toLocaleString() + ' h'; }
+function renderWorkload() {
+  const from = document.getElementById('date-from').value, to = document.getElementById('date-to').value;
+  document.getElementById('workload-range').textContent = fmtDate(from) + (from === to ? '' : ' – ' + fmtDate(to)) + (workloadDates(from,to).length > 31 ? ' · Showing first 31 days' : '');
+  const rows = buildWorkloadRows(scheduledJobs,from,to,[...activeTypes],CREW.filter(name=>activeCrews.has(name)),workloadEstimates);
+  const html = rows.map(row => `<tr><td>${escapeHtml(fmtDate(row.date))}<br><strong>${escapeHtml(row.name)}</strong></td><td>${row.jobs.length ? `<ul>${row.jobs.map(job=>`<li>${escapeHtml(job.num)} ${escapeHtml(job.title)}<br>${job.hours === null ? 'Estimate unknown' : workloadHoursLabel(job.hours)}</li>`).join('')}</ul>` : 'No assigned jobs'}</td><td>${row.trucks.size ? [...row.trucks].map(id=>escapeHtml(vehicleNameForId(id))).join('<br>') : '—'}${row.trucks.size > 1 ? '<br><span class="workload-warning">Review multiple trucks</span>' : ''}</td><td><strong>${row.unknown ? (row.hours ? workloadHoursLabel(row.hours)+' known' : 'Unknown') : workloadHoursLabel(row.hours)}</strong>${row.unknown ? `<br>${row.unknown} job${row.unknown===1?'':'s'} without estimates` : ''}${row.hours > 7 ? '<br><span class="workload-warning">Above 7 h guide</span>' : ''}</td></tr>`).join('');
+  document.getElementById('workload-body').innerHTML = html ? `<table class="workload-table"><thead><tr><th scope="col">Date / crew</th><th scope="col">Assigned jobs</th><th scope="col">Trucks</th><th scope="col">Planned labor</th></tr></thead><tbody>${html}</tbody></table>` : '<p class="workload-status">No crew or jobs match the current filters.</p>';
+}
+async function openWorkload() {
+  workloadReturnFocus = document.activeElement;
+  document.getElementById('workload-backdrop').classList.add('show');
+  const panel = document.getElementById('workload-panel');
+  panel.classList.add('show'); panel.focus();
+  const request = ++workloadRequest;
+  renderWorkload();
+  const nums = [...new Set(getVisibleScheduled().filter(job=>job.type==='install').map(job=>String(job.num)).filter(num=>/^\d{5,6}$/.test(num)))].slice(0,60);
+  const status = document.getElementById('workload-status');
+  status.textContent = nums.length ? 'Loading current job estimates…' : 'No installation estimates to load for these dates.';
+  if (!nums.length) return;
+  try {
+    const result = await scriptGet('getWorkloadEstimates&nums=' + encodeURIComponent(nums.join(',')));
+    if (!result || result.error || !result.estimates) throw new Error('Estimates unavailable');
+    if (request !== workloadRequest) return;
+    // Clear outdated values when the server cannot resolve a current estimate.
+    nums.forEach(num=>workloadEstimates.delete(num));
+    Object.entries(result.estimates).forEach(([num,hours])=> { if(workloadHours(hours)!==null) workloadEstimates.set(num,Number(hours)); });
+    status.textContent = result.warning || (getVisibleScheduled().filter(job=>job.type==='install' && job.num).length > 60 ? 'Showing estimates for up to 60 job numbers. Other estimates remain unknown.' : 'Estimates loaded. This is a planning guide, not recorded working time.');
+    renderWorkload();
+  } catch(error) {
+    if (request !== workloadRequest) return;
+    status.textContent = 'Could not refresh estimates. Previously loaded estimates are shown where available; other hours remain unknown.';
+  }
+}
+function closeWorkload() {
+  workloadRequest++;
+  document.getElementById('workload-panel').classList.remove('show');
+  document.getElementById('workload-backdrop').classList.remove('show');
+  if (workloadReturnFocus) workloadReturnFocus.focus();
+}
+document.getElementById('workload-panel').addEventListener('keydown',event=> {
+  if (event.key === 'Escape') { event.preventDefault(); closeWorkload(); }
+  if (event.key === 'Tab') { event.preventDefault(); document.querySelector('#workload-panel button').focus(); }
+});
