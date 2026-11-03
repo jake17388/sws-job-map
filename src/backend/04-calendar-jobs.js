@@ -18,8 +18,28 @@ function getJobs(e) {
   const installJobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', start, end);
   const serviceJobs = fetchCalendarEvents(SERVICE_CAL_ID, 'service', start, end);
   const excavJobs   = fetchCalendarEvents(EXCAV_CAL_ID,   'excavation', start, end);
-  const jobs = harmonizeLoadedDailyTruckAssignments_([...installJobs, ...serviceJobs, ...excavJobs]);
+  const jobs = attachScheduledEstimatedHours_(
+    harmonizeLoadedDailyTruckAssignments_([...installJobs, ...serviceJobs, ...excavJobs]),
+  );
   return { jobs, timestamp: new Date().toISOString(), fetchedFrom: formatDate(start), fetchedTo: formatDate(end) };
+}
+
+function attachScheduledEstimatedHours_(jobs) {
+  const totals = new Map();
+  if (typeof squarecoilInstallHoursByJob_ === 'function') {
+    try {
+      const resolved = squarecoilInstallHoursByJob_(jobs.map(job => job.num), false);
+      resolved.forEach((hours, jobNum) => totals.set(String(jobNum), hours));
+    } catch (error) {
+      console.warn('Could not load SquareCoil estimates for scheduled jobs:', error.message);
+    }
+  }
+  return jobs.map(job => ({
+    ...job,
+    estimated_install_hours: totals.has(String(job.num))
+      ? totals.get(String(job.num))
+      : null,
+  }));
 }
 
 function jobDateKeys_(job) {

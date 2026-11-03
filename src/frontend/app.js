@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.03.4';
+const APP_VERSION = '2026.11.03.5';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -951,6 +951,7 @@ function scheduledCardHTML(job) {
     <div style="font-weight:700;font-size:13px;margin:3px 0;color:#1a1a1a">${escapeHtml(job.title)}</div>
     <div style="font-size:11px;color:#888;margin-bottom:5px">${escapeHtml(job.addr)}</div>
     <div style="font-size:11px;font-weight:600;color:${SCHED_PIN}">${escapeHtml(job.type.toUpperCase())} · ${escapeHtml(dateStr)}</div>
+    <div class="job-card-estimate">${estimatedInstallHoursHTML(job)}</div>
     ${crewChips}
     ${truckChips}
     ${editAction}
@@ -1230,7 +1231,7 @@ function renderList() {
       <div class="job-info">
         <div class="job-num">${escapeHtml(job.num || '—')}</div>
         <div class="job-title">${escapeHtml(job.title)}</div>
-        <div class="job-meta"><span class="badge ${job.type}">${job.type}</span>${dateStr}</div>
+        <div class="job-meta"><span class="badge ${job.type}">${job.type}</span>${dateStr}${estimatedInstallHoursHTML(job)}</div>
         ${(job.crew||[]).length>0?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${(job.crew||[]).map(n=>`<span style="font-size:10px;font-weight:700;color:${CREW_COLORS[n]||'#555'};background:${CREW_COLORS[n]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[n]||'#999'}55">${n}</span>`).join('')}</div>`:''}
         ${truckAssignmentsHTML(job.crew || [], job.truck_assignments || {})}
         ${errText}
