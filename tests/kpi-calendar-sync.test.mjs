@@ -82,6 +82,16 @@ test('drive estimates add five percent, include the return trip, and use decimal
   assert.equal(context.adjustedDriveHours_(0), '');
 });
 
+test('recommended install days allow one long first day then use nine-hour days', () => {
+  const context = backendContext();
+  assert.equal(context.recommendedInstallDays_(0), null);
+  assert.equal(context.recommendedInstallDays_(8), 1);
+  assert.equal(context.recommendedInstallDays_(10), 1);
+  assert.equal(context.recommendedInstallDays_(10.01), 2);
+  assert.equal(context.recommendedInstallDays_(18), 2);
+  assert.equal(context.recommendedInstallDays_(18.01), 3);
+});
+
 test('calendar addresses are routed once per unique destination', () => {
   let requestCount = 0;
   const directions = {
