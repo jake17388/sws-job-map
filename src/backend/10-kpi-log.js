@@ -105,7 +105,7 @@ function estimateDriveHoursByAddress_(jobs) {
   const estimates = new Map();
   const cache = driveEstimateCache_();
   (jobs || []).forEach(job => {
-    const address = String(job && job.addr || '').replace(/\s+/g, ' ').trim();
+    const address = String(job && (job.addr || job.address) || '').replace(/\s+/g, ' ').trim();
     const normalizedAddress = normalizeDriveAddress_(address);
     if (!normalizedAddress || estimates.has(normalizedAddress)) return;
     const cacheKey = driveEstimateCacheKey_(normalizedAddress);

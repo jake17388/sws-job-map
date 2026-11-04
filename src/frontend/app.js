@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.04.2';
+const APP_VERSION = '2026.11.04.3';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -975,12 +975,22 @@ function scheduledCardHTML(job) {
   </div>`;
 }
 function estimatedInstallHoursHTML(job) {
-  const raw = job.estimated_install_hours;
-  const hours = raw === null || raw === '' ? NaN : Number(raw);
-  const known = Number.isFinite(hours);
-  const display = known ? String(Math.round(hours * 100) / 100) : '—';
-  const stateClass = !known ? ' unavailable' : hours === 0 ? ' zero' : '';
-  return `<span class="estimated-hours${stateClass}">Est. total job hrs: ${display}</span>`;
+  const rawJobHours = job.estimated_install_hours;
+  const rawDriveHours = job.estimated_drive_hours;
+  const rawDays = job.recommended_install_days;
+  const jobHours = rawJobHours === null || rawJobHours === '' ? NaN : Number(rawJobHours);
+  const driveHours = rawDriveHours === null || rawDriveHours === '' ? NaN : Number(rawDriveHours);
+  const days = rawDays === null || rawDays === '' ? NaN : Number(rawDays);
+  const jobKnown = Number.isFinite(jobHours);
+  const driveKnown = Number.isFinite(driveHours);
+  const daysKnown = Number.isInteger(days) && days > 0;
+  const formatHours = value => String(Math.round(value * 100) / 100);
+  const jobStateClass = !jobKnown ? ' unavailable' : jobHours === 0 ? ' zero' : '';
+  const driveStateClass = driveKnown ? ' drive' : ' drive unavailable';
+  const daysStateClass = daysKnown ? ' recommended' : ' recommended unavailable';
+  return `<span class="estimated-hours${jobStateClass}">Est. total job hrs: ${jobKnown ? formatHours(jobHours) : '—'}</span>
+    <span class="estimated-hours${driveStateClass}">Drive round trip: ${driveKnown ? `${formatHours(driveHours)} hrs` : '—'}</span>
+    <span class="estimated-hours${daysStateClass}">Recommended (1 installer): ${daysKnown ? `${days} ${days === 1 ? 'day' : 'days'}` : '—'}</span>`;
 }
 
 function unschedCardHTML(job) {

@@ -26,6 +26,7 @@ function getJobs(e) {
 
 function attachScheduledEstimatedHours_(jobs) {
   const totals = new Map();
+  let driveHoursByAddress = new Map();
   if (typeof squarecoilInstallHoursByJob_ === 'function') {
     try {
       const installJobNums = jobs
@@ -37,12 +38,28 @@ function attachScheduledEstimatedHours_(jobs) {
       console.warn('Could not load SquareCoil estimates for scheduled jobs:', error.message);
     }
   }
-  return jobs.map(job => ({
-    ...job,
-    estimated_install_hours: totals.has(String(job.num))
+  if (typeof estimateDriveHoursByAddress_ === 'function') {
+    try { driveHoursByAddress = estimateDriveHoursByAddress_(jobs); }
+    catch (error) { console.warn('Could not load drive estimates for scheduled jobs:', error.message); }
+  }
+  return jobs.map(job => {
+    const estimatedInstallHours = totals.has(String(job.num))
       ? totals.get(String(job.num))
-      : null,
-  }));
+      : null;
+    const addressKey = typeof normalizeDriveAddress_ === 'function'
+      ? normalizeDriveAddress_(job.addr)
+      : String(job.addr || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    return {
+      ...job,
+      estimated_install_hours: estimatedInstallHours,
+      estimated_drive_hours: driveHoursByAddress.has(addressKey)
+        ? driveHoursByAddress.get(addressKey)
+        : null,
+      recommended_install_days: typeof recommendedInstallDays_ === 'function'
+        ? recommendedInstallDays_(estimatedInstallHours)
+        : null,
+    };
+  });
 }
 
 function jobDateKeys_(job) {

@@ -270,8 +270,10 @@ header { background: linear-gradient(160deg, var(--navy-deep), var(--navy)); col
 .added-by { font-size: 9px; color: #ccc; }
 .estimated-hours { display: inline-block; font-size: 9px; font-weight: 700; color: #245b9f; background: #e7f0fb; padding: 1px 6px; border-radius: 3px; font-family: 'DM Mono', monospace; }
 .estimated-hours.zero { color: #725900; background: #fff2a8; }
+.estimated-hours.drive { color: #6b4a10; background: #fff0c9; }
+.estimated-hours.recommended { color: #1a7040; background: #d8f5e4; }
 .estimated-hours.unavailable { color: #888; background: #f1f1f1; }
-.job-card-estimate { margin-top: 6px; }
+.job-card-estimate { margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
 .btn-remove { background: none; border: none; color: #e0e0e0; font-size: 14px; cursor: pointer; padding: 2px 4px; margin-left: auto; flex-shrink: 0; line-height: 1; }
 .btn-remove:hover { color: #e74c3c; }
 .no-results { padding: 40px 14px; text-align: center; color: #ccc; font-size: 13px; }

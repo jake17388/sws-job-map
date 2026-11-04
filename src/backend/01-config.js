@@ -7,6 +7,14 @@ const INSTALL_TRUCK_DRIVE_FACTOR = 1.05;
 const INSTALL_ROUND_TRIP_FACTOR = 2;
 const ADMIN_USER_NAME = 'Jake Banks';
 
+function recommendedInstallDays_(estimatedJobHours) {
+  const hours = Number(estimatedJobHours);
+  if (!Number.isFinite(hours) || hours <= 0) return null;
+  // A one-day job may run long through 10 hours. Larger jobs are split so
+  // each planned day stays at roughly nine install hours or less.
+  return hours <= 10 ? 1 : Math.ceil(hours / 9);
+}
+
 const INSTALL_CAL_ID = 'summitwestsigns.com_5ehu6it6pfpcg2g9ifpcuv6gd8@group.calendar.google.com';
 const SERVICE_CAL_ID = 'summitwestsigns.com_plamgq5u79k125mvl50ie49fu0@group.calendar.google.com';
 const EXCAV_CAL_ID   = 'c_86ccbe589549562e734ff696a2cebbefc071fe607283d4a7cac31c0c36d1155c@group.calendar.google.com';
