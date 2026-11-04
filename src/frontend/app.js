@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.04.1';
+const APP_VERSION = '2026.11.04.2';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -306,6 +306,34 @@ function saveSquarecoilSettings() {
         : 'SquareCoil could not be connected.';
     })
     .finally(() => { button.disabled = false; });
+}
+function refreshSquarecoilEstimatedHours() {
+  if (!isAdmin()) return;
+  const status = document.getElementById('squarecoil-settings-status');
+  const button = document.getElementById('squarecoil-refresh-button');
+  button.disabled = true;
+  button.textContent = 'Refreshing estimated hours…';
+  status.textContent = 'Contacting SquareCoil. This may take a moment…';
+  scriptPost({ action: 'refreshJobMapEstimatedHours' })
+    .then(result => {
+      if (!result || result.error || result.success === false) {
+        throw new Error(result && result.error || 'Estimated hours could not be refreshed.');
+      }
+      status.textContent = `Resolved ${result.jobs_resolved || 0} of ${result.jobs_requested || 0} jobs. Reloading the map…`;
+      return Promise.all([loadJobs(), loadUnscheduled()]).then(() => result);
+    })
+    .then(result => {
+      status.textContent = `Estimated hours refreshed for ${result.jobs_resolved || 0} jobs.`;
+    })
+    .catch(error => {
+      status.textContent = error && error.message
+        ? error.message
+        : 'Estimated hours could not be refreshed.';
+    })
+    .finally(() => {
+      button.disabled = false;
+      button.textContent = 'Refresh estimated hours';
+    });
 }
 function checkSystemHealth(button) { button.textContent = 'System healthy'; setTimeout(() => { button.textContent = 'Check system health'; }, 2500); }
 function closeSettings() {

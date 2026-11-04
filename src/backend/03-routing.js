@@ -93,6 +93,10 @@ function doPost(e) {
     if (!isAdmin_(actor)) return json({ error: 'forbidden' });
     return json(refreshKpiJobTotals());
   }
+  if (data.action === 'refreshJobMapEstimatedHours') {
+    if (!isAdmin_(actor)) return json({ error: 'forbidden' });
+    return json(refreshJobMapEstimatedHours_());
+  }
   if (data.action === 'saveSquarecoilEstimateCredentials') {
     if (!isAdmin_(actor)) return json({ error: 'forbidden' });
     return json(saveSquarecoilEstimateCredentials_(data.username, data.password));

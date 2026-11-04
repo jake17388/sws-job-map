@@ -13,21 +13,41 @@ function setupDailyTrigger() {
   refreshCurrentJobs();
 }
 
-// Keep the Install Log aligned with the next 60 days of the install calendar.
-function refreshInstallKpiFromCalendar_() {
+function currentJobEstimateContext_() {
   const start = new Date();
   const end = new Date(start);
   end.setDate(end.getDate() + 60);
   const installJobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', start, end);
+  const unscheduledJobs = typeof getUnscheduledJobs_ === 'function' ? getUnscheduledJobs_() : [];
+  const jobNums = Array.from(new Set(installJobs.map(job => job.num)
+    .concat(unscheduledJobs.map(job => job.job_num))
+    .map(value => String(value || '').trim())
+    .filter(value => /^\d{5,6}$/.test(value))));
+  return { installJobs, jobNums };
+}
+
+function refreshJobMapEstimatedHours_() {
+  if (!isSquarecoilEstimateConfigured_()) {
+    return { success: false, error: 'Squarecoil credentials are not configured' };
+  }
+  const current = currentJobEstimateContext_();
+  const totals = squarecoilInstallHoursByJob_(current.jobNums, true);
+  return {
+    success: true,
+    jobs_requested: current.jobNums.length,
+    jobs_resolved: totals.size,
+  };
+}
+
+// Keep the Install Log aligned with the next 60 days of the install calendar.
+function refreshInstallKpiFromCalendar_() {
+  const current = currentJobEstimateContext_();
   try {
-    const unscheduledJobs = typeof getUnscheduledJobs_ === 'function' ? getUnscheduledJobs_() : [];
-    const estimateJobNums = installJobs.map(job => job.num)
-      .concat(unscheduledJobs.map(job => job.job_num));
-    squarecoilInstallHoursByJob_(estimateJobNums, false);
+    squarecoilInstallHoursByJob_(current.jobNums, false);
   } catch (error) {
     Logger.log('Squarecoil estimate refresh failed during KPI sync: ' + error.message);
   }
-  return syncInstallJobsToKpi_(installJobs);
+  return syncInstallJobsToKpi_(current.installJobs);
 }
 
 // Run once from the Apps Script editor to install the hourly KPI refresh.
