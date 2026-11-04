@@ -363,6 +363,34 @@ test('an hourly trigger keeps the KPI log current with the install calendar', ()
   assert.equal(result.created, 1);
 });
 
+test('manual estimate refresh force-loads current scheduled and unscheduled job totals', () => {
+  const estimateRefreshes = [];
+  const context = vm.createContext({
+    Date,
+    INSTALL_CAL_ID: 'install-calendar',
+    isSquarecoilEstimateConfigured_: () => true,
+    fetchCalendarEvents: () => [job(), job({ num: '123456' })],
+    getUnscheduledJobs_: () => [{ job_num: '654321' }, { job_num: 'bad' }],
+    squarecoilInstallHoursByJob_(jobNums, forceRefresh) {
+      estimateRefreshes.push({ jobNums: [...jobNums], forceRefresh });
+      return new Map([['123456', 42], ['654321', 18]]);
+    },
+  });
+  vm.runInContext(triggerSource, context);
+
+  const result = context.refreshJobMapEstimatedHours_();
+
+  assert.deepEqual(estimateRefreshes, [{
+    jobNums: ['123456', '654321'],
+    forceRefresh: true,
+  }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+    success: true,
+    jobs_requested: 2,
+    jobs_resolved: 2,
+  });
+});
+
 test('scheduled jobs sync to the Sheet without KPI entry controls', () => {
   assert.doesNotMatch(frontendSource, /action:\s*'syncInstallKpi'/);
   assert.doesNotMatch(frontendHtml, /id="kpi-entry-panel"/);

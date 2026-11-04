@@ -68,6 +68,7 @@ test('rejected Squarecoil credentials are not stored or echoed', () => {
 
 test('Squarecoil status and credential updates are admin-only routes', () => {
   const calls = [];
+  let refreshCalls = 0;
   const context = vm.createContext({
     JSON,
     UNAUTHORIZED: { error: 'unauthorized' },
@@ -80,6 +81,10 @@ test('Squarecoil status and credential updates are admin-only routes', () => {
     saveSquarecoilEstimateCredentials_: (username, password) => {
       calls.push([username, password]);
       return { success: true, configured: true };
+    },
+    refreshJobMapEstimatedHours_: () => {
+      refreshCalls += 1;
+      return { success: true, jobs_requested: 2, jobs_resolved: 2 };
     },
   });
   vm.runInContext(routingSource, context);
@@ -111,6 +116,21 @@ test('Squarecoil status and credential updates are admin-only routes', () => {
     { success: true, configured: true },
   );
   assert.deepEqual(calls, [['install.admin', 'secret-value']]);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(context.doPost({ postData: { contents: JSON.stringify({
+      action: 'refreshJobMapEstimatedHours',
+      token: 'viewer-token',
+    }) } }))),
+    { error: 'forbidden' },
+  );
+  assert.deepEqual(
+    context.doPost({ postData: { contents: JSON.stringify({
+      action: 'refreshJobMapEstimatedHours',
+      token: 'admin-token',
+    }) } }),
+    { success: true, jobs_requested: 2, jobs_resolved: 2 },
+  );
+  assert.equal(refreshCalls, 1);
 });
 
 test('settings provide an admin-only password form without prefilled secrets', () => {
@@ -118,8 +138,12 @@ test('settings provide an admin-only password form without prefilled secrets', (
   assert.match(htmlSource, /id="squarecoil-username"[^>]+autocomplete="username"/);
   assert.match(htmlSource, /id="squarecoil-password"[^>]+type="password"[^>]+autocomplete="current-password"/);
   assert.match(htmlSource, /onclick="saveSquarecoilSettings\(\)"/);
+  assert.match(htmlSource, /id="squarecoil-refresh-button"[^>]+onclick="refreshSquarecoilEstimatedHours\(\)"/);
   assert.match(frontendSource, /squarecoil-settings-card[\s\S]{0,300}isAdmin\(\)/);
   assert.match(frontendSource, /action:\s*'saveSquarecoilEstimateCredentials'/);
+  assert.match(frontendSource, /function refreshSquarecoilEstimatedHours\(\)/);
+  assert.match(frontendSource, /action:\s*'refreshJobMapEstimatedHours'/);
+  assert.match(frontendSource, /Promise\.all\(\[loadJobs\(\), loadUnscheduled\(\)\]\)/);
   assert.match(frontendSource, /squarecoil-password'\)\.value\s*=\s*''/);
   assert.doesNotMatch(frontendSource, /localStorage[^\n]+squarecoil/i);
 });
