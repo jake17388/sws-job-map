@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 const calendarSource = readFileSync(new URL('../src/backend/04-calendar-jobs.js', import.meta.url), 'utf8');
 const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
 
-function scheduledContext({ estimateTotals, estimateError } = {}) {
+function scheduledContext({ estimateTotals, estimateError, includeNonInstall = false } = {}) {
   const calls = [];
   const event = {
     getTitle: () => '(Johnny) 260242 Seton Catholic Gym',
@@ -18,7 +18,11 @@ function scheduledContext({ estimateTotals, estimateError } = {}) {
   };
   const calendars = new Map([
     ['install-calendar', { getEvents: () => [event] }],
-    ['service-calendar', { getEvents: () => [] }],
+    ['service-calendar', { getEvents: () => includeNonInstall ? [{
+      ...event,
+      getTitle: () => '261999 Service Call',
+      getId: () => 'event-2',
+    }] : [] }],
     ['excavation-calendar', { getEvents: () => [] }],
   ]);
   const context = vm.createContext({
@@ -37,8 +41,8 @@ function scheduledContext({ estimateTotals, estimateError } = {}) {
     ].join('-'),
     normalizeCrew: values => values,
     normalizeStoredTruckAssignments_: () => ({}),
-    squarecoilInstallHoursByJob_: (jobNums, forceRefresh) => {
-      calls.push({ jobNums: [...jobNums], forceRefresh });
+    squarecoilInstallHoursByJob_: (jobNums, forceRefresh, cacheOnly) => {
+      calls.push({ jobNums: [...jobNums], forceRefresh, cacheOnly });
       if (estimateError) throw estimateError;
       return estimateTotals || new Map();
     },
@@ -47,13 +51,17 @@ function scheduledContext({ estimateTotals, estimateError } = {}) {
   return { context, calls };
 }
 
-test('scheduled jobs receive cached SquareCoil install totals in one batch', () => {
-  const backend = scheduledContext({ estimateTotals: new Map([['260242', 102]]) });
+test('scheduled install jobs receive cached SquareCoil totals without looking up other job types', () => {
+  const backend = scheduledContext({
+    estimateTotals: new Map([['260242', 102]]),
+    includeNonInstall: true,
+  });
 
   const result = backend.context.getJobs({ parameter: { from: '2026-11-03', to: '2026-11-03' } });
 
-  assert.deepEqual(backend.calls, [{ jobNums: ['260242'], forceRefresh: false }]);
+  assert.deepEqual(backend.calls, [{ jobNums: ['260242'], forceRefresh: false, cacheOnly: true }]);
   assert.equal(result.jobs[0].estimated_install_hours, 102);
+  assert.equal(result.jobs[1].estimated_install_hours, null);
 });
 
 test('SquareCoil failures leave scheduled jobs available with an unknown estimate', () => {

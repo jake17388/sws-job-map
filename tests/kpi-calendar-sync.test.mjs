@@ -305,6 +305,7 @@ test('an hourly trigger keeps the KPI log current with the install calendar', ()
   const deleted = [];
   const created = [];
   const synced = [];
+  const estimateRefreshes = [];
   const triggers = [
     { getHandlerFunction: () => 'refreshInstallKpiFromCalendar_' },
     { getHandlerFunction: () => 'refreshCurrentJobs' },
@@ -330,6 +331,13 @@ test('an hourly trigger keeps the KPI log current with the install calendar', ()
       assert.equal(type, 'install');
       return [job()];
     },
+    getUnscheduledJobs_() {
+      return [{ job_num: '654321' }];
+    },
+    squarecoilInstallHoursByJob_(jobNums, forceRefresh) {
+      estimateRefreshes.push({ jobNums: [...jobNums], forceRefresh });
+      return new Map();
+    },
     syncInstallJobsToKpi_(jobs) {
       synced.push(jobs);
       return { success: true, created: jobs.length };
@@ -348,11 +356,15 @@ test('an hourly trigger keeps the KPI log current with the install calendar', ()
   }]);
   assert.equal(synced.length, 1);
   assert.equal(synced[0].length, 1);
+  assert.deepEqual(estimateRefreshes, [{
+    jobNums: ['123456', '654321'],
+    forceRefresh: false,
+  }]);
   assert.equal(result.created, 1);
 });
 
 test('scheduled jobs sync to the Sheet without KPI entry controls', () => {
-  assert.match(frontendSource, /action:\s*'syncInstallKpi'/);
+  assert.doesNotMatch(frontendSource, /action:\s*'syncInstallKpi'/);
   assert.doesNotMatch(frontendHtml, /id="kpi-entry-panel"/);
   assert.doesNotMatch(frontendSource, /function openKpiEntry\(/);
   assert.doesNotMatch(frontendSource, /action:\s*'getKpiEntry'/);
