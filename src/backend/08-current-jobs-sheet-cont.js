@@ -19,6 +19,14 @@ function refreshInstallKpiFromCalendar_() {
   const end = new Date(start);
   end.setDate(end.getDate() + 60);
   const installJobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', start, end);
+  try {
+    const unscheduledJobs = typeof getUnscheduledJobs_ === 'function' ? getUnscheduledJobs_() : [];
+    const estimateJobNums = installJobs.map(job => job.num)
+      .concat(unscheduledJobs.map(job => job.job_num));
+    squarecoilInstallHoursByJob_(estimateJobNums, false);
+  } catch (error) {
+    Logger.log('Squarecoil estimate refresh failed during KPI sync: ' + error.message);
+  }
   return syncInstallJobsToKpi_(installJobs);
 }
 

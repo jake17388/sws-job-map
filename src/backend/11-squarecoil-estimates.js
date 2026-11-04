@@ -5,6 +5,7 @@
 const SQUARECOIL_ESTIMATE_BASE_URL = 'https://summitwestsigns.squarecoil.net';
 const SQUARECOIL_ESTIMATE_BATCH_SIZE = 15;
 const SQUARECOIL_ESTIMATE_CACHE_SECONDS = 21600;
+const SQUARECOIL_ESTIMATE_STORED_PREFIX = 'SQUARECOIL_INSTALL_HOURS_V1_';
 
 function squarecoilEstimateCredentials_() {
   const properties = PropertiesService.getScriptProperties();
@@ -233,7 +234,45 @@ function squarecoilEstimateCacheKey_(jobNum) {
   return `squarecoil_install_hours_v1_${jobNum}`;
 }
 
-function squarecoilInstallHoursByJob_(jobNums, forceRefresh) {
+function squarecoilEstimateStoredKey_(jobNum) {
+  return `${SQUARECOIL_ESTIMATE_STORED_PREFIX}${jobNum}`;
+}
+
+function squarecoilEstimateReadStored_(jobNum) {
+  if (typeof PropertiesService === 'undefined') return null;
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const raw = properties.getProperty(squarecoilEstimateStoredKey_(jobNum));
+    if (!raw) return null;
+    const record = JSON.parse(raw);
+    const hours = Number(record && record.hours);
+    if (!Number.isFinite(hours)) return null;
+    return { hours, updatedAt: String(record.updatedAt || '') };
+  } catch (error) {
+    return null;
+  }
+}
+
+function squarecoilEstimateWriteStored_(jobNum, hours) {
+  if (typeof PropertiesService === 'undefined') return;
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    properties.setProperty(squarecoilEstimateStoredKey_(jobNum), JSON.stringify({
+      hours,
+      updatedAt: new Date().toISOString(),
+    }));
+  } catch (error) {
+    // CacheService still keeps the live result available when persistence fails.
+  }
+}
+
+function squarecoilEstimateStoredIsFresh_(record) {
+  const updatedAt = Date.parse(record && record.updatedAt || '');
+  return Number.isFinite(updatedAt)
+    && Date.now() - updatedAt < SQUARECOIL_ESTIMATE_CACHE_SECONDS * 1000;
+}
+
+function squarecoilInstallHoursByJob_(jobNums, forceRefresh, cacheOnly) {
   const unique = Array.from(new Set((jobNums || [])
     .map(value => String(value || '').trim())
     .filter(value => /^\d{5,6}$/.test(value))));
@@ -246,10 +285,26 @@ function squarecoilInstallHoursByJob_(jobNums, forceRefresh) {
       try { cached = cache.get(squarecoilEstimateCacheKey_(jobNum)); }
       catch (error) { cached = null; }
     }
-    if (cached != null && cached !== '' && Number.isFinite(Number(cached))) totals.set(jobNum, Number(cached));
-    else missing.push(jobNum);
+    if (!forceRefresh && cached != null && cached !== '' && Number.isFinite(Number(cached))) {
+      totals.set(jobNum, Number(cached));
+      return;
+    }
+    const stored = squarecoilEstimateReadStored_(jobNum);
+    if (!forceRefresh && stored && (cacheOnly || squarecoilEstimateStoredIsFresh_(stored))) {
+      totals.set(jobNum, stored.hours);
+      if (cache) {
+        try { cache.put(squarecoilEstimateCacheKey_(jobNum), String(stored.hours), SQUARECOIL_ESTIMATE_CACHE_SECONDS); }
+        catch (error) { /* the durable value remains usable */ }
+      }
+      return;
+    }
+    if (cacheOnly) {
+      if (stored) totals.set(jobNum, stored.hours);
+      return;
+    }
+    missing.push(jobNum);
   });
-  if (!missing.length) return totals;
+  if (cacheOnly || !missing.length) return totals;
 
   const credentials = squarecoilEstimateCredentials_();
   if (!credentials.username || !credentials.password) return totals;
@@ -290,6 +345,7 @@ function squarecoilInstallHoursByJob_(jobNums, forceRefresh) {
       try { cache.put(squarecoilEstimateCacheKey_(jobNum), String(total), SQUARECOIL_ESTIMATE_CACHE_SECONDS); }
       catch (error) { /* the live result remains usable */ }
     }
+    squarecoilEstimateWriteStored_(jobNum, total);
   });
   return totals;
 }

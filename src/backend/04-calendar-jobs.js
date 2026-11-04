@@ -28,7 +28,10 @@ function attachScheduledEstimatedHours_(jobs) {
   const totals = new Map();
   if (typeof squarecoilInstallHoursByJob_ === 'function') {
     try {
-      const resolved = squarecoilInstallHoursByJob_(jobs.map(job => job.num), false);
+      const installJobNums = jobs
+        .filter(job => String(job.type || '').toLowerCase() === 'install')
+        .map(job => job.num);
+      const resolved = squarecoilInstallHoursByJob_(installJobNums, false, true);
       resolved.forEach((hours, jobNum) => totals.set(String(jobNum), hours));
     } catch (error) {
       console.warn('Could not load SquareCoil estimates for scheduled jobs:', error.message);
