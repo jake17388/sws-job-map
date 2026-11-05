@@ -160,7 +160,7 @@ test('drive estimate cache keys include the entire normalized address', () => {
   assert.match(context.driveEstimateCacheKey_('mesa'), /^install_drive_v2:/);
 });
 
-test('new KPI rows receive the calculated drive estimate in column H', () => {
+test('new KPI rows receive the calculated drive estimate in column I', () => {
   const context = backendContext();
   const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
   const seeds = context.buildKpiSeedRows_([
@@ -227,7 +227,7 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
   ], [existing], estimates, new Map([['123456', 42]]));
 
   assert.equal(plan.rowsToAppend.length, 1);
-  assert.equal(plan.rowsToAppend[0][1], 'Eli');
+  assert.equal(plan.rowsToAppend[0][2], 'Eli');
   assert.equal(plan.rowsToUpdate.length, 1);
   assert.equal(plan.rowsToDriveUpdate.length, 0);
   assert.deepEqual(Array.from(plan.rowsToJobHoursUpdate, update => ({ index: update.index, value: update.value })), [

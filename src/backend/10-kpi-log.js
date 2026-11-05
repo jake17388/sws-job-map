@@ -1,10 +1,10 @@
 // ── Install KPI log ──────────────────────────────────────────────────────────
 const KPI_HEADER_ROW = 3;
 const KPI_FIRST_DATA_ROW = 4;
-const KPI_COLUMN_COUNT = 27;
-const KPI_TOTAL_JOB_HOURS_COLUMN = 7;
-const KPI_DRIVE_HOURS_COLUMN = 8;
-const KPI_KEY_COLUMN = 27;
+const KPI_COLUMN_COUNT = 28;
+const KPI_TOTAL_JOB_HOURS_COLUMN = 8;
+const KPI_DRIVE_HOURS_COLUMN = 9;
+const KPI_KEY_COLUMN = 28;
 const KPI_KEY_HEADER = 'Calendar KPI Key';
 
 function getKpiSheet_() {
@@ -22,6 +22,10 @@ function ensureKpiKeyColumn_(sheet) {
 
 function kpiKey_(eventId, workDate, crewMember) {
   return `${String(eventId || '').trim()}|${String(workDate || '').trim()}|${String(crewMember || '').trim()}`;
+}
+
+function dayNameForDate_(date) {
+  return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
 }
 
 function vehicleNameForKpi_(vehicleId) {
@@ -159,11 +163,12 @@ function buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber) {
         // The Apps Script project uses Phoenix time while the KPI workbook uses
         // Los Angeles time. Midday keeps the calendar date stable in both zones.
         sheetDate.setHours(12, 0, 0, 0);
-        values[0] = sheetDate;
-        values[1] = crewMember;
-        values[2] = String(job.num || '');
-        values[3] = String(job.title || '');
-        values[4] = vehicleNameForKpi_((job.truck_assignments || {})[crewMember]);
+        values[0] = dayNameForDate_(sheetDate);
+        values[1] = sheetDate;
+        values[2] = crewMember;
+        values[3] = String(job.num || '');
+        values[4] = String(job.title || '');
+        values[5] = vehicleNameForKpi_((job.truck_assignments || {})[crewMember]);
         const jobNum = String(job.num || '');
         const totalJobHours = jobHoursByNumber && typeof jobHoursByNumber.has === 'function'
           && jobHoursByNumber.has(jobNum)
@@ -174,7 +179,7 @@ function buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber) {
           ? driveHoursByAddress.get(normalizeDriveAddress_(job.addr))
           : '';
         values[KPI_DRIVE_HOURS_COLUMN - 1] = driveEstimate == null ? '' : driveEstimate;
-        values[10] = false;
+        values[11] = false;
         values[KPI_KEY_COLUMN - 1] = key;
         seeds.push({ key, values });
       });
@@ -200,7 +205,7 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber)
       rowsByKey.set(seed.key, { index: -1, row: seed.values });
       return;
     }
-    const scheduleValues = seed.values.slice(0, 5);
+    const scheduleValues = seed.values.slice(0, 6);
     const changed = scheduleValues.some((value, column) => {
       const current = existing.row[column];
       if (value instanceof Date) return !(current instanceof Date) || current.getTime() !== value.getTime();
@@ -226,7 +231,7 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber)
 function planKpiJobHoursBackfill_(existingRows, jobHoursByNumber) {
   let updated = 0;
   const values = (existingRows || []).map(row => {
-    const jobNum = String((row || [])[2] || '').trim();
+    const jobNum = String((row || [])[3] || '').trim();
     const current = (row || [])[KPI_TOTAL_JOB_HOURS_COLUMN - 1];
     if (!jobHoursByNumber || typeof jobHoursByNumber.has !== 'function' || !jobHoursByNumber.has(jobNum)) {
       return [current == null ? '' : current];
@@ -259,7 +264,7 @@ function syncInstallJobsToKpi_(jobs) {
       : [];
     const plan = planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber);
     plan.rowsToUpdate.forEach(update => {
-      sheet.getRange(KPI_FIRST_DATA_ROW + update.index, 1, 1, 5).setValues([update.values]);
+      sheet.getRange(KPI_FIRST_DATA_ROW + update.index, 1, 1, 6).setValues([update.values]);
     });
     plan.rowsToJobHoursUpdate.forEach(update => {
       sheet.getRange(KPI_FIRST_DATA_ROW + update.index, KPI_TOTAL_JOB_HOURS_COLUMN).setValue(update.value);
@@ -298,7 +303,7 @@ function refreshKpiJobTotals() {
       .getRange(KPI_FIRST_DATA_ROW, 1, lastRow - KPI_FIRST_DATA_ROW + 1, KPI_COLUMN_COUNT)
       .getValues();
     const jobNums = Array.from(new Set(existingRows
-      .map(row => String(row[2] || '').trim())
+      .map(row => String(row[3] || '').trim())
       .filter(jobNum => /^\d{5,6}$/.test(jobNum))));
     const jobHoursByNumber = squarecoilInstallHoursByJob_(jobNums, true);
     const plan = planKpiJobHoursBackfill_(existingRows, jobHoursByNumber);
