@@ -204,6 +204,40 @@ test('the split Install Log starts with its assignment section and row-three hea
   assert.match(kpiSource, /const KPI_FIRST_DATA_ROW = 4;/);
 });
 
+test('the KPI sync migrates the live sheet to a Day column exactly once', () => {
+  const context = backendContext();
+  let header = 'Date';
+  let insertedAt = null;
+  let dayValues = null;
+  const dates = [new Date(2026, 10, 2, 12), '', new Date(2026, 10, 8, 12)];
+  const sheet = {
+    getLastRow: () => 6,
+    insertColumnBefore(column) { insertedAt = column; },
+    getRange(row, column, rowCount, columnCount) {
+      if (row === 3 && column === 1) {
+        return {
+          getValue: () => header,
+          setValue(value) { header = value; },
+        };
+      }
+      if (row === 4 && column === 2 && rowCount === 3 && columnCount === 1) {
+        return { getValues: () => dates.map(value => [value]) };
+      }
+      if (row === 4 && column === 1 && rowCount === 3 && columnCount === 1) {
+        return { setValues(values) { dayValues = values; } };
+      }
+      throw new Error(`Unexpected range: ${row},${column},${rowCount},${columnCount}`);
+    },
+  };
+
+  context.ensureKpiDayColumn_(sheet);
+  context.ensureKpiDayColumn_(sheet);
+
+  assert.equal(insertedAt, 1);
+  assert.equal(header, 'Day');
+  assert.deepEqual(Array.from(dayValues, row => row[0]), ['Monday', '', 'Sunday']);
+});
+
 test('sync planning is idempotent and preserves entered KPI results', () => {
   const context = backendContext();
   const existing = Array(28).fill('');
