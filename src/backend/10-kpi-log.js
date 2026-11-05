@@ -92,7 +92,7 @@ function ensureKpiCrewSizeColumn_(sheet) {
 }
 
 function kpiCrewSizeFormulaR1C1_() {
-  return '=IF(OR(RC[-4]="",RC[-6]=""),"",COUNTIFS(C4,RC[-4],C2,RC[-6]))';
+  return '=IF(OR(RC[-3]="",RC[-6]=""),"",COUNTIFS(C5,RC[-3],C2,RC[-6]))';
 }
 
 function setKpiCrewSizeFormulas_(sheet, startRow, rowCount) {
