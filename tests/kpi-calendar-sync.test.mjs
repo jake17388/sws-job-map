@@ -326,6 +326,32 @@ test('the KPI sync inserts the Crew Size column exactly once', () => {
   assert.equal(header, 'Crew Size');
 });
 
+test('the KPI log adds one reusable header filter across all user-facing columns', () => {
+  const context = backendContext();
+  let filter = null;
+  let created = 0;
+  const sheet = {
+    getFilter: () => filter,
+    getMaxRows: () => 1018,
+    getRange(row, column, rowCount, columnCount) {
+      assert.equal(row, 3);
+      assert.equal(column, 1);
+      assert.equal(rowCount, 1016);
+      assert.equal(columnCount, 27);
+      return {
+        createFilter() {
+          created += 1;
+          filter = {};
+        },
+      };
+    },
+  };
+
+  assert.equal(context.ensureKpiFilter_(sheet), true);
+  assert.equal(context.ensureKpiFilter_(sheet), false);
+  assert.equal(created, 1);
+});
+
 test('sync planning is idempotent and preserves entered KPI results', () => {
   const context = backendContext();
   const existing = Array(30).fill('');
