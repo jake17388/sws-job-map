@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.04.3';
+const APP_VERSION = '2026.11.05.1';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -990,7 +990,7 @@ function estimatedInstallHoursHTML(job) {
   const daysStateClass = daysKnown ? ' recommended' : ' recommended unavailable';
   return `<span class="estimated-hours${jobStateClass}">Est. total job hrs: ${jobKnown ? formatHours(jobHours) : '—'}</span>
     <span class="estimated-hours${driveStateClass}">Drive round trip: ${driveKnown ? `${formatHours(driveHours)} hrs` : '—'}</span>
-    <span class="estimated-hours${daysStateClass}">Recommended (1 installer): ${daysKnown ? `${days} ${days === 1 ? 'day' : 'days'}` : '—'}</span>`;
+    <span class="estimated-hours${daysStateClass}">Recommended: ${daysKnown ? `${days} ${days === 1 ? 'day' : 'days'}` : '—'}</span>`;
 }
 
 function unschedCardHTML(job) {
