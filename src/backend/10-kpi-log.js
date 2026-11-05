@@ -11,6 +11,7 @@ function getKpiSheet_() {
   const spreadsheet = SpreadsheetApp.openById(KPI_SHEET_ID);
   const sheet = spreadsheet.getSheetByName(KPI_SHEET_NAME);
   if (!sheet) throw new Error(`KPI sheet not found: ${KPI_SHEET_NAME}`);
+  ensureKpiDayColumn_(sheet);
   return sheet;
 }
 
@@ -26,6 +27,23 @@ function kpiKey_(eventId, workDate, crewMember) {
 
 function dayNameForDate_(date) {
   return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
+}
+
+function ensureKpiDayColumn_(sheet) {
+  const header = String(sheet.getRange(KPI_HEADER_ROW, 1).getValue() || '').trim();
+  if (header === 'Day') return false;
+  if (header !== 'Date') throw new Error(`Unexpected first KPI column: ${header || '(blank)'}`);
+
+  sheet.insertColumnBefore(1);
+  sheet.getRange(KPI_HEADER_ROW, 1).setValue('Day');
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= KPI_FIRST_DATA_ROW) {
+    const rowCount = lastRow - KPI_FIRST_DATA_ROW + 1;
+    const dates = sheet.getRange(KPI_FIRST_DATA_ROW, 2, rowCount, 1).getValues();
+    const days = dates.map(row => [row[0] instanceof Date ? dayNameForDate_(row[0]) : '']);
+    sheet.getRange(KPI_FIRST_DATA_ROW, 1, rowCount, 1).setValues(days);
+  }
+  return true;
 }
 
 function vehicleNameForKpi_(vehicleId) {
