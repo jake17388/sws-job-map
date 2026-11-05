@@ -84,6 +84,7 @@ test('estimated project hours split multi-day job hours across assigned crew', (
   assert.equal(context.estimatedProjectHoursForDay_(60, 2.7, 1), 57.3);
   assert.equal(context.estimatedProjectHoursForDay_(102, 0.87, 4), 24.63);
   assert.equal(context.estimatedProjectHoursForDay_(102, 0.87, 4, 2), 12.32);
+  assert.equal(context.estimatedProjectHoursForDay_(36, 1.63, 1, 2), 17.19);
   assert.equal(context.estimatedProjectHoursForDay_(1, 2, 1), 0);
   assert.equal(context.estimatedProjectHoursForDay_('', 2, 1), '');
 });
