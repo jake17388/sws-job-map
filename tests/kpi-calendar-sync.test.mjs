@@ -417,9 +417,9 @@ test('sync planning writes a legitimate zero-hour Squarecoil total into a blank 
 test('job-hour backfill repeats each Squarecoil total on every matching KPI row', () => {
   const context = backendContext();
   const rows = [
-    ['', '', '', '260242', '', '', '', ''],
-    ['', '', '', '260242', '', '', '', ''],
-    ['', '', '', '999999', '', '', '', 7],
+    ['', '', '', '260242', '', '', '', '', ''],
+    ['', '', '', '260242', '', '', '', '', ''],
+    ['', '', '', '999999', '', '', '', '', 7],
   ];
   const plan = context.planKpiJobHoursBackfill_(rows, new Map([['260242', 102]]));
 

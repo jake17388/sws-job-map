@@ -1,13 +1,14 @@
 // ── Install KPI log ──────────────────────────────────────────────────────────
 const KPI_HEADER_ROW = 3;
 const KPI_FIRST_DATA_ROW = 4;
-const KPI_COLUMN_COUNT = 29;
-const KPI_TOTAL_JOB_HOURS_COLUMN = 8;
-const KPI_DRIVE_HOURS_COLUMN = 9;
-const KPI_ESTIMATED_PROJECT_HOURS_COLUMN = 10;
-const KPI_TOTAL_CLOCKED_HOURS_COLUMN = 11;
-const KPI_ACTUAL_PROJECT_HOURS_COLUMN = 12;
-const KPI_KEY_COLUMN = 29;
+const KPI_COLUMN_COUNT = 30;
+const KPI_CREW_SIZE_COLUMN = 8;
+const KPI_TOTAL_JOB_HOURS_COLUMN = 9;
+const KPI_DRIVE_HOURS_COLUMN = 10;
+const KPI_ESTIMATED_PROJECT_HOURS_COLUMN = 11;
+const KPI_TOTAL_CLOCKED_HOURS_COLUMN = 12;
+const KPI_ACTUAL_PROJECT_HOURS_COLUMN = 13;
+const KPI_KEY_COLUMN = 30;
 const KPI_KEY_HEADER = 'Calendar KPI Key';
 const KPI_HOUR_HEADERS = [
   'Total Estimated Job Hours',
@@ -22,6 +23,7 @@ function getKpiSheet_() {
   const sheet = spreadsheet.getSheetByName(KPI_SHEET_NAME);
   if (!sheet) throw new Error(`KPI sheet not found: ${KPI_SHEET_NAME}`);
   ensureKpiDayColumn_(sheet);
+  ensureKpiCrewSizeColumn_(sheet);
   ensureKpiHoursColumns_(sheet);
   return sheet;
 }
@@ -74,8 +76,33 @@ function ensureKpiHoursColumns_(sheet) {
   return !alreadyMigrated;
 }
 
+function ensureKpiCrewSizeColumn_(sheet) {
+  const header = String(sheet.getRange(KPI_HEADER_ROW, KPI_CREW_SIZE_COLUMN).getValue() || '').trim();
+  if (header === 'Crew Size') return false;
+  if (!/^(?:Est\. Total Job hrs|Total Estimated Job Hours)$/i.test(header)) {
+    throw new Error(`Unexpected KPI column H: ${header || '(blank)'}`);
+  }
+  sheet.insertColumnBefore(KPI_CREW_SIZE_COLUMN);
+  sheet.getRange(KPI_HEADER_ROW, KPI_CREW_SIZE_COLUMN).setValue('Crew Size');
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= KPI_FIRST_DATA_ROW) {
+    setKpiCrewSizeFormulas_(sheet, KPI_FIRST_DATA_ROW, lastRow - KPI_FIRST_DATA_ROW + 1);
+  }
+  return true;
+}
+
+function kpiCrewSizeFormulaR1C1_() {
+  return '=IF(OR(RC[-4]="",RC[-6]=""),"",COUNTIFS(C4,RC[-4],C2,RC[-6]))';
+}
+
+function setKpiCrewSizeFormulas_(sheet, startRow, rowCount) {
+  if (!rowCount) return;
+  sheet.getRange(startRow, KPI_CREW_SIZE_COLUMN, rowCount, 1)
+    .setFormulaR1C1(kpiCrewSizeFormulaR1C1_());
+}
+
 function kpiEstimatedProjectHoursFormulaR1C1_() {
-  return '=IF(OR(RC[-2]="",RC[-1]="",RC[-6]="",RC[-8]=""),"",ROUND(MAX(0,(RC[-2]/COUNTUNIQUEIFS(C2,C4,RC[-6]))-RC[-1])/COUNTIFS(C4,RC[-6],C2,RC[-8]),2))';
+  return '=IF(OR(RC[-2]="",RC[-1]="",RC[-7]="",RC[-9]="",RC[-3]=""),"",ROUND(MAX(0,(RC[-2]/COUNTUNIQUEIFS(C2,C4,RC[-7]))-RC[-1])/RC[-3],2))';
 }
 
 function setKpiEstimatedProjectHourFormulas_(sheet, startRow, rowCount) {
@@ -259,7 +286,7 @@ function buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber) {
           ? driveHoursByAddress.get(normalizeDriveAddress_(job.addr))
           : '';
         values[KPI_DRIVE_HOURS_COLUMN - 1] = driveEstimate == null ? '' : driveEstimate;
-        values[12] = false;
+        values[13] = false;
         values[KPI_KEY_COLUMN - 1] = key;
         seeds.push({ key, values });
       });
@@ -359,6 +386,7 @@ function syncInstallJobsToKpi_(jobs) {
         .setFormulaR1C1('=IF(RC[-1]="","",MAX(0,RC[-1]-RC[-3]))');
     }
     const formulaRowCount = lastRow - KPI_FIRST_DATA_ROW + 1 + plan.rowsToAppend.length;
+    setKpiCrewSizeFormulas_(sheet, KPI_FIRST_DATA_ROW, formulaRowCount);
     setKpiEstimatedProjectHourFormulas_(sheet, KPI_FIRST_DATA_ROW, formulaRowCount);
     return {
       success: true,
@@ -394,6 +422,7 @@ function refreshKpiJobTotals() {
     if (plan.values.length) {
       sheet.getRange(KPI_FIRST_DATA_ROW, KPI_TOTAL_JOB_HOURS_COLUMN, plan.values.length, 1)
         .setValues(plan.values);
+      setKpiCrewSizeFormulas_(sheet, KPI_FIRST_DATA_ROW, plan.values.length);
       setKpiEstimatedProjectHourFormulas_(sheet, KPI_FIRST_DATA_ROW, plan.values.length);
     }
     return {
