@@ -49,7 +49,11 @@ function job(overrides = {}) {
 
 test('multi-day install events expand to one unchecked row per date and crew member', () => {
   const context = backendContext();
-  const seeds = context.buildKpiSeedRows_([job()], new Map(), new Map([['123456', 42]]));
+  const seeds = context.buildKpiSeedRows_(
+    [job({ addr: '1150 N Dobson Rd, Chandler, AZ 85224' })],
+    new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]),
+    new Map([['123456', 42]]),
+  );
 
   assert.equal(seeds.length, 4);
   assert.deepEqual(Array.from(seeds, seed => seed.key), [
@@ -66,9 +70,21 @@ test('multi-day install events expand to one unchecked row per date and crew mem
   assert.equal(seeds[0].values[4], 'Monument Sign');
   assert.equal(seeds[0].values[5], '2022 Crane');
   assert.equal(seeds[0].values[7], 42);
+  assert.equal(seeds[0].values[8], 2.1);
+  assert.equal(seeds[0].values[9], 18.9);
   assert.equal(seeds[0].values[10], '');
-  assert.equal(seeds[0].values[11], false);
-  assert.equal(seeds[0].values[27], 'event-1|2026-11-02|Johnny');
+  assert.equal(seeds[0].values[11], '');
+  assert.equal(seeds[0].values[12], false);
+  assert.equal(seeds[0].values[28], 'event-1|2026-11-02|Johnny');
+});
+
+test('estimated project hours subtract drive after splitting multi-day job hours', () => {
+  const context = backendContext();
+
+  assert.equal(context.estimatedProjectHoursForDay_(60, 2.7, 1), 57.3);
+  assert.equal(context.estimatedProjectHoursForDay_(102, 0.87, 4), 24.63);
+  assert.equal(context.estimatedProjectHoursForDay_(1, 2, 1), 0);
+  assert.equal(context.estimatedProjectHoursForDay_('', 2, 1), '');
 });
 
 test('events without crew do not create KPI rows', () => {
@@ -240,7 +256,7 @@ test('the KPI sync migrates the live sheet to a Day column exactly once', () => 
 
 test('sync planning is idempotent and preserves entered KPI results', () => {
   const context = backendContext();
-  const existing = Array(28).fill('');
+  const existing = Array(29).fill('');
   existing[0] = 'Monday';
   existing[1] = new Date(2026, 10, 2);
   existing[2] = 'Johnny';
@@ -250,10 +266,11 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
   existing[7] = 90;
   existing[8] = 2.1;
   existing[9] = 4.5;
-  existing[10] = 3.75;
-  existing[11] = true;
-  existing[12] = 'Waiting on electrical';
-  existing[27] = 'event-1|2026-11-02|Johnny';
+  existing[10] = 8.25;
+  existing[11] = 3.75;
+  existing[12] = true;
+  existing[13] = 'Waiting on electrical';
+  existing[28] = 'event-1|2026-11-02|Johnny';
 
   const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
   const plan = context.planKpiSync_([
@@ -264,6 +281,9 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
   assert.equal(plan.rowsToAppend[0][2], 'Eli');
   assert.equal(plan.rowsToUpdate.length, 1);
   assert.equal(plan.rowsToDriveUpdate.length, 0);
+  assert.deepEqual(Array.from(plan.rowsToEstimatedWorkUpdate, update => ({ index: update.index, value: update.value })), [
+    { index: 0, value: 39.9 },
+  ]);
   assert.deepEqual(Array.from(plan.rowsToJobHoursUpdate, update => ({ index: update.index, value: update.value })), [
     { index: 0, value: 42 },
   ]);
@@ -271,24 +291,25 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
   assert.equal(plan.rowsToUpdate[0].values[1].getHours(), 12);
   assert.equal(plan.rowsToAppend[0][7], 42);
   assert.equal(plan.rowsToAppend[0][8], 2.1);
-  assert.equal(existing[9], 4.5);
-  assert.equal(existing[10], 3.75);
-  assert.equal(existing[11], true);
-  assert.equal(existing[12], 'Waiting on electrical');
+  assert.equal(plan.rowsToAppend[0][9], 39.9);
+  assert.equal(existing[10], 8.25);
+  assert.equal(existing[11], 3.75);
+  assert.equal(existing[12], true);
+  assert.equal(existing[13], 'Waiting on electrical');
 });
 
 test('sync planning fills a blank drive estimate without overwriting other KPI fields', () => {
   const context = backendContext();
-  const existing = Array(28).fill('');
+  const existing = Array(29).fill('');
   existing[0] = 'Monday';
   existing[1] = new Date(2026, 10, 2, 12);
   existing[2] = 'Johnny';
   existing[3] = '123456';
   existing[4] = 'Monument Sign';
   existing[5] = '2022 Crane';
-  existing[9] = 4.5;
-  existing[11] = false;
-  existing[27] = 'event-1|2026-11-02|Johnny';
+  existing[10] = 4.5;
+  existing[12] = false;
+  existing[28] = 'event-1|2026-11-02|Johnny';
   const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
 
   const plan = context.planKpiSync_([
@@ -298,21 +319,21 @@ test('sync planning fills a blank drive estimate without overwriting other KPI f
   assert.deepEqual(Array.from(plan.rowsToDriveUpdate, update => ({ index: update.index, value: update.value })), [
     { index: 0, value: 2.1 },
   ]);
-  assert.equal(existing[9], 4.5);
-  assert.equal(existing[11], false);
+  assert.equal(existing[10], 4.5);
+  assert.equal(existing[12], false);
 });
 
 test('sync planning writes a legitimate zero-hour Squarecoil total into a blank cell', () => {
   const context = backendContext();
-  const existing = Array(28).fill('');
+  const existing = Array(29).fill('');
   existing[0] = 'Monday';
   existing[1] = new Date(2026, 10, 2, 12);
   existing[2] = 'Johnny';
   existing[3] = '123456';
   existing[4] = 'Monument Sign';
   existing[5] = '2022 Crane';
-  existing[11] = false;
-  existing[27] = 'event-1|2026-11-02|Johnny';
+  existing[12] = false;
+  existing[28] = 'event-1|2026-11-02|Johnny';
 
   const plan = context.planKpiSync_([
     job({ start: '2026-11-02', end: '2026-11-02', crew: ['Johnny'] }),
