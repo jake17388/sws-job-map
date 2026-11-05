@@ -254,6 +254,48 @@ test('the KPI sync migrates the live sheet to a Day column exactly once', () => 
   assert.deepEqual(Array.from(dayValues, row => row[0]), ['Monday', '', 'Sunday']);
 });
 
+test('the KPI sync inserts and names the clocked-hours column exactly once', () => {
+  const context = backendContext();
+  let headers = [
+    'Est. Total Job hrs',
+    'Est. drive (hr)',
+    'Est. work (hr)',
+    'Act. work (hr)',
+    'Work Completed on Schedule',
+  ];
+  let insertions = 0;
+  const sheet = {
+    getLastRow: () => 3,
+    insertColumnBefore(column) {
+      assert.equal(column, 11);
+      insertions += 1;
+      headers.splice(3, 0, '');
+    },
+    getRange(row, column, rowCount, columnCount) {
+      assert.equal(row, 3);
+      assert.equal(column, 8);
+      assert.equal(rowCount, 1);
+      assert.equal(columnCount, 5);
+      return {
+        getValues: () => [headers.slice(0, 5)],
+        setValues(values) { headers = Array.from(values[0]); },
+      };
+    },
+  };
+
+  context.ensureKpiHoursColumns_(sheet);
+  context.ensureKpiHoursColumns_(sheet);
+
+  assert.equal(insertions, 1);
+  assert.deepEqual(headers, [
+    'Total Estimated Job Hours',
+    'Round-Trip Drive Hours',
+    'Estimated Project Hours (Day)',
+    'Total Clocked Hours (Day)',
+    'Actual Project Work Hours',
+  ]);
+});
+
 test('sync planning is idempotent and preserves entered KPI results', () => {
   const context = backendContext();
   const existing = Array(29).fill('');
