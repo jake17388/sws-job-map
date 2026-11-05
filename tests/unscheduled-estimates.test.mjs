@@ -88,7 +88,8 @@ test('unscheduled list rows and map cards display estimated install hours', () =
   assert.match(frontendSource, /id="item-unsched-\$\{i\}"[\s\S]*estimatedInstallHoursHTML\(job/);
   assert.match(frontendSource, /Est\. total job hrs:/);
   assert.match(frontendSource, /Drive round trip:/);
-  assert.match(frontendSource, /Recommended \(1 installer\):/);
+  assert.match(frontendSource, /Recommended:/);
+  assert.doesNotMatch(frontendSource, /Recommended \(1 installer\):/);
   assert.match(frontendSource, /estimated_install_hours/);
 });
 

@@ -85,5 +85,6 @@ test('scheduled list rows and map cards display estimated install hours', () => 
   assert.match(frontendSource, /function scheduledCardHTML\(job\)[\s\S]*estimatedInstallHoursHTML\(job\)[\s\S]*function estimatedInstallHoursHTML/);
   assert.match(frontendSource, /id="item-sched-\$\{idx\}"[\s\S]*estimatedInstallHoursHTML\(job\)[\s\S]*list\.innerHTML/);
   assert.match(frontendSource, /Drive round trip:/);
-  assert.match(frontendSource, /Recommended \(1 installer\):/);
+  assert.match(frontendSource, /Recommended:/);
+  assert.doesNotMatch(frontendSource, /Recommended \(1 installer\):/);
 });
