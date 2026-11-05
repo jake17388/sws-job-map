@@ -84,7 +84,8 @@ function estimatedProjectHoursForDay_(totalJobHours, roundTripDriveHours, schedu
   const crewCount = assignedCrewCount == null ? 1 : Number(assignedCrewCount);
   if (!Number.isFinite(total) || !Number.isFinite(drive) || !Number.isFinite(days) || days <= 0
       || !Number.isFinite(crewCount) || crewCount <= 0) return '';
-  return Math.round((Math.max(0, (total / days) - drive) / crewCount) * 100) / 100;
+  const perCrewHours = Math.max(0, (total / days) - drive) / crewCount;
+  return Math.round((perCrewHours + 1e-9) * 100) / 100;
 }
 
 function kpiAssignmentStats_(rows) {
