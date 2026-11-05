@@ -8,6 +8,7 @@ const KPI_DRIVE_HOURS_COLUMN = 10;
 const KPI_ESTIMATED_PROJECT_HOURS_COLUMN = 11;
 const KPI_TOTAL_CLOCKED_HOURS_COLUMN = 12;
 const KPI_ACTUAL_PROJECT_HOURS_COLUMN = 13;
+const KPI_FILTER_COLUMN_COUNT = 27;
 const KPI_KEY_COLUMN = 30;
 const KPI_KEY_HEADER = 'Calendar KPI Key';
 const KPI_HOUR_HEADERS = [
@@ -25,7 +26,15 @@ function getKpiSheet_() {
   ensureKpiDayColumn_(sheet);
   ensureKpiCrewSizeColumn_(sheet);
   ensureKpiHoursColumns_(sheet);
+  ensureKpiFilter_(sheet);
   return sheet;
+}
+
+function ensureKpiFilter_(sheet) {
+  if (sheet.getFilter()) return false;
+  const rowCount = Math.max(1, sheet.getMaxRows() - KPI_HEADER_ROW + 1);
+  sheet.getRange(KPI_HEADER_ROW, 1, rowCount, KPI_FILTER_COLUMN_COUNT).createFilter();
+  return true;
 }
 
 function ensureKpiKeyColumn_(sheet) {
