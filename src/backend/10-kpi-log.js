@@ -74,35 +74,46 @@ function ensureKpiHoursColumns_(sheet) {
   return !alreadyMigrated;
 }
 
-function estimatedProjectHoursForDay_(totalJobHours, roundTripDriveHours, scheduledDays) {
+function estimatedProjectHoursForDay_(totalJobHours, roundTripDriveHours, scheduledDays, assignedCrewCount) {
   if (totalJobHours === '' || totalJobHours == null || roundTripDriveHours === '' || roundTripDriveHours == null) {
     return '';
   }
   const total = Number(totalJobHours);
   const drive = Number(roundTripDriveHours);
   const days = Number(scheduledDays);
-  if (!Number.isFinite(total) || !Number.isFinite(drive) || !Number.isFinite(days) || days <= 0) return '';
-  return Math.round(Math.max(0, (total / days) - drive) * 100) / 100;
+  const crewCount = assignedCrewCount == null ? 1 : Number(assignedCrewCount);
+  if (!Number.isFinite(total) || !Number.isFinite(drive) || !Number.isFinite(days) || days <= 0
+      || !Number.isFinite(crewCount) || crewCount <= 0) return '';
+  return Math.round((Math.max(0, (total / days) - drive) / crewCount) * 100) / 100;
 }
 
-function scheduledDayCountsByEvent_(rows) {
-  const datesByEvent = new Map();
+function kpiAssignmentStats_(rows) {
+  const datesByJob = new Map();
+  const crewByJobDate = new Map();
   (rows || []).forEach(row => {
+    const jobNum = String((row || [])[3] || '').trim();
+    const crewMember = String((row || [])[2] || '').trim();
     const key = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
-    const parts = key.split('|');
-    if (!parts[0] || !parts[1]) return;
-    if (!datesByEvent.has(parts[0])) datesByEvent.set(parts[0], new Set());
-    datesByEvent.get(parts[0]).add(parts[1]);
+    const workDate = key.split('|')[1];
+    if (!jobNum || !workDate) return;
+    if (!datesByJob.has(jobNum)) datesByJob.set(jobNum, new Set());
+    datesByJob.get(jobNum).add(workDate);
+    const jobDateKey = `${jobNum}|${workDate}`;
+    if (!crewByJobDate.has(jobDateKey)) crewByJobDate.set(jobDateKey, new Set());
+    if (crewMember) crewByJobDate.get(jobDateKey).add(crewMember);
   });
-  const counts = new Map();
-  datesByEvent.forEach((dates, eventId) => counts.set(eventId, dates.size));
-  return counts;
+  return { datesByJob, crewByJobDate };
 }
 
-function scheduledDayCountForKpiRow_(row, dayCountsByEvent) {
+function assignmentCountsForKpiRow_(row, stats) {
+  const jobNum = String((row || [])[3] || '').trim();
   const key = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
-  const eventId = key.split('|')[0];
-  return dayCountsByEvent && dayCountsByEvent.get(eventId) || 1;
+  const workDate = key.split('|')[1];
+  return {
+    scheduledDays: stats && stats.datesByJob.get(jobNum) && stats.datesByJob.get(jobNum).size || 1,
+    assignedCrewCount: stats && stats.crewByJobDate.get(`${jobNum}|${workDate}`)
+      && stats.crewByJobDate.get(`${jobNum}|${workDate}`).size || 1,
+  };
 }
 
 function backfillKpiHourColumns_(sheet) {
@@ -110,12 +121,16 @@ function backfillKpiHourColumns_(sheet) {
   if (lastRow < KPI_FIRST_DATA_ROW) return;
   const rowCount = lastRow - KPI_FIRST_DATA_ROW + 1;
   const rows = sheet.getRange(KPI_FIRST_DATA_ROW, 1, rowCount, KPI_COLUMN_COUNT).getValues();
-  const dayCounts = scheduledDayCountsByEvent_(rows);
-  const estimatedValues = rows.map(row => [estimatedProjectHoursForDay_(
-    row[KPI_TOTAL_JOB_HOURS_COLUMN - 1],
-    row[KPI_DRIVE_HOURS_COLUMN - 1],
-    scheduledDayCountForKpiRow_(row, dayCounts),
-  )]);
+  const stats = kpiAssignmentStats_(rows);
+  const estimatedValues = rows.map(row => {
+    const counts = assignmentCountsForKpiRow_(row, stats);
+    return [estimatedProjectHoursForDay_(
+      row[KPI_TOTAL_JOB_HOURS_COLUMN - 1],
+      row[KPI_DRIVE_HOURS_COLUMN - 1],
+      counts.scheduledDays,
+      counts.assignedCrewCount,
+    )];
+  });
   sheet.getRange(KPI_FIRST_DATA_ROW, KPI_ESTIMATED_PROJECT_HOURS_COLUMN, rowCount, 1)
     .setValues(estimatedValues);
 
@@ -258,6 +273,20 @@ function inclusiveDateStrings_(startValue, endValue) {
 
 function buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber) {
   const seeds = [];
+  const datesByJob = new Map();
+  const crewByJobDate = new Map();
+  (jobs || []).forEach(job => {
+    if (String(job.type || '').toLowerCase() !== 'install' || !job.event_id) return;
+    const jobNum = String(job.num || '');
+    const crew = normalizeUnscheduledCrew_(job.crew);
+    inclusiveDateStrings_(job.start, job.end).forEach(workDate => {
+      if (!datesByJob.has(jobNum)) datesByJob.set(jobNum, new Set());
+      datesByJob.get(jobNum).add(workDate);
+      const jobDateKey = `${jobNum}|${workDate}`;
+      if (!crewByJobDate.has(jobDateKey)) crewByJobDate.set(jobDateKey, new Set());
+      crew.forEach(crewMember => crewByJobDate.get(jobDateKey).add(crewMember));
+    });
+  });
   (jobs || []).forEach(job => {
     if (String(job.type || '').toLowerCase() !== 'install' || !job.event_id) return;
     const crew = normalizeUnscheduledCrew_(job.crew);
@@ -291,11 +320,18 @@ function buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber) {
         values[KPI_ESTIMATED_PROJECT_HOURS_COLUMN - 1] = estimatedProjectHoursForDay_(
           totalJobHours,
           driveEstimate,
-          workDates.length,
+          datesByJob.get(jobNum) && datesByJob.get(jobNum).size || workDates.length,
+          crewByJobDate.get(`${jobNum}|${workDate}`) && crewByJobDate.get(`${jobNum}|${workDate}`).size || crew.length,
         );
         values[12] = false;
         values[KPI_KEY_COLUMN - 1] = key;
-        seeds.push({ key, values, scheduledDays: workDates.length });
+        seeds.push({
+          key,
+          values,
+          scheduledDays: datesByJob.get(jobNum) && datesByJob.get(jobNum).size || workDates.length,
+          assignedCrewCount: crewByJobDate.get(`${jobNum}|${workDate}`)
+            && crewByJobDate.get(`${jobNum}|${workDate}`).size || crew.length,
+        });
       });
     });
   });
@@ -344,7 +380,12 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber)
     const effectiveDrive = currentDrive == null || String(currentDrive).trim() === ''
       ? estimatedDrive
       : currentDrive;
-    const estimatedWork = estimatedProjectHoursForDay_(effectiveTotal, effectiveDrive, seed.scheduledDays);
+    const estimatedWork = estimatedProjectHoursForDay_(
+      effectiveTotal,
+      effectiveDrive,
+      seed.scheduledDays,
+      seed.assignedCrewCount,
+    );
     if (estimatedWork !== ''
         && ((currentEstimatedWork == null || String(currentEstimatedWork).trim() === '')
           || Number(currentEstimatedWork) !== Number(estimatedWork))) {
@@ -362,7 +403,7 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber)
 
 function planKpiJobHoursBackfill_(existingRows, jobHoursByNumber) {
   let updated = 0;
-  const dayCounts = scheduledDayCountsByEvent_(existingRows);
+  const stats = kpiAssignmentStats_(existingRows);
   const values = (existingRows || []).map(row => {
     const jobNum = String((row || [])[3] || '').trim();
     const current = (row || [])[KPI_TOTAL_JOB_HOURS_COLUMN - 1];
@@ -373,11 +414,15 @@ function planKpiJobHoursBackfill_(existingRows, jobHoursByNumber) {
     if (Number(current) !== Number(total) || current === '') updated += 1;
     return [total];
   });
-  const estimatedWorkValues = (existingRows || []).map((row, index) => [estimatedProjectHoursForDay_(
-    values[index][0],
-    (row || [])[KPI_DRIVE_HOURS_COLUMN - 1],
-    scheduledDayCountForKpiRow_(row, dayCounts),
-  )]);
+  const estimatedWorkValues = (existingRows || []).map((row, index) => {
+    const counts = assignmentCountsForKpiRow_(row, stats);
+    return [estimatedProjectHoursForDay_(
+      values[index][0],
+      (row || [])[KPI_DRIVE_HOURS_COLUMN - 1],
+      counts.scheduledDays,
+      counts.assignedCrewCount,
+    )];
+  });
   return { values, estimatedWorkValues, updated };
 }
 
