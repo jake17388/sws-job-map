@@ -125,10 +125,15 @@ function backfillKpiHourColumns_(sheet) {
     ? actualRange.getFormulasR1C1()
     : actualValues.map(() => ['']);
   const formula = '=IF(RC[-1]="","",MAX(0,RC[-1]-RC[-3]))';
-  const defaults = actualValues.map((row, index) => [
-    actualFormulas[index][0] || (row[0] === '' || row[0] == null ? formula : row[0]),
-  ]);
-  actualRange.setValues(defaults);
+  actualRange.setFormulaR1C1(formula);
+  actualValues.forEach((row, index) => {
+    const existingFormula = actualFormulas[index][0];
+    const existingValue = row[0];
+    if (!existingFormula && (existingValue === '' || existingValue == null)) return;
+    const cell = sheet.getRange(KPI_FIRST_DATA_ROW + index, KPI_ACTUAL_PROJECT_HOURS_COLUMN);
+    if (existingFormula) cell.setFormulaR1C1(existingFormula);
+    else cell.setValue(existingValue);
+  });
 }
 
 function vehicleNameForKpi_(vehicleId) {
