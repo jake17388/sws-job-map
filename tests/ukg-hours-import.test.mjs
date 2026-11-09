@@ -60,30 +60,50 @@ test('clocked-hour planning repeats the daily total and preserves unrelated valu
   assert.equal(plan.matchedCrewDates, 1);
 });
 
-test('the newest CSV attachment is selected from matching UKG messages', () => {
-  const oldCsv = { getName: () => 'old.csv', getContentType: () => 'text/csv' };
-  const newCsv = { getName: () => 'Install Daily Hours Export.csv', getContentType: () => 'text/csv' };
-  const ignoredPdf = { getName: () => 'report.pdf', getContentType: () => 'application/pdf' };
+test('the newest CSV attachment is read through the Gmail read-only API', () => {
+  const requests = [];
+  const response = body => ({
+    getResponseCode: () => 200,
+    getContentText: () => JSON.stringify(body),
+  });
+  const csvBlob = { name: 'Install Daily Hours Export.csv' };
   const context = ukgContext({
-    GmailApp: {
-      search(query, start, count) {
-        assert.match(query, /Install Daily Hours Export/);
-        assert.equal(start, 0);
-        assert.equal(count, 10);
-        return [{
-          getMessages: () => [
-            {
-              getId: () => 'old-message',
-              getDate: () => new Date('2026-11-08T12:00:00Z'),
-              getAttachments: () => [oldCsv],
+    ScriptApp: { getOAuthToken: () => 'read-only-token' },
+    Utilities: {
+      base64DecodeWebSafe: value => [`decoded:${value}`],
+      newBlob(bytes, contentType, name) {
+        assert.deepEqual(bytes, ['decoded:Y3N2']);
+        assert.equal(contentType, 'text/csv');
+        assert.equal(name, 'Install Daily Hours Export.csv');
+        return csvBlob;
+      },
+    },
+    UrlFetchApp: {
+      fetch(url, options) {
+        requests.push({ url, options });
+        assert.equal(options.headers.Authorization, 'Bearer read-only-token');
+        if (url.includes('/messages?')) {
+          assert.match(decodeURIComponent(url), /Install Daily Hours Export/);
+          return response({ messages: [{ id: 'new-message' }, { id: 'old-message' }] });
+        }
+        if (url.endsWith('/messages/new-message?format=full')) {
+          return response({
+            payload: {
+              parts: [
+                { filename: 'report.pdf', mimeType: 'application/pdf', body: { attachmentId: 'pdf-a' } },
+                {
+                  filename: 'Install Daily Hours Export.csv',
+                  mimeType: 'text/csv',
+                  body: { attachmentId: 'csv-a' },
+                },
+              ],
             },
-            {
-              getId: () => 'new-message',
-              getDate: () => new Date('2026-11-09T12:00:00Z'),
-              getAttachments: () => [ignoredPdf, newCsv],
-            },
-          ],
-        }];
+          });
+        }
+        if (url.endsWith('/messages/new-message/attachments/csv-a')) {
+          return response({ data: 'Y3N2' });
+        }
+        throw new Error(`Unexpected URL: ${url}`);
       },
     },
   });
@@ -91,7 +111,9 @@ test('the newest CSV attachment is selected from matching UKG messages', () => {
   const found = context.newestUkgCsvAttachment_();
 
   assert.equal(found.messageId, 'new-message');
-  assert.equal(found.attachment, newCsv);
+  assert.equal(found.attachment, csvBlob);
+  assert.equal(requests.length, 3);
+  assert.doesNotMatch(ukgSource, /GmailApp/);
 });
 
 test('hourly KPI refresh imports UKG hours without blocking calendar sync failures', () => {
