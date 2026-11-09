@@ -117,6 +117,40 @@ test('scheduled jobs read truck assignments from a private Calendar tag', () => 
   });
 });
 
+test('calendar dates are formatted in the source calendar timezone', () => {
+  const formatCalls = [];
+  const event = {
+    getTitle: () => '(Jerry) 261572 Snowflake Junior High School - Service',
+    getLocation: () => '1380 Main St',
+    getStartTime: () => new Date('2026-11-06T07:00:00.000Z'),
+    getEndTime: () => new Date('2026-11-07T07:00:00.000Z'),
+    getId: () => 'event-jerry',
+    getTag: () => null,
+  };
+  const calendar = {
+    getTimeZone: () => 'America/Phoenix',
+    getEvents: () => [event],
+  };
+  const context = assignmentContext({
+    CalendarApp: { getCalendarById: () => calendar },
+    Utilities: {
+      formatDate(date, timeZone, pattern) {
+        formatCalls.push({ date: date.toISOString(), timeZone, pattern });
+        return date.toISOString().startsWith('2026-11-06') ? '2026-11-06' : '2026-11-07';
+      },
+    },
+  });
+
+  const jobs = context.fetchCalendarEvents('calendar-1', 'install', new Date(), new Date());
+
+  assert.equal(jobs[0].start, '2026-11-06');
+  assert.equal(jobs[0].end, '2026-11-06');
+  assert.deepEqual(formatCalls.map(call => [call.timeZone, call.pattern]), [
+    ['America/Phoenix', 'yyyy-MM-dd'],
+    ['America/Phoenix', 'yyyy-MM-dd'],
+  ]);
+});
+
 test('job loading fills existing daily truck assignments onto every same-day job', () => {
   function event(id, title, assignments = {}) {
     return {
