@@ -440,6 +440,42 @@ test('sync planning writes a legitimate zero-hour Squarecoil total into a blank 
   ]);
 });
 
+test('calendar reconciliation removes stale crew assignments in the requested window', () => {
+  const context = backendContext();
+  const existing = [
+    ['Friday', new Date(2026, 10, 6, 12), 'Jonathan', '261618', 'Discount Tire', '', '', '', '', '', '', 8.88],
+    ['Friday', new Date(2026, 10, 6, 12), 'Eli', '261618', 'Discount Tire', '', '', '', '', '', '', 10.25],
+    ['Monday', new Date(2026, 9, 26, 12), 'Jerry', 'old-job', 'Older job'],
+    ['Friday', new Date(2026, 10, 6, 12), 'Manual', '', 'Manual row'],
+  ].map(row => {
+    const values = Array(30).fill('');
+    row.forEach((value, index) => { values[index] = value; });
+    return values;
+  });
+  existing[0][29] = 'event-1|2026-11-06|Jonathan';
+  existing[1][29] = 'event-1|2026-11-06|Eli';
+  existing[2][29] = 'old-event|2026-10-26|Jerry';
+
+  const plan = context.planKpiSync_([
+    job({
+      start: '2026-11-06',
+      end: '2026-11-06',
+      crew: ['Randy', 'Eli'],
+      truck_assignments: {},
+    }),
+  ], existing, new Map(), new Map(), {
+    reconcileStart: new Date(2026, 10, 1),
+    reconcileEnd: new Date(2026, 10, 30, 23, 59, 59),
+  });
+
+  assert.deepEqual(Array.from(plan.rowIndexesToDelete), [0]);
+  assert.deepEqual(Array.from(plan.rowsToAppend, row => row[2]), ['Randy']);
+  assert.equal(plan.rowsToUpdate.length, 1);
+  assert.equal(plan.rowsToUpdate[0].index, 1);
+  assert.equal(existing[2][29], 'old-event|2026-10-26|Jerry');
+  assert.equal(existing[3][29], '');
+});
+
 test('job-hour backfill repeats each Squarecoil total on every matching KPI row', () => {
   const context = backendContext();
   const rows = [
@@ -475,6 +511,7 @@ test('an hourly trigger keeps the KPI log current with the install calendar', ()
   const ukgImports = [];
   const triggers = [
     { getHandlerFunction: () => 'refreshInstallKpiFromCalendar_' },
+    { getHandlerFunction: () => 'handleInstallCalendarChange_' },
     { getHandlerFunction: () => 'refreshCurrentJobs' },
   ];
   const context = vm.createContext({
@@ -490,6 +527,8 @@ test('an hourly trigger keeps the KPI log current with the install calendar', ()
         return {
           timeBased() { plan.timeBased = true; return this; },
           everyHours(hours) { plan.hours = hours; return this; },
+          forUserCalendar(calendarId) { plan.calendarId = calendarId; return this; },
+          onEventUpdated() { plan.onEventUpdated = true; return this; },
           create() { plan.created = true; return this; },
         };
       },
@@ -506,8 +545,8 @@ test('an hourly trigger keeps the KPI log current with the install calendar', ()
       estimateRefreshes.push({ jobNums: [...jobNums], forceRefresh });
       return new Map();
     },
-    syncInstallJobsToKpi_(jobs) {
-      synced.push(jobs);
+    syncInstallJobsToKpi_(jobs, options) {
+      synced.push({ jobs, options });
       return { success: true, created: jobs.length };
     },
     syncUkgDailyHoursFromEmail_() {
@@ -519,15 +558,27 @@ test('an hourly trigger keeps the KPI log current with the install calendar', ()
 
   const result = context.setupInstallKpiSyncTrigger();
 
-  assert.deepEqual(deleted, ['refreshInstallKpiFromCalendar_']);
-  assert.deepEqual(created, [{
-    handler: 'refreshInstallKpiFromCalendar_',
-    timeBased: true,
-    hours: 1,
-    created: true,
-  }]);
+  assert.deepEqual(deleted, ['refreshInstallKpiFromCalendar_', 'handleInstallCalendarChange_']);
+  assert.deepEqual(created, [
+    {
+      handler: 'refreshInstallKpiFromCalendar_',
+      timeBased: true,
+      hours: 1,
+      created: true,
+    },
+    {
+      handler: 'handleInstallCalendarChange_',
+      calendarId: 'install-calendar',
+      onEventUpdated: true,
+      created: true,
+    },
+  ]);
   assert.equal(synced.length, 1);
-  assert.equal(synced[0].length, 1);
+  assert.equal(synced[0].jobs.length, 1);
+  assert.equal(synced[0].options.reconcileStart.getFullYear(), 2026);
+  assert.equal(synced[0].options.reconcileStart.getMonth(), 10);
+  assert.equal(synced[0].options.reconcileStart.getDate(), 1);
+  assert.ok(synced[0].options.reconcileEnd > synced[0].options.reconcileStart);
   assert.deepEqual(estimateRefreshes, [{
     jobNums: ['123456', '654321'],
     forceRefresh: false,
