@@ -419,6 +419,32 @@ test('sync planning fills a blank drive estimate without overwriting other KPI f
   assert.equal(existing[13], false);
 });
 
+test('calendar reconciliation refreshes drive time when an event location changes', () => {
+  const context = backendContext();
+  const existing = Array(30).fill('');
+  existing[0] = 'Monday';
+  existing[1] = new Date(2026, 10, 2, 12);
+  existing[2] = 'Johnny';
+  existing[3] = '123456';
+  existing[4] = 'Monument Sign';
+  existing[9] = 2.1;
+  existing[13] = false;
+  existing[29] = 'event-1|2026-11-02|Johnny';
+
+  const plan = context.planKpiSync_([
+    job({
+      start: '2026-11-02',
+      end: '2026-11-02',
+      crew: ['Johnny'],
+      addr: 'New destination',
+    }),
+  ], [existing], new Map([['new destination', 3.4]]), new Map());
+
+  assert.deepEqual(Array.from(plan.rowsToDriveUpdate, update => ({ index: update.index, value: update.value })), [
+    { index: 0, value: 3.4 },
+  ]);
+});
+
 test('sync planning writes a legitimate zero-hour Squarecoil total into a blank cell', () => {
   const context = backendContext();
   const existing = Array(30).fill('');
