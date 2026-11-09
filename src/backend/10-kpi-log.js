@@ -304,17 +304,40 @@ function buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber) {
   return seeds;
 }
 
-function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber) {
+function kpiRowDate_(row) {
+  const value = (row || [])[1];
+  if (value instanceof Date && Number.isFinite(value.getTime())) return value;
+  const key = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
+  const parts = key.split('|');
+  if (parts.length < 3) return null;
+  const result = parseScheduleDate_(parts[parts.length - 2], 'KPI row');
+  return result.error ? null : result.date;
+}
+
+function kpiRowIsInReconcileWindow_(row, options) {
+  const start = options && options.reconcileStart;
+  const end = options && options.reconcileEnd;
+  if (!(start instanceof Date) || !(end instanceof Date)) return false;
+  const date = kpiRowDate_(row);
+  return !!date && date >= start && date <= end;
+}
+
+function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber, options) {
   const rowsByKey = new Map();
+  const duplicateRowIndexes = new Set();
   (existingRows || []).forEach((row, index) => {
     const key = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
-    if (key && !rowsByKey.has(key)) rowsByKey.set(key, { index, row });
+    if (!key) return;
+    if (rowsByKey.has(key)) duplicateRowIndexes.add(index);
+    else rowsByKey.set(key, { index, row });
   });
   const rowsToAppend = [];
   const rowsToUpdate = [];
   const rowsToJobHoursUpdate = [];
   const rowsToDriveUpdate = [];
-  buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber).forEach(seed => {
+  const seeds = buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber);
+  const desiredKeys = new Set(seeds.map(seed => seed.key));
+  seeds.forEach(seed => {
     const existing = rowsByKey.get(seed.key);
     if (!existing) {
       rowsToAppend.push(seed.values);
@@ -337,11 +360,25 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber)
     }
     const currentDrive = existing.row[KPI_DRIVE_HOURS_COLUMN - 1];
     const estimatedDrive = seed.values[KPI_DRIVE_HOURS_COLUMN - 1];
-    if ((currentDrive == null || String(currentDrive).trim() === '') && estimatedDrive !== '') {
+    if (estimatedDrive !== ''
+        && ((currentDrive == null || String(currentDrive).trim() === '')
+          || Number(currentDrive) !== Number(estimatedDrive))) {
       rowsToDriveUpdate.push({ index: existing.index, value: estimatedDrive });
     }
   });
-  return { rowsToAppend, rowsToUpdate, rowsToJobHoursUpdate, rowsToDriveUpdate };
+  const rowIndexesToDelete = [];
+  (existingRows || []).forEach((row, index) => {
+    const key = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
+    if (!key || !kpiRowIsInReconcileWindow_(row, options)) return;
+    if (duplicateRowIndexes.has(index) || !desiredKeys.has(key)) rowIndexesToDelete.push(index);
+  });
+  return {
+    rowsToAppend,
+    rowsToUpdate,
+    rowsToJobHoursUpdate,
+    rowsToDriveUpdate,
+    rowIndexesToDelete,
+  };
 }
 
 function planKpiJobHoursBackfill_(existingRows, jobHoursByNumber) {
@@ -359,7 +396,7 @@ function planKpiJobHoursBackfill_(existingRows, jobHoursByNumber) {
   return { values, updated };
 }
 
-function syncInstallJobsToKpi_(jobs) {
+function syncInstallJobsToKpi_(jobs, options) {
   const lock = typeof LockService !== 'undefined' ? LockService.getScriptLock() : null;
   if (lock) lock.waitLock(10000);
   try {
@@ -378,7 +415,7 @@ function syncInstallJobsToKpi_(jobs) {
     const existingRows = lastRow >= KPI_FIRST_DATA_ROW
       ? sheet.getRange(KPI_FIRST_DATA_ROW, 1, lastRow - KPI_FIRST_DATA_ROW + 1, KPI_COLUMN_COUNT).getValues()
       : [];
-    const plan = planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber);
+    const plan = planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber, options);
     plan.rowsToUpdate.forEach(update => {
       sheet.getRange(KPI_FIRST_DATA_ROW + update.index, 1, 1, 6).setValues([update.values]);
     });
@@ -388,18 +425,24 @@ function syncInstallJobsToKpi_(jobs) {
     plan.rowsToDriveUpdate.forEach(update => {
       sheet.getRange(KPI_FIRST_DATA_ROW + update.index, KPI_DRIVE_HOURS_COLUMN).setValue(update.value);
     });
+    plan.rowIndexesToDelete
+      .slice()
+      .sort((left, right) => right - left)
+      .forEach(index => sheet.deleteRow(KPI_FIRST_DATA_ROW + index));
     if (plan.rowsToAppend.length) {
-      sheet.getRange(lastRow + 1, 1, plan.rowsToAppend.length, KPI_COLUMN_COUNT)
+      const appendRow = Math.max(sheet.getLastRow(), KPI_HEADER_ROW) + 1;
+      sheet.getRange(appendRow, 1, plan.rowsToAppend.length, KPI_COLUMN_COUNT)
         .setValues(plan.rowsToAppend);
-      sheet.getRange(lastRow + 1, KPI_ACTUAL_PROJECT_HOURS_COLUMN, plan.rowsToAppend.length, 1)
+      sheet.getRange(appendRow, KPI_ACTUAL_PROJECT_HOURS_COLUMN, plan.rowsToAppend.length, 1)
         .setFormulaR1C1('=IF(RC[-1]="","",MAX(0,RC[-1]-RC[-3]))');
     }
-    const formulaRowCount = lastRow - KPI_FIRST_DATA_ROW + 1 + plan.rowsToAppend.length;
+    const formulaRowCount = Math.max(0, sheet.getLastRow() - KPI_FIRST_DATA_ROW + 1);
     setKpiCrewSizeFormulas_(sheet, KPI_FIRST_DATA_ROW, formulaRowCount);
     setKpiEstimatedProjectHourFormulas_(sheet, KPI_FIRST_DATA_ROW, formulaRowCount);
     return {
       success: true,
       created: plan.rowsToAppend.length,
+      removed: plan.rowIndexesToDelete.length,
       filled: plan.rowsToUpdate.length,
       estimated_job_hours_filled: plan.rowsToJobHoursUpdate.length,
       estimated_drive_filled: plan.rowsToDriveUpdate.length,
@@ -457,5 +500,8 @@ function syncInstallCalendarToKpi(data) {
   const end = new Date(toResult.date);
   end.setHours(23, 59, 59, 999);
   const jobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', fromResult.date, end);
-  return syncInstallJobsToKpi_(jobs);
+  return syncInstallJobsToKpi_(jobs, {
+    reconcileStart: fromResult.date,
+    reconcileEnd: end,
+  });
 }

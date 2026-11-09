@@ -529,7 +529,7 @@ test('the daily Current Jobs refresh also seeds KPI rows', () => {
   assert.match(currentJobsSource, /syncInstallJobsToKpi_\(installJobs\)/);
 });
 
-test('an hourly trigger keeps the KPI log current with the install calendar', () => {
+test('calendar changes sync immediately with an hourly fallback', () => {
   const deleted = [];
   const created = [];
   const synced = [];

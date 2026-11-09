@@ -1,4 +1,6 @@
 // ── Current Jobs sheet ────────────────────────────────────────────────────────
+const INSTALL_KPI_HISTORY_START = '2026-11-01';
+
 // Run once from the Apps Script editor to schedule daily auto-refresh at 6 am.
 function setupDailyTrigger() {
   ScriptApp.getProjectTriggers()
@@ -26,6 +28,21 @@ function currentJobEstimateContext_() {
   return { installJobs, jobNums };
 }
 
+function installKpiCalendarContext_() {
+  const [year, month, day] = INSTALL_KPI_HISTORY_START.split('-').map(Number);
+  const start = new Date(year, month - 1, day);
+  const end = new Date();
+  end.setDate(end.getDate() + 60);
+  end.setHours(23, 59, 59, 999);
+  const installJobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', start, end);
+  const unscheduledJobs = typeof getUnscheduledJobs_ === 'function' ? getUnscheduledJobs_() : [];
+  const jobNums = Array.from(new Set(installJobs.map(job => job.num)
+    .concat(unscheduledJobs.map(job => job.job_num))
+    .map(value => String(value || '').trim())
+    .filter(value => /^\d{5,6}$/.test(value))));
+  return { start, end, installJobs, jobNums };
+}
+
 function refreshJobMapEstimatedHours_() {
   if (!isSquarecoilEstimateConfigured_()) {
     return { success: false, error: 'Squarecoil credentials are not configured' };
@@ -39,15 +56,18 @@ function refreshJobMapEstimatedHours_() {
   };
 }
 
-// Keep the Install Log aligned with the next 60 days of the install calendar.
+// Reconcile the complete Install Log history and the next 60 calendar days.
 function refreshInstallKpiFromCalendar_() {
-  const current = currentJobEstimateContext_();
+  const current = installKpiCalendarContext_();
   try {
     squarecoilInstallHoursByJob_(current.jobNums, false);
   } catch (error) {
     Logger.log('Squarecoil estimate refresh failed during KPI sync: ' + error.message);
   }
-  const result = syncInstallJobsToKpi_(current.installJobs);
+  const result = syncInstallJobsToKpi_(current.installJobs, {
+    reconcileStart: current.start,
+    reconcileEnd: current.end,
+  });
   try {
     result.ukg_hours = syncUkgDailyHoursFromEmail_();
   } catch (error) {
@@ -57,14 +77,25 @@ function refreshInstallKpiFromCalendar_() {
   return result;
 }
 
-// Run once from the Apps Script editor to install the hourly KPI refresh.
+function handleInstallCalendarChange_() {
+  return refreshInstallKpiFromCalendar_();
+}
+
+// Run once from the Apps Script editor to install event-driven sync plus an hourly fallback.
 function setupInstallKpiSyncTrigger() {
   ScriptApp.getProjectTriggers()
-    .filter(trigger => trigger.getHandlerFunction() === 'refreshInstallKpiFromCalendar_')
+    .filter(trigger => [
+      'refreshInstallKpiFromCalendar_',
+      'handleInstallCalendarChange_',
+    ].includes(trigger.getHandlerFunction()))
     .forEach(trigger => ScriptApp.deleteTrigger(trigger));
   ScriptApp.newTrigger('refreshInstallKpiFromCalendar_')
     .timeBased()
     .everyHours(1)
+    .create();
+  ScriptApp.newTrigger('handleInstallCalendarChange_')
+    .forUserCalendar(INSTALL_CAL_ID)
+    .onEventUpdated()
     .create();
   return refreshInstallKpiFromCalendar_();
 }
