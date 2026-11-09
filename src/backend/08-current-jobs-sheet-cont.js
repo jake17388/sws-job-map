@@ -47,7 +47,14 @@ function refreshInstallKpiFromCalendar_() {
   } catch (error) {
     Logger.log('Squarecoil estimate refresh failed during KPI sync: ' + error.message);
   }
-  return syncInstallJobsToKpi_(current.installJobs);
+  const result = syncInstallJobsToKpi_(current.installJobs);
+  try {
+    result.ukg_hours = syncUkgDailyHoursFromEmail_();
+  } catch (error) {
+    Logger.log('UKG daily hours import failed during KPI sync: ' + error.message);
+    result.ukg_hours = { success: false, error: error.message };
+  }
+  return result;
 }
 
 // Run once from the Apps Script editor to install the hourly KPI refresh.

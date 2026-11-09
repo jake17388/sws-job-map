@@ -472,6 +472,7 @@ test('an hourly trigger keeps the KPI log current with the install calendar', ()
   const created = [];
   const synced = [];
   const estimateRefreshes = [];
+  const ukgImports = [];
   const triggers = [
     { getHandlerFunction: () => 'refreshInstallKpiFromCalendar_' },
     { getHandlerFunction: () => 'refreshCurrentJobs' },
@@ -479,6 +480,7 @@ test('an hourly trigger keeps the KPI log current with the install calendar', ()
   const context = vm.createContext({
     Date,
     INSTALL_CAL_ID: 'install-calendar',
+    Logger: { log() {} },
     ScriptApp: {
       getProjectTriggers: () => triggers,
       deleteTrigger: trigger => deleted.push(trigger.getHandlerFunction()),
@@ -508,6 +510,10 @@ test('an hourly trigger keeps the KPI log current with the install calendar', ()
       synced.push(jobs);
       return { success: true, created: jobs.length };
     },
+    syncUkgDailyHoursFromEmail_() {
+      ukgImports.push(true);
+      return { success: true, updated: 2 };
+    },
   });
   vm.runInContext(triggerSource, context);
 
@@ -527,6 +533,8 @@ test('an hourly trigger keeps the KPI log current with the install calendar', ()
     forceRefresh: false,
   }]);
   assert.equal(result.created, 1);
+  assert.equal(ukgImports.length, 1);
+  assert.equal(result.ukg_hours.updated, 2);
 });
 
 test('manual estimate refresh force-loads current scheduled and unscheduled job totals', () => {
