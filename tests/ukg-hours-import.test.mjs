@@ -140,3 +140,28 @@ test('Apps Script has read-only Gmail access for scheduled report attachments', 
   assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/gmail.readonly'));
   assert.ok(!manifest.oauthScopes.includes('https://mail.google.com/'));
 });
+
+test('the manual setup requests only the Gmail read-only scope', () => {
+  const requested = [];
+  const context = ukgContext({
+    ScriptApp: {
+      AuthMode: { FULL: 'FULL' },
+      getOAuthToken: () => 'token',
+      requireScopes: (mode, scopes) => requested.push({ mode, scopes: [...scopes] }),
+    },
+    UrlFetchApp: {
+      fetch: () => ({
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({ messages: [] }),
+      }),
+    },
+  });
+
+  const result = context.authorizeAndSyncUkgDailyHours();
+
+  assert.equal(result.report_found, false);
+  assert.deepEqual(requested, [{
+    mode: 'FULL',
+    scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+  }]);
+});
