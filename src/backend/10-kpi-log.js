@@ -263,6 +263,19 @@ function inclusiveDateStrings_(startValue, endValue) {
   return dates;
 }
 
+function kpiSheetDateSerial_(value) {
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) return value;
+  const epoch = Date.UTC(1899, 11, 30);
+  const date = Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
+  return Math.round((date - epoch) / 86400000);
+}
+
+function kpiWritableRow_(values) {
+  const writable = (values || []).slice();
+  if (writable.length > 1) writable[1] = kpiSheetDateSerial_(writable[1]);
+  return writable;
+}
+
 function buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber) {
   const seeds = [];
   (jobs || []).forEach(job => {
@@ -416,7 +429,8 @@ function syncInstallJobsToKpi_(jobs, options) {
       : [];
     const plan = planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber, options);
     plan.rowsToUpdate.forEach(update => {
-      sheet.getRange(KPI_FIRST_DATA_ROW + update.index, 1, 1, 6).setValues([update.values]);
+      sheet.getRange(KPI_FIRST_DATA_ROW + update.index, 1, 1, 6)
+        .setValues([kpiWritableRow_(update.values)]);
     });
     plan.rowsToJobHoursUpdate.forEach(update => {
       sheet.getRange(KPI_FIRST_DATA_ROW + update.index, KPI_TOTAL_JOB_HOURS_COLUMN).setValue(update.value);
@@ -431,7 +445,7 @@ function syncInstallJobsToKpi_(jobs, options) {
     if (plan.rowsToAppend.length) {
       const appendRow = Math.max(sheet.getLastRow(), KPI_HEADER_ROW) + 1;
       sheet.getRange(appendRow, 1, plan.rowsToAppend.length, KPI_COLUMN_COUNT)
-        .setValues(plan.rowsToAppend);
+        .setValues(plan.rowsToAppend.map(kpiWritableRow_));
       sheet.getRange(appendRow, KPI_ACTUAL_PROJECT_HOURS_COLUMN, plan.rowsToAppend.length, 1)
         .setFormulaR1C1('=IF(RC[-1]="","",MAX(0,RC[-1]-RC[-3]))');
     }

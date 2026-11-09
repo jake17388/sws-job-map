@@ -65,6 +65,7 @@ test('multi-day install events expand to one unchecked row per date and crew mem
   assert.equal(seeds[0].values[0], 'Monday');
   assert.equal(seeds[0].values[1] instanceof Date, true);
   assert.equal(seeds[0].values[1].toISOString(), '2026-11-02T12:00:00.000Z');
+  assert.equal(context.kpiSheetDateSerial_(seeds[0].values[1]), 46328);
   assert.equal(seeds[0].values[2], 'Johnny');
   assert.equal(seeds[0].values[3], '123456');
   assert.equal(seeds[0].values[4], 'Monument Sign');
