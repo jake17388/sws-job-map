@@ -128,8 +128,17 @@ function fetchCalendarEvents(calId, type, start, end) {
       .replace(/^\s*[-–]\s*/, '')
       .trim();
     const cleanAddr = location.replace(/\s*\|\s*/g, ', ').replace(/\s+/g, ' ').trim();
-    const startDate = event.getStartTime();
-    const endDate = new Date(event.getEndTime());
+    const isAllDay = typeof event.isAllDayEvent === 'function' && event.isAllDayEvent();
+    const eventTimeZone = isAllDay && typeof Session !== 'undefined'
+      && typeof Session.getScriptTimeZone === 'function'
+      ? Session.getScriptTimeZone()
+      : calendarTimeZone;
+    const startDate = isAllDay && typeof event.getAllDayStartDate === 'function'
+      ? event.getAllDayStartDate()
+      : event.getStartTime();
+    const endDate = new Date(isAllDay && typeof event.getAllDayEndDate === 'function'
+      ? event.getAllDayEndDate()
+      : event.getEndTime());
     endDate.setDate(endDate.getDate() - 1);
     const truckAssignments = normalizeStoredTruckAssignments_(
       typeof event.getTag === 'function' ? event.getTag(TRUCK_ASSIGNMENTS_TAG) : '',
@@ -138,8 +147,8 @@ function fetchCalendarEvents(calId, type, start, end) {
       type, num: jobNum, title: cleanTitle || title,
       event_id: event.getId(),
       addr: cleanAddr,
-      start: formatDate(startDate, calendarTimeZone),
-      end: formatDate(endDate, calendarTimeZone),
+      start: formatDate(startDate, eventTimeZone),
+      end: formatDate(endDate, eventTimeZone),
       crew,
       truck_assignments: truckAssignments,
     });

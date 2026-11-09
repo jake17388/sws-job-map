@@ -117,13 +117,16 @@ test('scheduled jobs read truck assignments from a private Calendar tag', () => 
   });
 });
 
-test('calendar dates are formatted in the source calendar timezone', () => {
+test('all-day calendar dates use the all-day date in the script timezone', () => {
   const formatCalls = [];
   const event = {
     getTitle: () => '(Jerry) 261572 Snowflake Junior High School - Service',
     getLocation: () => '1380 Main St',
-    getStartTime: () => new Date('2026-11-06T07:00:00.000Z'),
-    getEndTime: () => new Date('2026-11-07T07:00:00.000Z'),
+    isAllDayEvent: () => true,
+    getAllDayStartDate: () => new Date('2026-11-06T00:00:00.000Z'),
+    getAllDayEndDate: () => new Date('2026-11-07T00:00:00.000Z'),
+    getStartTime: () => new Date('2026-11-06T00:00:00.000Z'),
+    getEndTime: () => new Date('2026-11-07T00:00:00.000Z'),
     getId: () => 'event-jerry',
     getTag: () => null,
   };
@@ -139,6 +142,7 @@ test('calendar dates are formatted in the source calendar timezone', () => {
         return date.toISOString().startsWith('2026-11-06') ? '2026-11-06' : '2026-11-07';
       },
     },
+    Session: { getScriptTimeZone: () => 'UTC' },
   });
 
   const jobs = context.fetchCalendarEvents('calendar-1', 'install', new Date(), new Date());
@@ -146,8 +150,8 @@ test('calendar dates are formatted in the source calendar timezone', () => {
   assert.equal(jobs[0].start, '2026-11-06');
   assert.equal(jobs[0].end, '2026-11-06');
   assert.deepEqual(formatCalls.map(call => [call.timeZone, call.pattern]), [
-    ['America/Phoenix', 'yyyy-MM-dd'],
-    ['America/Phoenix', 'yyyy-MM-dd'],
+    ['UTC', 'yyyy-MM-dd'],
+    ['UTC', 'yyyy-MM-dd'],
   ]);
 });
 
