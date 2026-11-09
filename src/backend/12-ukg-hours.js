@@ -1,5 +1,6 @@
 // ── UKG daily clocked hours ──────────────────────────────────────────────────
 const UKG_HOURS_EMAIL_QUERY = 'subject:"Install Daily Hours Export" has:attachment newer_than:30d';
+const UKG_GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 const UKG_KPI_CLOCKED_HOURS_INDEX = 11;
 const UKG_INSTALL_CREW_BY_EMPLOYEE_ID = Object.freeze({
   '46': 'Johnny',
@@ -178,5 +179,6 @@ function syncUkgDailyHoursFromEmail_() {
 // Run from the Apps Script editor after first deployment to grant Gmail read access
 // and immediately import the newest scheduled UKG CSV attachment.
 function authorizeAndSyncUkgDailyHours() {
+  ScriptApp.requireScopes(ScriptApp.AuthMode.FULL, [UKG_GMAIL_READONLY_SCOPE]);
   return syncUkgDailyHoursFromEmail_();
 }
