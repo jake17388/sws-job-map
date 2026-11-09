@@ -64,7 +64,7 @@ test('multi-day install events expand to one unchecked row per date and crew mem
   ]);
   assert.equal(seeds[0].values[0], 'Monday');
   assert.equal(seeds[0].values[1] instanceof Date, true);
-  assert.equal(seeds[0].values[1].getHours(), 12);
+  assert.equal(seeds[0].values[1].toISOString(), '2026-11-02T12:00:00.000Z');
   assert.equal(seeds[0].values[2], 'Johnny');
   assert.equal(seeds[0].values[3], '123456');
   assert.equal(seeds[0].values[4], 'Monument Sign');
@@ -384,7 +384,7 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
     { index: 0, value: 42 },
   ]);
   assert.equal(plan.rowsToUpdate[0].values[0], 'Monday');
-  assert.equal(plan.rowsToUpdate[0].values[1].getHours(), 12);
+  assert.equal(plan.rowsToUpdate[0].values[1].toISOString(), '2026-11-02T12:00:00.000Z');
   assert.equal(plan.rowsToAppend[0][8], 42);
   assert.equal(plan.rowsToAppend[0][9], 2.1);
   assert.equal(plan.rowsToAppend[0][10], '');

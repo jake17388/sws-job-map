@@ -271,14 +271,13 @@ function buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber) {
     if (!crew.length) return;
     const workDates = inclusiveDateStrings_(job.start, job.end);
     workDates.forEach(workDate => {
-      const dateResult = parseScheduleDate_(workDate, 'work');
       crew.forEach(crewMember => {
         const key = kpiKey_(job.event_id, workDate, crewMember);
         const values = Array(KPI_COLUMN_COUNT).fill('');
-        const sheetDate = new Date(dateResult.date);
-        // The Apps Script project uses Phoenix time while the KPI workbook uses
-        // Los Angeles time. Midday keeps the calendar date stable in both zones.
-        sheetDate.setHours(12, 0, 0, 0);
+        const [year, month, day] = workDate.split('-').map(Number);
+        // A fixed UTC midday keeps the written serial on the intended date in
+        // both the Phoenix script and Los Angeles spreadsheet time zones.
+        const sheetDate = new Date(Date.UTC(year, month - 1, day, 12));
         values[0] = dayNameForDate_(sheetDate);
         values[1] = sheetDate;
         values[2] = crewMember;
