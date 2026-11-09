@@ -89,15 +89,53 @@ function planKpiClockedHoursSync_(existingRows, hoursByEmployeeDate) {
   return { values, updated, matchedCrewDates: matched.size };
 }
 
+function gmailReadOnlyApiGet_(path) {
+  const response = UrlFetchApp.fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, {
+    headers: { Authorization: `Bearer ${ScriptApp.getOAuthToken()}` },
+    muteHttpExceptions: true,
+  });
+  const status = response.getResponseCode();
+  const text = response.getContentText();
+  if (status < 200 || status >= 300) {
+    throw new Error(`Gmail read-only API failed (${status}): ${text.slice(0, 300)}`);
+  }
+  return JSON.parse(text);
+}
+
+function findUkgCsvPart_(part) {
+  if (!part) return null;
+  const filename = String(part.filename || '');
+  const contentType = String(part.mimeType || '');
+  if ((/\.csv$/i.test(filename) || /(?:^|\/)csv$/i.test(contentType)) && part.body) return part;
+  for (const child of (part.parts || [])) {
+    const found = findUkgCsvPart_(child);
+    if (found) return found;
+  }
+  return null;
+}
+
 function newestUkgCsvAttachment_() {
-  const messages = GmailApp.search(UKG_HOURS_EMAIL_QUERY, 0, 10)
-    .reduce((all, thread) => all.concat(thread.getMessages()), [])
-    .sort((left, right) => right.getDate().getTime() - left.getDate().getTime());
-  for (const message of messages) {
-    const attachment = message.getAttachments({ includeInlineImages: false, includeAttachments: true })
-      .find(candidate => /\.csv$/i.test(candidate.getName())
-        || /(?:^|\/)csv$/i.test(candidate.getContentType()));
-    if (attachment) return { messageId: message.getId(), attachment };
+  const query = encodeURIComponent(UKG_HOURS_EMAIL_QUERY);
+  const listing = gmailReadOnlyApiGet_(`messages?q=${query}&maxResults=10`);
+  for (const summary of (listing.messages || [])) {
+    const messageId = String(summary.id || '');
+    if (!messageId) continue;
+    const message = gmailReadOnlyApiGet_(`messages/${encodeURIComponent(messageId)}?format=full`);
+    const part = findUkgCsvPart_(message.payload);
+    if (!part) continue;
+    let data = part.body.data || '';
+    if (!data && part.body.attachmentId) {
+      const attachmentId = encodeURIComponent(part.body.attachmentId);
+      data = gmailReadOnlyApiGet_(`messages/${encodeURIComponent(messageId)}/attachments/${attachmentId}`).data || '';
+    }
+    if (!data) continue;
+    const bytes = Utilities.base64DecodeWebSafe(data);
+    const attachment = Utilities.newBlob(
+      bytes,
+      String(part.mimeType || 'text/csv'),
+      String(part.filename || 'Install Daily Hours Export.csv'),
+    );
+    return { messageId, attachment };
   }
   return null;
 }
