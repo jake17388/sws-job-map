@@ -107,6 +107,7 @@ function harmonizeLoadedDailyTruckAssignments_(jobs) {
 function fetchCalendarEvents(calId, type, start, end) {
   const cal = CalendarApp.getCalendarById(calId);
   if (!cal) return [];
+  const calendarTimeZone = typeof cal.getTimeZone === 'function' ? cal.getTimeZone() : '';
   const events = cal.getEvents(start, end);
   const jobs = [];
   events.forEach(event => {
@@ -137,8 +138,8 @@ function fetchCalendarEvents(calId, type, start, end) {
       type, num: jobNum, title: cleanTitle || title,
       event_id: event.getId(),
       addr: cleanAddr,
-      start: formatDate(startDate),
-      end: formatDate(endDate),
+      start: formatDate(startDate, calendarTimeZone),
+      end: formatDate(endDate, calendarTimeZone),
       crew,
       truck_assignments: truckAssignments,
     });
@@ -327,6 +328,13 @@ function authorizeCalendarWrite() {
   return { success: true, event_id: event.getId() };
 }
 
-function formatDate(d) {
+function formatDate(d, timeZone) {
+  if (typeof Utilities !== 'undefined' && typeof Utilities.formatDate === 'function') {
+    const resolvedTimeZone = timeZone
+      || (typeof Session !== 'undefined' && typeof Session.getScriptTimeZone === 'function'
+        ? Session.getScriptTimeZone()
+        : 'America/Phoenix');
+    return Utilities.formatDate(d, resolvedTimeZone, 'yyyy-MM-dd');
+  }
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
