@@ -80,6 +80,50 @@ test('multi-day install events expand to one unchecked row per date and crew mem
   assert.equal(seeds[0].values[29], 'event-1|2026-11-02|Johnny');
 });
 
+test('saving a Job Map truck assignment updates the matching KPI truck cell immediately', () => {
+  const row = Array(30).fill('');
+  row[1] = new Date(2026, 10, 10, 12);
+  row[2] = 'Johnny';
+  row[5] = '';
+  row[29] = 'event-1|2026-11-10|Johnny';
+  const sheet = {
+    getLastRow: () => 4,
+    getRange(rowNumber, column, rowCount, columnCount) {
+      if (rowNumber === 4 && column === 1 && rowCount === 1 && columnCount === 30) {
+        return { getValues: () => [[...row]] };
+      }
+      if (rowNumber === 4 && column === 6 && rowCount === 1 && columnCount === 1) {
+        return { setValue(value) { row[5] = value; } };
+      }
+      throw new Error(`Unexpected range: ${rowNumber},${column},${rowCount},${columnCount}`);
+    },
+  };
+  const context = backendContext({
+    SpreadsheetApp: {
+      openById: () => ({ getSheetByName: () => sheet }),
+    },
+  });
+  const event = {
+    getId: () => 'event-1',
+    getTitle: () => '(Johnny) 123456 Monument Sign',
+    getStartTime: () => new Date(2026, 10, 10),
+    getEndTime: () => new Date(2026, 10, 11),
+  };
+
+  const result = context.syncKpiTruckAssignmentsForCalendarUpdates_([{
+    calendarId: context.INSTALL_CAL_ID,
+    event,
+    assignments: { Johnny: 'crane-1' },
+  }]);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), { success: true, rows_updated: 1 });
+  assert.equal(row[5], '2022 Crane');
+});
+
+test('scheduled assignment saves invoke the immediate KPI truck sync', () => {
+  assert.match(calendarSource, /syncKpiTruckAssignmentsForCalendarUpdates_\(updates\)/);
+});
+
 test('estimated project hours use a row formula based on job dates and same-day job occurrences', () => {
   const context = backendContext();
 
