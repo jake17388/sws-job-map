@@ -372,7 +372,7 @@ test('the KPI sync inserts the Crew Size column exactly once', () => {
   assert.equal(header, 'Crew Size');
 });
 
-test('the KPI log adds one reusable header filter across all user-facing columns', () => {
+test('the KPI log filter includes the hidden calendar key so row data sorts together', () => {
   const context = backendContext();
   let filter = null;
   let created = 0;
@@ -383,7 +383,7 @@ test('the KPI log adds one reusable header filter across all user-facing columns
       assert.equal(row, 3);
       assert.equal(column, 1);
       assert.equal(rowCount, 1016);
-      assert.equal(columnCount, 27);
+      assert.equal(columnCount, 30);
       return {
         createFilter() {
           created += 1;
