@@ -103,6 +103,7 @@ test('saving a Job Map truck assignment updates the matching KPI truck cell imme
       openById: () => ({ getSheetByName: () => sheet }),
     },
   });
+  context.getKpiSheet_ = () => sheet;
   const event = {
     getId: () => 'event-1',
     getTitle: () => '(Johnny) 123456 Monument Sign',
@@ -111,7 +112,7 @@ test('saving a Job Map truck assignment updates the matching KPI truck cell imme
   };
 
   const result = context.syncKpiTruckAssignmentsForCalendarUpdates_([{
-    calendarId: context.INSTALL_CAL_ID,
+    calendarId: context.calendarIdForJobType_('install'),
     event,
     assignments: { Johnny: 'crane-1' },
   }]);

@@ -189,16 +189,17 @@ function calendarEventsOverlap_(event, range) {
   return !!candidate && candidate.start < range.end && candidate.end > range.start;
 }
 
-function eventAssignmentUpdate_(event, assignments) {
+function eventAssignmentUpdate_(event, assignments, calendarId) {
   return {
     event,
     assignments,
+    calendarId,
     previousTag: typeof event.getTag === 'function' ? event.getTag(TRUCK_ASSIGNMENTS_TAG) || '' : '',
   };
 }
 
 function collectDailyTruckAssignmentUpdates_(sourceCalendarId, sourceEvent, sourceCrew, sourceAssignments) {
-  const updates = [eventAssignmentUpdate_(sourceEvent, sourceAssignments)];
+  const updates = [eventAssignmentUpdate_(sourceEvent, sourceAssignments, sourceCalendarId)];
   const range = calendarEventRange_(sourceEvent);
   if (!range) return updates;
 
@@ -223,7 +224,7 @@ function collectDailyTruckAssignmentUpdates_(sourceCalendarId, sourceEvent, sour
         else delete next[name];
       });
       if (serializeTruckAssignments_(next) !== serializeTruckAssignments_(current)) {
-        updates.push(eventAssignmentUpdate_(event, next));
+        updates.push(eventAssignmentUpdate_(event, next, calendarId));
       }
     });
   });
@@ -286,8 +287,9 @@ function updateScheduledAssignments(data) {
   const nextTitle = crew.length ? `(${crew.join('/')}) ${baseTitle}` : baseTitle;
   const previousTitle = event.getTitle();
   let updatedEventCount = 0;
+  let updates = [];
   try {
-    const updates = collectDailyTruckAssignmentUpdates_(
+    updates = collectDailyTruckAssignmentUpdates_(
       calendarId,
       event,
       crew,
@@ -303,12 +305,26 @@ function updateScheduledAssignments(data) {
     }
     return { success: false, error: e.message };
   }
+  let kpiRowsUpdated = 0;
+  if (typeof syncKpiTruckAssignmentsForCalendarUpdates_ === 'function') {
+    try {
+      const kpiResult = syncKpiTruckAssignmentsForCalendarUpdates_(updates);
+      kpiRowsUpdated = Number(kpiResult && kpiResult.rows_updated || 0);
+    } catch (e) {
+      return {
+        success: false,
+        partial: true,
+        error: `Assignments were saved, but the KPI truck update failed: ${e.message}`,
+      };
+    }
+  }
   return {
     success: true,
     crew,
     truck_assignments: assignmentResult.assignments,
     title: nextTitle,
     propagated_event_count: Math.max(0, updatedEventCount - 1),
+    kpi_rows_updated: kpiRowsUpdated,
   };
   } finally {
     if (lock) lock.releaseLock();

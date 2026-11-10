@@ -150,6 +150,56 @@ function vehicleNameForKpi_(vehicleId) {
   return vehicle ? String(vehicle.displayName) : '';
 }
 
+function kpiDateKeysForCalendarEvent_(event) {
+  const range = calendarEventRange_(event);
+  if (!range) return [];
+  const cursor = new Date(
+    range.start.getFullYear(),
+    range.start.getMonth(),
+    range.start.getDate(),
+    12,
+  );
+  const dates = [];
+  while (cursor < range.end && dates.length < 366) {
+    dates.push(formatDate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+function syncKpiTruckAssignmentsForCalendarUpdates_(updates) {
+  const desiredTruckByKey = new Map();
+  (updates || []).forEach(update => {
+    if (!update || String(update.calendarId || '') !== String(INSTALL_CAL_ID)) return;
+    const event = update.event;
+    const eventId = event && typeof event.getId === 'function' ? String(event.getId()) : '';
+    if (!eventId) return;
+    const crew = crewFromCalendarTitle_(event.getTitle());
+    const dates = kpiDateKeysForCalendarEvent_(event);
+    crew.forEach(name => {
+      const truckName = vehicleNameForKpi_((update.assignments || {})[name]);
+      dates.forEach(date => desiredTruckByKey.set(kpiKey_(eventId, date, name), truckName));
+    });
+  });
+  if (!desiredTruckByKey.size) return { success: true, rows_updated: 0 };
+
+  const sheet = getKpiSheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < KPI_FIRST_DATA_ROW) return { success: true, rows_updated: 0 };
+  const rowCount = lastRow - KPI_FIRST_DATA_ROW + 1;
+  const rows = sheet.getRange(KPI_FIRST_DATA_ROW, 1, rowCount, KPI_COLUMN_COUNT).getValues();
+  let rowsUpdated = 0;
+  rows.forEach((row, index) => {
+    const key = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
+    if (!desiredTruckByKey.has(key)) return;
+    const desiredTruck = desiredTruckByKey.get(key);
+    if (String((row || [])[5] || '') === desiredTruck) return;
+    sheet.getRange(KPI_FIRST_DATA_ROW + index, 6, 1, 1).setValue(desiredTruck);
+    rowsUpdated += 1;
+  });
+  return { success: true, rows_updated: rowsUpdated };
+}
+
 function normalizeDriveAddress_(value) {
   return String(value || '')
     .replace(/\s*\|\s*/g, ', ')
