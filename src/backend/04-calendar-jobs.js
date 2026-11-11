@@ -169,6 +169,51 @@ function scheduledJobCalendarIds_() {
   return [INSTALL_CAL_ID, SERVICE_CAL_ID, EXCAV_CAL_ID];
 }
 
+function truckAssignmentRows_(crew, assignments) {
+  const roster = new Map(vehicleRoster_().map(vehicle => [String(vehicle.id), String(vehicle.displayName)]));
+  return (crew || []).map(name => {
+    const vehicleId = String((assignments || {})[name] || '').trim();
+    if (!vehicleId) return null;
+    return { name, vehicleName: roster.get(vehicleId) || vehicleId };
+  }).filter(Boolean);
+}
+
+function truckAssignmentSummary_(crew, assignments) {
+  return truckAssignmentRows_(crew, assignments)
+    .map(row => `${row.name} - ${row.vehicleName}`)
+    .join('; ');
+}
+
+function truckAssignmentDescriptionBlock_(crew, assignments) {
+  const rows = truckAssignmentRows_(crew, assignments);
+  if (!rows.length) return '';
+  return ['Truck Assignment:', ...rows.map(row => `• ${row.name} - ${row.vehicleName}`)].join('\n');
+}
+
+function withoutTruckAssignmentDescription_(description) {
+  const lines = String(description || '').replace(/\r\n/g, '\n').split('\n');
+  const kept = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim().toLowerCase() !== 'truck assignment:') {
+      kept.push(lines[i]);
+      continue;
+    }
+    while (kept.length && !kept[kept.length - 1].trim()) kept.pop();
+    while (i + 1 < lines.length && /^\s*[\u2022*-]\s+.+\s+-\s+.+$/.test(lines[i + 1])) i++;
+    while (i + 1 < lines.length && !lines[i + 1].trim()) i++;
+  }
+  while (kept.length && !kept[0].trim()) kept.shift();
+  while (kept.length && !kept[kept.length - 1].trim()) kept.pop();
+  return kept.join('\n');
+}
+
+function descriptionWithTruckAssignments_(description, crew, assignments) {
+  const existing = withoutTruckAssignmentDescription_(description);
+  const block = truckAssignmentDescriptionBlock_(crew, assignments);
+  if (!block) return existing;
+  return existing ? `${existing}\n\n${block}` : block;
+}
+
 function crewFromCalendarTitle_(title) {
   const match = String(title || '').match(/^\(([^)]+)\)/);
   if (!match) return [];
@@ -189,17 +234,19 @@ function calendarEventsOverlap_(event, range) {
   return !!candidate && candidate.start < range.end && candidate.end > range.start;
 }
 
-function eventAssignmentUpdate_(event, assignments, calendarId) {
+function eventAssignmentUpdate_(event, assignments, calendarId, crew) {
   return {
     event,
     assignments,
     calendarId,
+    crew: crew || crewFromCalendarTitle_(event.getTitle()),
     previousTag: typeof event.getTag === 'function' ? event.getTag(TRUCK_ASSIGNMENTS_TAG) || '' : '',
+    previousDescription: typeof event.getDescription === 'function' ? event.getDescription() || '' : '',
   };
 }
 
 function collectDailyTruckAssignmentUpdates_(sourceCalendarId, sourceEvent, sourceCrew, sourceAssignments) {
-  const updates = [eventAssignmentUpdate_(sourceEvent, sourceAssignments, sourceCalendarId)];
+  const updates = [eventAssignmentUpdate_(sourceEvent, sourceAssignments, sourceCalendarId, sourceCrew)];
   const range = calendarEventRange_(sourceEvent);
   if (!range) return updates;
 
@@ -237,6 +284,9 @@ function restoreTruckAssignmentTag_(update) {
   } else if (!update.previousTag && typeof update.event.deleteTag === 'function') {
     update.event.deleteTag(TRUCK_ASSIGNMENTS_TAG);
   }
+  if (typeof update.event.setDescription === 'function') {
+    update.event.setDescription(update.previousDescription);
+  }
 }
 
 function applyTruckAssignmentUpdates_(updates) {
@@ -245,6 +295,13 @@ function applyTruckAssignmentUpdates_(updates) {
     updates.forEach(update => {
       applied.push(update);
       applyTruckAssignmentsTag_(update.event, update.assignments);
+      if (typeof update.event.setDescription === 'function') {
+        update.event.setDescription(descriptionWithTruckAssignments_(
+          update.previousDescription,
+          update.crew,
+          update.assignments,
+        ));
+      }
     });
   } catch (error) {
     applied.reverse().forEach(update => {

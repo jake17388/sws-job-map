@@ -21,6 +21,10 @@ function refreshCurrentJobs() {
   const sheet = ss.getSheetByName('Current Jobs');
   if (!sheet) return;
 
+  sheet.getRange(1, 1, 1, 5).setValues([[
+    'Job Number', 'Job Name', 'Date', 'Type', 'Assigned Trucks',
+  ]]);
+
   // Clear existing data rows, keep header
   const lastRow = sheet.getLastRow();
   if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, 5).clearContent();
@@ -41,7 +45,13 @@ function refreshCurrentJobs() {
       dateStr = Utilities.formatDate(d, tz, 'MMM d') + ' – ' +
                 Utilities.formatDate(de, tz, 'MMM d, yyyy');
     }
-    return [job.num || '', job.title, dateStr, job.type, ''];
+    return [
+      job.num || '',
+      job.title,
+      dateStr,
+      job.type,
+      truckAssignmentSummary_(job.crew, job.truck_assignments),
+    ];
   });
 
   sheet.getRange(2, 1, rows.length, 5).setValues(rows);

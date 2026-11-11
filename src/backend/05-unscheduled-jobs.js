@@ -261,7 +261,10 @@ function scheduleUnsched(data) {
     const exclusiveEnd = new Date(endResult.date);
     exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
     const eventTitle = `${crewResult.crew.length ? `(${crewResult.crew.join('/')}) ` : ''}${jobNum} ${title}`;
-    const event = calendar.createAllDayEvent(eventTitle, startResult.date, exclusiveEnd, { location: address });
+    const event = calendar.createAllDayEvent(eventTitle, startResult.date, exclusiveEnd, {
+      location: address,
+      description: truckAssignmentDescriptionBlock_(crewResult.crew, assignmentResult.assignments),
+    });
     const receipt = {
       event_id: event.getId(),
       type: 'install',

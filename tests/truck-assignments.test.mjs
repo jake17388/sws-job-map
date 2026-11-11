@@ -300,8 +300,8 @@ test('scheduled assignment updates propagate each crew truck to every overlappin
   ].join('\n'));
   assert.equal(jerryJob.description(), [
     'Truck Assignment:',
-    '• Jerry - 2019 Bucket',
     '• Johnny - Big Crane',
+    '• Jerry - 2019 Bucket',
   ].join('\n'));
   assert.equal(nextDayJob.tags.has('sws_truck_assignments_v1'), false);
 });

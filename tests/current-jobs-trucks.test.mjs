@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 const configSource = readFileSync(new URL('../src/backend/01-config.js', import.meta.url), 'utf8');
+const calendarSource = readFileSync(new URL('../src/backend/04-calendar-jobs.js', import.meta.url), 'utf8');
 const currentJobsSource = readFileSync(new URL('../src/backend/06-current-jobs-sheet.js', import.meta.url), 'utf8');
 const vehicleRoster = JSON.parse(readFileSync(new URL('../config/vehicle-roster.json', import.meta.url), 'utf8'));
 
@@ -42,22 +43,26 @@ test('Current Jobs replaces the old check columns with assigned truck details', 
       }),
     },
     SpreadsheetApp: { openById: () => ({ getSheetByName: () => sheet }) },
-    fetchCalendarEvents: (calendarId, type) => type === 'install' ? jobs : [],
     syncInstallJobsToKpi_() {},
   });
-  vm.runInContext(`const VEHICLE_ROSTER = ${JSON.stringify(vehicleRoster)};\n${configSource}\n${currentJobsSource}`, context);
+  vm.runInContext(
+    `const VEHICLE_ROSTER = ${JSON.stringify(vehicleRoster)};\n${configSource}\n${calendarSource}\n${currentJobsSource}`,
+    context,
+  );
+  context.fetchCalendarEvents = (calendarId, type) => type === 'install' ? jobs : [];
 
   context.refreshCurrentJobs();
 
   assert.deepEqual(clears, [{ row: 2, column: 1, rowCount: 2, columnCount: 5 }]);
-  assert.deepEqual(writes[0], {
+  const normalizedWrites = JSON.parse(JSON.stringify(writes));
+  assert.deepEqual(normalizedWrites[0], {
     row: 1,
     column: 1,
     rowCount: 1,
     columnCount: 5,
     values: [['Job Number', 'Job Name', 'Date', 'Type', 'Assigned Trucks']],
   });
-  assert.deepEqual(writes[1].values[0], [
+  assert.deepEqual(normalizedWrites[1].values[0], [
     '261452',
     'Ferguson - Cottonwood',
     'Nov 11, 2026',
