@@ -35,13 +35,13 @@ function refreshCurrentJobs() {
   const tz = Session.getScriptTimeZone();
   const rows = allJobs.filter(job => job.num).map(job => {
     const p = job.start.split('-');
-    const d = new Date(+p[0], +p[1] - 1, +p[2]);
+    const d = new Date(+p[0], +p[1] - 1, +p[2], 12);
     let dateStr;
     if (job.start === job.end) {
       dateStr = Utilities.formatDate(d, tz, 'MMM d, yyyy');
     } else {
       const ep = job.end.split('-');
-      const de = new Date(+ep[0], +ep[1] - 1, +ep[2]);
+      const de = new Date(+ep[0], +ep[1] - 1, +ep[2], 12);
       dateStr = Utilities.formatDate(d, tz, 'MMM d') + ' – ' +
                 Utilities.formatDate(de, tz, 'MMM d, yyyy');
     }
