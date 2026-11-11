@@ -133,6 +133,11 @@ test('scheduling stores shared truck assignments as private Calendar metadata', 
     Johnny: '2018-big-crane',
     Eli: '2018-big-crane',
   });
+  assert.equal(backend.created[0].options.description, [
+    'Truck Assignment:',
+    '• Johnny - 2018 Altec Crane',
+    '• Eli - 2018 Altec Crane',
+  ].join('\n'));
 });
 
 test('scheduling propagates each crew truck to their other jobs on the same day', () => {

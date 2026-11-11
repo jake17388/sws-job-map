@@ -190,10 +190,13 @@ test('job loading fills existing daily truck assignments onto every same-day job
 
 test('scheduled assignment updates save crew and trucks together', () => {
   let title = '(Johnny) 123456 Monument Sign';
+  let description = 'Bring permit packet.';
   const tags = new Map();
   const event = {
     getTitle: () => title,
     setTitle: value => { title = value; },
+    getDescription: () => description,
+    setDescription: value => { description = value; },
     getTag: key => tags.get(key) || null,
     setTag: (key, value) => { tags.set(key, value); },
     deleteTag: key => { tags.delete(key); },
@@ -212,6 +215,13 @@ test('scheduled assignment updates save crew and trucks together', () => {
 
   assert.equal(result.success, true);
   assert.equal(title, '(Johnny/Eli) 123456 Monument Sign');
+  assert.equal(description, [
+    'Bring permit packet.',
+    '',
+    'Truck Assignment:',
+    '• Johnny - Big Crane',
+    '• Eli - Big Crane',
+  ].join('\n'));
   assert.deepEqual(JSON.parse(tags.get('sws_truck_assignments_v1')), {
     Johnny: 'big-crane',
     Eli: 'big-crane',
@@ -221,6 +231,7 @@ test('scheduled assignment updates save crew and trucks together', () => {
 test('scheduled assignment updates propagate each crew truck to every overlapping job that day', () => {
   function event(id, title, startDay, assignments = {}) {
     let currentTitle = title;
+    let description = '';
     const tags = new Map();
     if (Object.keys(assignments).length) {
       tags.set('sws_truck_assignments_v1', JSON.stringify(assignments));
@@ -231,11 +242,14 @@ test('scheduled assignment updates propagate each crew truck to every overlappin
       getId: () => id,
       getTitle: () => currentTitle,
       setTitle: value => { currentTitle = value; },
+      getDescription: () => description,
+      setDescription: value => { description = value; },
       getStartTime: () => new Date(2026, 9, startDay),
       getEndTime: () => new Date(2026, 9, startDay + 1),
       getTag: key => tags.get(key) || null,
       setTag: (key, value) => { tags.set(key, value); },
       deleteTag: key => { tags.delete(key); },
+      description: () => description,
     };
   }
 
@@ -275,6 +289,20 @@ test('scheduled assignment updates propagate each crew truck to every overlappin
     Jerry: '2019-bucket',
     Johnny: 'big-crane',
   });
+  assert.equal(target.description(), [
+    'Truck Assignment:',
+    '• Eli - Small Crane',
+    '• Jerry - 2019 Bucket',
+  ].join('\n'));
+  assert.equal(eliJob.description(), [
+    'Truck Assignment:',
+    '• Eli - Small Crane',
+  ].join('\n'));
+  assert.equal(jerryJob.description(), [
+    'Truck Assignment:',
+    '• Jerry - 2019 Bucket',
+    '• Johnny - Big Crane',
+  ].join('\n'));
   assert.equal(nextDayJob.tags.has('sws_truck_assignments_v1'), false);
 });
 
