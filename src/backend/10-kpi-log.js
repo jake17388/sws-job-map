@@ -56,6 +56,22 @@ function buildKpiTableResizeRequest_(tableId, sheetId, lastRow) {
   };
 }
 
+function buildKpiFilterResizeRequest_(sheetId, lastRow, currentFilter) {
+  const filter = {
+    range: {
+      sheetId,
+      startRowIndex: KPI_HEADER_ROW - 1,
+      endRowIndex: Math.max(KPI_HEADER_ROW, lastRow),
+      startColumnIndex: 0,
+      endColumnIndex: KPI_COLUMN_COUNT,
+    },
+  };
+  if (currentFilter && currentFilter.sortSpecs) filter.sortSpecs = currentFilter.sortSpecs;
+  if (currentFilter && currentFilter.filterSpecs) filter.filterSpecs = currentFilter.filterSpecs;
+  else if (currentFilter && currentFilter.criteria) filter.criteria = currentFilter.criteria;
+  return { setBasicFilter: { filter } };
+}
+
 function kpiSheetsApiRequest_(url, options) {
   const response = UrlFetchApp.fetch(url, {
     muteHttpExceptions: true,
@@ -74,16 +90,14 @@ function resizeKpiNativeTable_(sheet) {
   if (typeof UrlFetchApp === 'undefined' || typeof ScriptApp === 'undefined') return false;
   const sheetId = sheet.getSheetId();
   const metadataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(KPI_SHEET_ID)}`
-    + '?fields=sheets(properties(sheetId),tables(tableId,name,range))';
+    + '?fields=sheets(properties(sheetId),basicFilter,tables(tableId,name,range))';
   const metadata = kpiSheetsApiRequest_(metadataUrl);
   const sheetMetadata = (metadata.sheets || [])
     .find(candidate => Number(candidate && candidate.properties && candidate.properties.sheetId) === Number(sheetId));
   const table = (sheetMetadata && sheetMetadata.tables || [])
     .find(candidate => candidate && candidate.name === KPI_TABLE_NAME);
-  if (!table || !table.tableId) return false;
-
   const lastRow = Math.max(KPI_HEADER_ROW, sheet.getLastRow());
-  const range = table.range || {};
+  const range = table && table.range || sheetMetadata && sheetMetadata.basicFilter && sheetMetadata.basicFilter.range || {};
   if (range.startRowIndex === KPI_HEADER_ROW - 1
     && range.endRowIndex === lastRow
     && range.startColumnIndex === 0
@@ -92,11 +106,15 @@ function resizeKpiNativeTable_(sheet) {
   }
 
   const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(KPI_SHEET_ID)}:batchUpdate`;
+  const request = table && table.tableId
+    ? buildKpiTableResizeRequest_(table.tableId, sheetId, lastRow)
+    : buildKpiFilterResizeRequest_(sheetId, lastRow, sheetMetadata && sheetMetadata.basicFilter);
+  if (!table && !(sheetMetadata && sheetMetadata.basicFilter)) return false;
   kpiSheetsApiRequest_(batchUrl, {
     method: 'post',
     contentType: 'application/json',
     payload: JSON.stringify({
-      requests: [buildKpiTableResizeRequest_(table.tableId, sheetId, lastRow)],
+      requests: [request],
     }),
   });
   return true;
