@@ -267,9 +267,9 @@ test('Squarecoil estimate list parsing returns unique estimate ids for the job',
   assert.deepEqual(Array.from(context.squarecoilEstimateIdsFromHtml_(html, '260242')), ['19811', '19812']);
 });
 
-test('the split Install Log starts with its assignment section and row-three header', () => {
-  assert.match(kpiSource, /const KPI_HEADER_ROW = 3;/);
-  assert.match(kpiSource, /const KPI_FIRST_DATA_ROW = 4;/);
+test('the Install Log starts with its native table header in row one', () => {
+  assert.match(kpiSource, /const KPI_HEADER_ROW = 1;/);
+  assert.match(kpiSource, /const KPI_FIRST_DATA_ROW = 2;/);
 });
 
 test('the KPI sync migrates the live sheet to a Day column exactly once', () => {
@@ -279,19 +279,19 @@ test('the KPI sync migrates the live sheet to a Day column exactly once', () => 
   let dayValues = null;
   const dates = [new Date(2026, 10, 2, 12), '', new Date(2026, 10, 8, 12)];
   const sheet = {
-    getLastRow: () => 6,
+    getLastRow: () => 4,
     insertColumnBefore(column) { insertedAt = column; },
     getRange(row, column, rowCount, columnCount) {
-      if (row === 3 && column === 1) {
+      if (row === 1 && column === 1) {
         return {
           getValue: () => header,
           setValue(value) { header = value; },
         };
       }
-      if (row === 4 && column === 2 && rowCount === 3 && columnCount === 1) {
+      if (row === 2 && column === 2 && rowCount === 3 && columnCount === 1) {
         return { getValues: () => dates.map(value => [value]) };
       }
-      if (row === 4 && column === 1 && rowCount === 3 && columnCount === 1) {
+      if (row === 2 && column === 1 && rowCount === 3 && columnCount === 1) {
         return { setValues(values) { dayValues = values; } };
       }
       throw new Error(`Unexpected range: ${row},${column},${rowCount},${columnCount}`);
@@ -317,14 +317,14 @@ test('the KPI sync inserts and names the clocked-hours column exactly once', () 
   ];
   let insertions = 0;
   const sheet = {
-    getLastRow: () => 3,
+    getLastRow: () => 1,
     insertColumnBefore(column) {
       assert.equal(column, 12);
       insertions += 1;
       headers.splice(3, 0, '');
     },
     getRange(row, column, rowCount, columnCount) {
-      assert.equal(row, 3);
+      assert.equal(row, 1);
       assert.equal(column, 9);
       assert.equal(rowCount, 1);
       assert.equal(columnCount, 5);
@@ -353,10 +353,10 @@ test('the KPI sync inserts the Crew Size column exactly once', () => {
   let header = 'Total Estimated Job Hours';
   let insertions = 0;
   const sheet = {
-    getLastRow: () => 3,
+    getLastRow: () => 1,
     insertColumnBefore(column) { assert.equal(column, 8); insertions += 1; },
     getRange(row, column) {
-      assert.equal(row, 3);
+      assert.equal(row, 1);
       assert.equal(column, 8);
       return {
         getValue: () => header,
@@ -380,9 +380,9 @@ test('the KPI log filter includes the hidden calendar key so row data sorts toge
     getFilter: () => filter,
     getMaxRows: () => 1018,
     getRange(row, column, rowCount, columnCount) {
-      assert.equal(row, 3);
+      assert.equal(row, 1);
       assert.equal(column, 1);
-      assert.equal(rowCount, 1016);
+      assert.equal(rowCount, 1018);
       assert.equal(columnCount, 30);
       return {
         createFilter() {
@@ -396,6 +396,28 @@ test('the KPI log filter includes the hidden calendar key so row data sorts toge
   assert.equal(context.ensureKpiFilter_(sheet), true);
   assert.equal(context.ensureKpiFilter_(sheet), false);
   assert.equal(created, 1);
+});
+
+test('the KPI table resize request covers row one through the live last row', () => {
+  const context = backendContext();
+  const request = context.buildKpiTableResizeRequest_('install-log-table', 1604393046, 247);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(request)), {
+    updateTable: {
+      table: {
+        tableId: 'install-log-table',
+        range: {
+          sheetId: 1604393046,
+          startRowIndex: 0,
+          endRowIndex: 247,
+          startColumnIndex: 0,
+          endColumnIndex: 30,
+        },
+      },
+      fields: 'range',
+    },
+  });
+  assert.match(kpiSource, /resizeKpiNativeTable_\(sheet\);/);
 });
 
 test('sync planning is idempotent and preserves entered KPI results', () => {
