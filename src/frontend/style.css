@@ -11,6 +11,21 @@
 html { height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--navy-deep); }
 body { position: fixed; inset: 0; width: 100%; overflow: hidden; overscroll-behavior: none; font-family: 'DM Sans', system-ui, sans-serif; background: #f4f3f0; color: #1a1a1a; height: 100%; height: 100dvh; display: flex; flex-direction: column; touch-action: manipulation; }
 
+/* iOS 27 samples fixed, painted top elements to choose solid status-bar
+   chrome instead of extending its system blur over the app header. Keep this
+   surface opaque and at least 8px tall even when the safe inset resolves to 0.
+   It is outside #app so sign-in and Settings receive the same treatment. */
+.status-bar-surface { display: none; }
+@supports (-webkit-touch-callout: none) {
+  @media (display-mode: standalone) {
+    .status-bar-surface {
+      display: block; position: fixed; top: 0; left: 0; width: 100%;
+      height: max(8px, env(safe-area-inset-top, 0px));
+      background-color: var(--navy-deep); z-index: 1100; pointer-events: none;
+    }
+  }
+}
+
 /* ── PIN Screen ── */
 #pin-screen { 
   position: fixed; inset: 0; background: radial-gradient(circle at 50% 28%, rgba(43,91,167,.42), transparent 36%), linear-gradient(160deg,#173764 0%,#0c1f3d 68%,#09172d 100%);
