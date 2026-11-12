@@ -420,6 +420,38 @@ test('the KPI table resize request covers row one through the live last row', ()
   assert.match(kpiSource, /resizeKpiNativeTable_\(sheet\);/);
 });
 
+test('the KPI filter fallback preserves criteria and expands through the live last row', () => {
+  const context = backendContext();
+  const currentFilter = {
+    range: {
+      sheetId: 1604393046,
+      startRowIndex: 0,
+      endRowIndex: 247,
+      startColumnIndex: 0,
+      endColumnIndex: 30,
+    },
+    sortSpecs: [{ dimensionIndex: 1, sortOrder: 'ASCENDING' }],
+    filterSpecs: [{ columnIndex: 1, filterCriteria: { hiddenValues: ['11/02/26'] } }],
+  };
+  const request = context.buildKpiFilterResizeRequest_(1604393046, 250, currentFilter);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(request)), {
+    setBasicFilter: {
+      filter: {
+        range: {
+          sheetId: 1604393046,
+          startRowIndex: 0,
+          endRowIndex: 250,
+          startColumnIndex: 0,
+          endColumnIndex: 30,
+        },
+        sortSpecs: [{ dimensionIndex: 1, sortOrder: 'ASCENDING' }],
+        filterSpecs: [{ columnIndex: 1, filterCriteria: { hiddenValues: ['11/02/26'] } }],
+      },
+    },
+  });
+});
+
 test('sync planning is idempotent and preserves entered KPI results', () => {
   const context = backendContext();
   const existing = Array(30).fill('');
