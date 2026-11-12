@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.05.1';
+const APP_VERSION = '2026.11.12.1';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -1839,19 +1839,21 @@ function saveUnschedEdit() {
   let startY = null, pulling = false, refreshing = false;
 
   list.addEventListener('touchstart', e => {
-    if (refreshing) return;
+    if (refreshing || e.touches.length !== 1) return;
     pulling = list.scrollTop <= 0;
     startY = pulling ? e.touches[0].clientY : null;
   }, { passive: true });
 
   list.addEventListener('touchmove', e => {
-    if (!pulling || refreshing) return;
+    if (!pulling || refreshing || e.touches.length !== 1) return;
     const dy = e.touches[0].clientY - startY;
     if (dy <= 0) { indicator.style.height = '0px'; indicator.classList.remove('armed'); return; }
+    // The app handles this gesture, so Safari must not also pull the page.
+    if (e.cancelable) e.preventDefault();
     const dist = Math.min(dy * 0.5, 90);
     indicator.style.height = dist + 'px';
     indicator.classList.toggle('armed', dist >= THRESHOLD);
-  }, { passive: true });
+  }, { passive: false });
 
   list.addEventListener('touchend', () => {
     if (!pulling || refreshing) { pulling = false; return; }
@@ -1867,6 +1869,15 @@ function saveUnschedEdit() {
       indicator.classList.remove('spinning');
       indicator.style.height = '0px';
     });
+  }, { passive: true });
+
+  list.addEventListener('touchcancel', () => {
+    pulling = false;
+    startY = null;
+    if (!refreshing) {
+      indicator.classList.remove('armed');
+      indicator.style.height = '0px';
+    }
   }, { passive: true });
 })();
 
