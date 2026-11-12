@@ -25,7 +25,6 @@
 </style>
 </head>
 <body>
-<div class="status-bar-surface" aria-hidden="true"></div>
  
 <!-- PIN Screen -->
 <div id="pin-screen">
@@ -319,6 +318,7 @@
         <div class="settings-row"><span>Text size</span><div class="zoom-controls"><button class="zoom-btn" onclick="adjustZoom(-1)">−</button><span class="zoom-label" id="zoom-label">100%</span><button class="zoom-btn" onclick="adjustZoom(1)">+</button><button class="zoom-reset-btn" onclick="resetZoom()">Reset</button></div></div>
         <div class="settings-row"><label for="theme-select">Theme</label><select id="theme-select" onchange="setTheme(this.value)"><option value="light">Light</option><option value="dark">Dark</option></select></div>
         <button class="settings-action" id="settings-check-link" onclick="checkForUpdate(true)">Check for updates</button>
+        <details class="display-troubleshooting"><summary>Display troubleshooting</summary><button class="settings-action" onclick="copyDisplayReport(this)">Copy display report</button><pre id="display-report" hidden></pre></details>
       </section>
       <section class="settings-card account-card"><h2>My Account</h2><p class="settings-help">Update the name and PIN used to sign in on this account.</p>
         <div class="account-fields"><label>Name<input id="account-name" autocomplete="name"></label><label>New PIN<input id="account-pin" inputmode="numeric" maxlength="6" placeholder="New 6-digit PIN"></label></div>

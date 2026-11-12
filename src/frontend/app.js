@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.12.3';
+const APP_VERSION = '2026.11.12.4';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -14,6 +14,34 @@ const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API lim
 const CREW = ['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy', 'Jake'];
 const CREW_COLORS = { Johnny:'#F97316', Jonathan:'#5B9CF6', Randy:'#3aad6e', Eli:'#5E35B1', Jerry:'#FFBF00', Jake:'#111111' };
  
+// Keep the app and its sheets above the iOS keyboard without using the
+// visual viewport as the app's normal height (that can leave a bottom gap).
+(function setupKeyboardViewport() {
+  const root = document.documentElement;
+  const viewport = window.visualViewport;
+  if (!viewport) return;
+  let pending = false;
+  function update() {
+    pending = false;
+    const focused = document.activeElement;
+    const editing = focused && (focused.matches('input, textarea, select') || focused.isContentEditable);
+    const occluded = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    const inset = editing && viewport.scale === 1 && occluded > 120 ? Math.round(occluded) : 0;
+    root.style.setProperty('--keyboard-inset', inset + 'px');
+  }
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(update);
+  }
+  viewport.addEventListener('resize', schedule);
+  viewport.addEventListener('scroll', schedule);
+  window.addEventListener('resize', schedule);
+  document.addEventListener('focusin', schedule);
+  document.addEventListener('focusout', schedule);
+  update();
+})();
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let map, geocoder, infoWindowOpen = null;
 let scheduledJobs = [], unscheduledJobs = [];
@@ -97,7 +125,7 @@ function scheduleRender() {
 }
 
 // ── Mobile layout: List/Map tabs, filters accordion, add-job modal, job card ──
-function isMobile() { return window.matchMedia('(max-width: 768px)').matches; }
+function isMobile() { return window.matchMedia('(max-width: 768px), (max-width: 1000px) and (max-height: 500px)').matches; }
 
 function setMobileView(view) {
   const main = document.querySelector('.main');
@@ -247,6 +275,39 @@ function openSettings() {
   document.getElementById('settings-panel').classList.add('show');
   document.getElementById('settings-content').scrollTop = 0;
 }
+async function copyDisplayReport(button) {
+  const root = document.documentElement;
+  const app = document.getElementById('app');
+  const header = document.querySelector('#app > header');
+  const viewport = window.visualViewport;
+  const rect = element => {
+    const r = element.getBoundingClientRect();
+    return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height), bottom: Math.round(r.bottom) };
+  };
+  const style = getComputedStyle(root);
+  const report = JSON.stringify({
+    version: APP_VERSION,
+    standalone: navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches,
+    screen: { width: screen.width, height: screen.height, ratio: window.devicePixelRatio },
+    window: { width: window.innerWidth, height: window.innerHeight, scrollY: window.scrollY },
+    visualViewport: viewport ? { width: viewport.width, height: viewport.height, top: viewport.offsetTop, scale: viewport.scale } : null,
+    safeArea: Object.fromEntries(['top', 'right', 'bottom', 'left'].map(side => [side, style.getPropertyValue('--safe-' + side).trim()])),
+    keyboardInset: style.getPropertyValue('--keyboard-inset').trim(),
+    app: rect(app), header: rect(header),
+    headerPosition: getComputedStyle(header).position,
+    headerColor: getComputedStyle(header).backgroundColor,
+  }, null, 2);
+  try {
+    await navigator.clipboard.writeText(report);
+    button.textContent = 'Display report copied';
+  } catch (error) {
+    const output = document.getElementById('display-report');
+    output.textContent = report;
+    output.hidden = false;
+    button.textContent = 'Report ready below — select to copy';
+  }
+}
+
 function setTheme(theme) { localStorage.setItem('sws_theme', theme); document.body.classList.toggle('theme-dark', theme === 'dark'); }
 function saveAccountInfo() {
   const name = document.getElementById('account-name').value.trim();
