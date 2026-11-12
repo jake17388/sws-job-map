@@ -1,6 +1,6 @@
 // ── Install KPI log ──────────────────────────────────────────────────────────
-const KPI_HEADER_ROW = 3;
-const KPI_FIRST_DATA_ROW = 4;
+const KPI_HEADER_ROW = 1;
+const KPI_FIRST_DATA_ROW = 2;
 const KPI_COLUMN_COUNT = 30;
 const KPI_CREW_SIZE_COLUMN = 8;
 const KPI_TOTAL_JOB_HOURS_COLUMN = 9;
@@ -11,6 +11,7 @@ const KPI_ACTUAL_PROJECT_HOURS_COLUMN = 13;
 const KPI_FILTER_COLUMN_COUNT = KPI_COLUMN_COUNT;
 const KPI_KEY_COLUMN = 30;
 const KPI_KEY_HEADER = 'Calendar KPI Key';
+const KPI_TABLE_NAME = 'InstallLogTable';
 const KPI_HOUR_HEADERS = [
   'Total Estimated Job Hours',
   'Round-Trip Drive Hours',
@@ -34,6 +35,70 @@ function ensureKpiFilter_(sheet) {
   if (sheet.getFilter()) return false;
   const rowCount = Math.max(1, sheet.getMaxRows() - KPI_HEADER_ROW + 1);
   sheet.getRange(KPI_HEADER_ROW, 1, rowCount, KPI_FILTER_COLUMN_COUNT).createFilter();
+  return true;
+}
+
+function buildKpiTableResizeRequest_(tableId, sheetId, lastRow) {
+  return {
+    updateTable: {
+      table: {
+        tableId,
+        range: {
+          sheetId,
+          startRowIndex: KPI_HEADER_ROW - 1,
+          endRowIndex: Math.max(KPI_HEADER_ROW, lastRow),
+          startColumnIndex: 0,
+          endColumnIndex: KPI_COLUMN_COUNT,
+        },
+      },
+      fields: 'range',
+    },
+  };
+}
+
+function kpiSheetsApiRequest_(url, options) {
+  const response = UrlFetchApp.fetch(url, {
+    muteHttpExceptions: true,
+    headers: { Authorization: `Bearer ${ScriptApp.getOAuthToken()}` },
+    ...options,
+  });
+  const status = response.getResponseCode();
+  const text = response.getContentText();
+  if (status < 200 || status >= 300) {
+    throw new Error(`Google Sheets API failed (${status}): ${text.slice(0, 300)}`);
+  }
+  return text ? JSON.parse(text) : {};
+}
+
+function resizeKpiNativeTable_(sheet) {
+  if (typeof UrlFetchApp === 'undefined' || typeof ScriptApp === 'undefined') return false;
+  const sheetId = sheet.getSheetId();
+  const metadataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(KPI_SHEET_ID)}`
+    + '?fields=sheets(properties(sheetId),tables(tableId,name,range))';
+  const metadata = kpiSheetsApiRequest_(metadataUrl);
+  const sheetMetadata = (metadata.sheets || [])
+    .find(candidate => Number(candidate && candidate.properties && candidate.properties.sheetId) === Number(sheetId));
+  const table = (sheetMetadata && sheetMetadata.tables || [])
+    .find(candidate => candidate && candidate.name === KPI_TABLE_NAME);
+  if (!table || !table.tableId) return false;
+
+  const lastRow = Math.max(KPI_HEADER_ROW, sheet.getLastRow());
+  const range = table.range || {};
+  if (range.startRowIndex === KPI_HEADER_ROW - 1
+    && range.endRowIndex === lastRow
+    && range.startColumnIndex === 0
+    && range.endColumnIndex === KPI_COLUMN_COUNT) {
+    return false;
+  }
+
+  const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(KPI_SHEET_ID)}:batchUpdate`;
+  kpiSheetsApiRequest_(batchUrl, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      requests: [buildKpiTableResizeRequest_(table.tableId, sheetId, lastRow)],
+    }),
+  });
   return true;
 }
 
@@ -502,6 +567,7 @@ function syncInstallJobsToKpi_(jobs, options) {
     const formulaRowCount = Math.max(0, sheet.getLastRow() - KPI_FIRST_DATA_ROW + 1);
     setKpiCrewSizeFormulas_(sheet, KPI_FIRST_DATA_ROW, formulaRowCount);
     setKpiEstimatedProjectHourFormulas_(sheet, KPI_FIRST_DATA_ROW, formulaRowCount);
+    resizeKpiNativeTable_(sheet);
     return {
       success: true,
       created: plan.rowsToAppend.length,

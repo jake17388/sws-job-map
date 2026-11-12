@@ -87,12 +87,12 @@ test('saving a Job Map truck assignment updates the matching KPI truck cell imme
   row[5] = '';
   row[29] = 'event-1|2026-11-10|Johnny';
   const sheet = {
-    getLastRow: () => 4,
+    getLastRow: () => 2,
     getRange(rowNumber, column, rowCount, columnCount) {
-      if (rowNumber === 4 && column === 1 && rowCount === 1 && columnCount === 30) {
+      if (rowNumber === 2 && column === 1 && rowCount === 1 && columnCount === 30) {
         return { getValues: () => [[...row]] };
       }
-      if (rowNumber === 4 && column === 6 && rowCount === 1 && columnCount === 1) {
+      if (rowNumber === 2 && column === 6 && rowCount === 1 && columnCount === 1) {
         return { setValue(value) { row[5] = value; } };
       }
       throw new Error(`Unexpected range: ${rowNumber},${column},${rowCount},${columnCount}`);
