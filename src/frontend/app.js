@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.12.4';
+const APP_VERSION = '2026.11.16.1';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -11,8 +11,8 @@ const TYPE_INIT = { install:'I', service:'S', excavation:'E' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API limit reached', OVER_QUERY_LIMIT:'Rate limited', REQUEST_DENIED:'API key error', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
-const CREW = ['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy', 'Jake'];
-const CREW_COLORS = { Johnny:'#F97316', Jonathan:'#5B9CF6', Randy:'#3aad6e', Eli:'#5E35B1', Jerry:'#FFBF00', Jake:'#111111' };
+const CREW = ['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy', 'Jake', 'Caden'];
+const CREW_COLORS = { Johnny:'#F97316', Jonathan:'#5B9CF6', Randy:'#3aad6e', Eli:'#5E35B1', Jerry:'#FFBF00', Jake:'#111111', Caden:'#8E402A' };
  
 // Keep the app and its sheets above the iOS keyboard without using the
 // visual viewport as the app's normal height (that can leave a bottom gap).
