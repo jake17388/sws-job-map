@@ -62,6 +62,28 @@ test('UKG reports may include metadata lines before the CSV header', () => {
   assert.deepEqual(Array.from(hours.entries()), [['46|2026-11-16', 9.5]]);
 });
 
+test('recent UKG reports retain older dates while newer corrections win', () => {
+  const context = ukgContext();
+  const olderReport = [
+    ['Employee Id', 'Date', 'Double Time Hours', 'Overtime Hours', 'Regular Hours'],
+    ['131', '11/07/2026', '', '', '7.25'],
+    ['46', '11/07/2026', '', '', '7.95'],
+  ];
+  const newerReport = [
+    ['Employee Id', 'Date', 'Double Time Hours', 'Overtime Hours', 'Regular Hours'],
+    ['131', '11/07/2026', '', '', '7.48'],
+    ['46', '11/16/2026', '', '', '8.5'],
+  ];
+
+  const hours = context.mergeUkgDailyHoursReports_([olderReport, newerReport]);
+
+  assert.deepEqual(Array.from(hours.entries()), [
+    ['131|2026-11-07', 7.48],
+    ['46|2026-11-07', 7.95],
+    ['46|2026-11-16', 8.5],
+  ]);
+});
+
 test('clocked-hour planning repeats the daily total and preserves unrelated values', () => {
   const context = ukgContext();
   const rows = [
@@ -84,22 +106,22 @@ test('clocked-hour planning repeats the daily total and preserves unrelated valu
   assert.equal(plan.matchedCrewDates, 2);
 });
 
-test('the newest CSV attachment is read through the Gmail read-only API', () => {
+test('recent CSV attachments are read through the Gmail read-only API', () => {
   const requests = [];
   const response = body => ({
     getResponseCode: () => 200,
     getContentText: () => JSON.stringify(body),
   });
-  const csvBlob = { name: 'Install Daily Hours Export.csv' };
+  const csvBlob = name => ({ name });
   const context = ukgContext({
     ScriptApp: { getOAuthToken: () => 'read-only-token' },
     Utilities: {
       base64DecodeWebSafe: value => [`decoded:${value}`],
       newBlob(bytes, contentType, name) {
-        assert.deepEqual(bytes, ['decoded:Y3N2']);
+        assert.match(String(bytes[0]), /^decoded:/);
         assert.equal(contentType, 'text/csv');
         assert.equal(name, 'Install Daily Hours Export.csv');
-        return csvBlob;
+        return csvBlob(String(bytes[0]));
       },
     },
     UrlFetchApp: {
@@ -125,18 +147,32 @@ test('the newest CSV attachment is read through the Gmail read-only API', () => 
           });
         }
         if (url.endsWith('/messages/new-message/attachments/csv-a')) {
-          return response({ data: 'Y3N2' });
+          return response({ data: 'bmV3' });
+        }
+        if (url.endsWith('/messages/old-message?format=full')) {
+          return response({
+            payload: {
+              parts: [{
+                filename: 'Install Daily Hours Export.csv',
+                mimeType: 'text/csv',
+                body: { attachmentId: 'csv-b' },
+              }],
+            },
+          });
+        }
+        if (url.endsWith('/messages/old-message/attachments/csv-b')) {
+          return response({ data: 'b2xk' });
         }
         throw new Error(`Unexpected URL: ${url}`);
       },
     },
   });
 
-  const found = context.newestUkgCsvAttachment_();
+  const found = context.ukgCsvAttachments_();
 
-  assert.equal(found.messageId, 'new-message');
-  assert.equal(found.attachment, csvBlob);
-  assert.equal(requests.length, 3);
+  assert.deepEqual(Array.from(found, item => item.messageId), ['new-message', 'old-message']);
+  assert.deepEqual(Array.from(found, item => item.attachment.name), ['decoded:bmV3', 'decoded:b2xk']);
+  assert.equal(requests.length, 5);
   assert.doesNotMatch(ukgSource, /GmailApp/);
 });
 
