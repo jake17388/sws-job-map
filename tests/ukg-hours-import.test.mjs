@@ -47,17 +47,19 @@ test('clocked-hour planning repeats the daily total and preserves unrelated valu
     ['Monday', new Date(2026, 10, 2), 'Johnny', '260102', '', '', '', '', '', '', '', 8.5],
     ['Monday', new Date(2026, 10, 2), 'Eli', '260103', '', '', '', '', '', '', '', 9],
     ['Tuesday', new Date(2026, 10, 3), 'Johnny', '260104', '', '', '', '', '', '', '', 7.25],
+    ['Monday', new Date(2026, 10, 2), 'Caden', '260105', '', '', '', '', '', '', '', ''],
   ];
   const hours = new Map([
     ['46|2026-11-02', 9.72],
+    ['294|2026-11-02', 8.25],
     ['999|2026-11-02', 12],
   ]);
 
   const plan = context.planKpiClockedHoursSync_(rows, hours, 'America/Phoenix');
 
-  assert.deepEqual(Array.from(plan.values, row => row[0]), [9.72, 9.72, 9, 7.25]);
-  assert.equal(plan.updated, 2);
-  assert.equal(plan.matchedCrewDates, 1);
+  assert.deepEqual(Array.from(plan.values, row => row[0]), [9.72, 9.72, 9, 7.25, 8.25]);
+  assert.equal(plan.updated, 3);
+  assert.equal(plan.matchedCrewDates, 2);
 });
 
 test('the newest CSV attachment is read through the Gmail read-only API', () => {
