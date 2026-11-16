@@ -43,19 +43,30 @@ function ukgDateKey_(value) {
 
 function parseUkgDailyHoursRows_(rows) {
   if (!Array.isArray(rows) || !rows.length) return new Map();
-  const headers = rows[0].map(normalizeUkgHeader_);
+  const requiredHeaders = [
+    'Employee Id',
+    'Date',
+    'Regular Hours',
+    'Overtime Hours',
+    'Double Time Hours',
+  ].map(normalizeUkgHeader_);
+  const headerRowIndex = rows.findIndex(row => {
+    const candidate = (row || []).map(normalizeUkgHeader_);
+    return requiredHeaders.every(header => candidate.includes(header));
+  });
+  if (headerRowIndex === -1) {
+    throw new Error('UKG CSV is missing Employee Id, Date, Regular, Overtime, or Double Time hours');
+  }
+  const headers = rows[headerRowIndex].map(normalizeUkgHeader_);
   const indexOf = name => headers.indexOf(normalizeUkgHeader_(name));
   const employeeIndex = indexOf('Employee Id');
   const dateIndex = indexOf('Date');
   const regularIndex = indexOf('Regular Hours');
   const overtimeIndex = indexOf('Overtime Hours');
   const doubleTimeIndex = indexOf('Double Time Hours');
-  if ([employeeIndex, dateIndex, regularIndex, overtimeIndex, doubleTimeIndex].includes(-1)) {
-    throw new Error('UKG CSV is missing Employee Id, Date, Regular, Overtime, or Double Time hours');
-  }
 
   const hoursByEmployeeDate = new Map();
-  rows.slice(1).forEach(row => {
+  rows.slice(headerRowIndex + 1).forEach(row => {
     const employeeId = String(row[employeeIndex] == null ? '' : row[employeeIndex]).trim();
     const dateKey = ukgDateKey_(row[dateIndex]);
     if (!employeeId || !dateKey) return;
