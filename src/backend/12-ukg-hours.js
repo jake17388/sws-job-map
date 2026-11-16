@@ -80,6 +80,14 @@ function parseUkgDailyHoursRows_(rows) {
   return hoursByEmployeeDate;
 }
 
+function mergeUkgDailyHoursReports_(reports) {
+  const merged = new Map();
+  (reports || []).forEach(rows => {
+    parseUkgDailyHoursRows_(rows).forEach((hours, key) => merged.set(key, hours));
+  });
+  return merged;
+}
+
 function planKpiClockedHoursSync_(existingRows, hoursByEmployeeDate) {
   const employeeIdByCrew = Object.entries(UKG_INSTALL_CREW_BY_EMPLOYEE_ID)
     .reduce((result, entry) => {
@@ -127,9 +135,10 @@ function findUkgCsvPart_(part) {
   return null;
 }
 
-function newestUkgCsvAttachment_() {
+function ukgCsvAttachments_() {
   const query = encodeURIComponent(UKG_HOURS_EMAIL_QUERY);
   const listing = gmailReadOnlyApiGet_(`messages?q=${query}&maxResults=10`);
+  const attachments = [];
   for (const summary of (listing.messages || [])) {
     const messageId = String(summary.id || '');
     if (!messageId) continue;
@@ -148,13 +157,16 @@ function newestUkgCsvAttachment_() {
       String(part.mimeType || 'text/csv'),
       String(part.filename || 'Install Daily Hours Export.csv'),
     );
-    return { messageId, attachment };
+    attachments.push({ messageId, attachment });
   }
-  return null;
+  return attachments;
 }
 
-function syncUkgDailyHoursRows_(rows) {
-  const hoursByEmployeeDate = parseUkgDailyHoursRows_(rows);
+function newestUkgCsvAttachment_() {
+  return ukgCsvAttachments_()[0] || null;
+}
+
+function syncUkgDailyHoursMap_(hoursByEmployeeDate) {
   const sheet = getKpiSheet_();
   const lastRow = sheet.getLastRow();
   if (lastRow < KPI_FIRST_DATA_ROW) {
@@ -176,15 +188,23 @@ function syncUkgDailyHoursRows_(rows) {
   };
 }
 
+function syncUkgDailyHoursRows_(rows) {
+  return syncUkgDailyHoursMap_(parseUkgDailyHoursRows_(rows));
+}
+
 function syncUkgDailyHoursFromEmail_() {
-  const found = newestUkgCsvAttachment_();
-  if (!found) {
+  const found = ukgCsvAttachments_();
+  if (!found.length) {
     return { success: true, updated: 0, matched_crew_dates: 0, report_found: false };
   }
-  const rows = Utilities.parseCsv(found.attachment.getDataAsString());
-  const result = syncUkgDailyHoursRows_(rows);
+  const reports = found
+    .slice()
+    .reverse()
+    .map(item => Utilities.parseCsv(item.attachment.getDataAsString()));
+  const result = syncUkgDailyHoursMap_(mergeUkgDailyHoursReports_(reports));
   result.report_found = true;
-  result.source_message_id = found.messageId;
+  result.source_message_id = found[0].messageId;
+  result.source_message_ids = found.map(item => item.messageId);
   return result;
 }
 
