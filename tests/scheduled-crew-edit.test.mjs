@@ -75,7 +75,7 @@ test('scheduled crew titles use the standard priority regardless of selection or
 });
 
 test('backend and frontend share the requested crew priority', () => {
-  const priority = "['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy', 'Jake']";
+  const priority = "['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy', 'Jake', 'Caden']";
   assert.ok(configSource.includes(`const CREW_NAMES = ${priority}`));
   assert.ok(frontendSource.includes(`const CREW = ${priority}`));
 });
