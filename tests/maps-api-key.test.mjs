@@ -12,6 +12,10 @@ const backend = readFileSync(new URL('../Code.js', import.meta.url), 'utf8');
 test('the deployed map uses Leaflet and OpenStreetMap without a Google API key', () => {
   assert.doesNotMatch(html, /maps\.googleapis\.com|AIza[\w-]+/);
   assert.match(template, /leaflet@1\.9\.4\/dist\/leaflet\.css/);
+  assert.match(
+    template,
+    /leaflet@1\.9\.4\/dist\/leaflet\.css" integrity="sha256-p4NxAoJBhIIN\+hmNHrzRCf9tD\/miZyoHS5obTRR9BMY="/,
+  );
   assert.match(template, /leaflet@1\.9\.4\/dist\/leaflet\.js/);
   assert.match(frontend, /https:\/\/tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/);
   assert.match(frontend, /&copy; OpenStreetMap contributors/);
