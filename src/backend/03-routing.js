@@ -24,6 +24,11 @@ function doGet(e) {
     return json(action === 'getJobs' ? getJobs(e) : getUnsched());
   }
 
+  if (action === 'geocode') {
+    if (!actor) return json(UNAUTHORIZED);
+    return json(geocodeAddress_(params.address));
+  }
+
   if (action === 'getVehicles') {
     if (!actor) return json(UNAUTHORIZED);
     return json(vehicleResponse_());

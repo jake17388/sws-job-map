@@ -50,7 +50,9 @@ function makeGeocoder(payload, statusCode = 200) {
   });
   new vm.Script(backend, { filename: 'Code.js' }).runInContext(context);
   return {
-    geocode: address => vm.runInContext(`geocodeAddress_(${JSON.stringify(address)})`, context),
+    geocode: address => JSON.parse(JSON.stringify(
+      vm.runInContext(`geocodeAddress_(${JSON.stringify(address)})`, context),
+    )),
     fetchCount: () => fetches,
   };
 }

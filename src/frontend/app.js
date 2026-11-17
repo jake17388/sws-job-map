@@ -3,14 +3,14 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.16.1';
+const APP_VERSION = '2026.11.17.1';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
 const TYPE_INIT = { install:'I', service:'S', excavation:'E' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const GEO_ERRORS = { ZERO_RESULTS:'Address not found', OVER_DAILY_LIMIT:'API limit reached', OVER_QUERY_LIMIT:'Rate limited', REQUEST_DENIED:'API key error', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
+const GEO_ERRORS = { ZERO_RESULTS:'Address not found', UPSTREAM_ERROR:'Map lookup unavailable', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
 const CREW = ['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy', 'Jake', 'Caden'];
 const CREW_COLORS = { Johnny:'#F97316', Jonathan:'#5B9CF6', Randy:'#3aad6e', Eli:'#5E35B1', Jerry:'#FFBF00', Jake:'#111111', Caden:'#8E402A' };
  
@@ -43,7 +43,7 @@ const CREW_COLORS = { Johnny:'#F97316', Jonathan:'#5B9CF6', Randy:'#3aad6e', Eli
 })();
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let map, geocoder, infoWindowOpen = null;
+let map, infoWindowOpen = null;
 let scheduledJobs = [], unscheduledJobs = [];
 const activeTypes = new Set(['install','service','excavation','unscheduled']);
 let currentUser = null;
@@ -107,14 +107,21 @@ function geoCacheSet(addr, lat, lng) {
 function geocodeAddress(addr, cb) {
   const hit = geoCacheGet(addr);
   if (hit) { cb(true, hit.lat, hit.lng, null); return; }
-  geocoder.geocode({ address: addr }, (results, status) => {
-    if (status === 'OK' && results[0]) {
-      const lat = results[0].geometry.location.lat();
-      const lng = results[0].geometry.location.lng();
-      geoCacheSet(addr, lat, lng);
-      cb(true, lat, lng, null);
-    } else cb(false, null, null, status);
-  });
+  scriptGet('geocode&address=' + encodeURIComponent(String(addr || '').trim()))
+    .then(result => {
+      if (result && result.ok) {
+        const lat = Number(result.lat);
+        const lng = Number(result.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error('Invalid geocode response');
+        geoCacheSet(addr, lat, lng);
+        cb(true, lat, lng, null);
+      } else {
+        cb(false, null, null, result && result.error ? result.error : 'UNKNOWN_ERROR');
+      }
+    })
+    .catch(() => {
+      cb(false, null, null, 'UPSTREAM_ERROR');
+    });
 }
 
 // Coalesce per-geocode re-renders into at most ~5 list/map refreshes per second
@@ -135,9 +142,7 @@ function setMobileView(view) {
   document.querySelectorAll('.mobile-tab').forEach(b => b.classList.toggle('on', b.dataset.view === view));
   if (view !== 'map') closeJobCard();
   if (view === 'map' && map) {
-    const c = map.getCenter();
-    google.maps.event.trigger(map, 'resize');
-    if (c) map.setCenter(c);
+    map.invalidateSize();
   }
 }
 
@@ -458,8 +463,8 @@ function signOut() {
   updateDots();
   document.getElementById('pin-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
-  scheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
-  unscheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
+  scheduledJobs.forEach(j => { if (j._marker) j._marker.remove(); });
+  unscheduledJobs.forEach(j => { if (j._marker) j._marker.remove(); });
   scheduledJobs = []; unscheduledJobs = [];
 }
 document.addEventListener('keydown', e => {
@@ -615,18 +620,17 @@ function makeHomeSVG() {
   </svg>`;
 }
 function initHomeMarker() {
-  const icon = {
-    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeHomeSVG()),
-    scaledSize: new google.maps.Size(44, 54),
-    anchor: new google.maps.Point(22, 54)
-  };
-  const marker = new google.maps.Marker({ position: HOME_COORDS, map, icon, title: 'SWS — Home Base', zIndex: 9999 });
-  const iw = new google.maps.InfoWindow({
-    content: `<div style="font-family:'DM Sans',sans-serif;padding:4px 2px;min-width:160px">
+  const icon = L.icon({
+    iconUrl: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeHomeSVG()),
+    iconSize: [44, 54],
+    iconAnchor: [22, 54],
+    popupAnchor: [0, -50],
+  });
+  const marker = createMarker({ position: HOME_COORDS, map, icon, title: 'SWS — Home Base', zIndex: 9999 });
+  const iw = createPopup(`<div style="font-family:'DM Sans',sans-serif;padding:4px 2px;min-width:160px">
       <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:3px">SWS Home Base</div>
       <div style="font-size:11px;color:#888">${HOME_ADDRESS}</div>
-    </div>`
-  });
+    </div>`);
   marker.addListener('click', () => {
     if (infoWindowOpen) infoWindowOpen.close();
     iw.open(map, marker); infoWindowOpen = iw;
@@ -643,11 +647,12 @@ let vehicleDataStale = false;
 function truckIcon_(status) {
   const fill = { normal: '#16a34a', idling: '#d97706', park_mode: '#6b7280' }[status] || '#9ca3af';
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 34 34'><circle cx='17' cy='17' r='15' fill='${fill}' stroke='#fff' stroke-width='2.5'/><path d='M8 13h11v9H8zm11 0h5l3 3.5V22h-8z' fill='#fff'/><circle cx='11.5' cy='22' r='2' fill='${fill}' stroke='#fff' stroke-width='1.5'/><circle cx='23.5' cy='22' r='2' fill='${fill}' stroke='#fff' stroke-width='1.5'/></svg>`;
-  return {
-    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-    scaledSize: new google.maps.Size(34, 34),
-    anchor: new google.maps.Point(17, 17),
-  };
+  return L.icon({
+    iconUrl: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+    popupAnchor: [0, -17],
+  });
 }
 
 function truckInfoHtml_(v) {
@@ -666,13 +671,13 @@ function truckInfoHtml_(v) {
 }
 
 function renderVehicleMarkers(vehicles) {
-  vehicleMarkers.forEach(m => m.setMap(null));
+  vehicleMarkers.forEach(m => m.remove());
   vehicleMarkers = [];
   vehicles.forEach(v => { v._marker = null; });
   if (!showVehicles || !map) return;
   vehicles.forEach(v => {
     if (!v.lat || !v.lng) return;
-    const marker = new google.maps.Marker({
+    const marker = createMarker({
       position: { lat: v.lat, lng: v.lng },
       map,
       icon: truckIcon_(v.status),
@@ -681,7 +686,7 @@ function renderVehicleMarkers(vehicles) {
     });
     marker.addListener('click', () => {
       if (infoWindowOpen) infoWindowOpen.close();
-      const iw = new google.maps.InfoWindow({ content: truckInfoHtml_(v) });
+      const iw = createPopup(truckInfoHtml_(v));
       iw.open(map, marker); infoWindowOpen = iw;
     });
     v._marker = marker;
@@ -763,7 +768,7 @@ function focusVehicle(idx) {
   map.setZoom(15);
   if (v._marker) {
     if (infoWindowOpen) infoWindowOpen.close();
-    const iw = new google.maps.InfoWindow({ content: truckInfoHtml_(v) });
+    const iw = createPopup(truckInfoHtml_(v));
     iw.open(map, v._marker); infoWindowOpen = iw;
   }
 }
@@ -806,7 +811,7 @@ function toggleTrucks() {
     if (btn) btn.classList.toggle('on', showVehicles);
   });
   if (showVehicles) fetchVehicles();
-  else { vehicleMarkers.forEach(m => m.setMap(null)); vehicleMarkers = []; }
+  else { vehicleMarkers.forEach(m => m.remove()); vehicleMarkers = []; }
 }
 
 // ── Map init ──────────────────────────────────────────────────────────────────
@@ -816,18 +821,58 @@ let mapsLoaded = false, mapWanted = false;
 function mapsReady() { mapsLoaded = true; if (mapWanted) initMap(); }
 function requestMap() { if (mapsLoaded) initMap(); else mapWanted = true; }
 
+function createMarker({ position, map: targetMap, icon, title, zIndex }) {
+  const marker = L.marker([position.lat, position.lng], {
+    icon,
+    title,
+    zIndexOffset: zIndex || 0,
+  }).addTo(targetMap);
+  let markerMap = targetMap;
+  let visible = true;
+  marker.addListener = (event, handler) => marker.on(event, handler);
+  marker.setMap = nextMap => {
+    if (!nextMap) {
+      marker.remove();
+      visible = false;
+      return;
+    }
+    markerMap = nextMap;
+    if (!markerMap.hasLayer(marker)) marker.addTo(markerMap);
+    visible = true;
+  };
+  marker.setVisible = show => {
+    if (show && !markerMap.hasLayer(marker)) marker.addTo(markerMap);
+    if (!show && markerMap.hasLayer(marker)) marker.remove();
+    visible = show;
+  };
+  marker.getVisible = () => visible && markerMap.hasLayer(marker);
+  marker.setZIndex = value => marker.setZIndexOffset(value);
+  return marker;
+}
+
+function createPopup(content) {
+  const popup = L.popup({ maxWidth: 340 }).setContent(content);
+  let popupMap = null;
+  return {
+    setContent(value) { popup.setContent(value); },
+    open(targetMap, marker) {
+      popupMap = targetMap;
+      popup.setLatLng(marker.getLatLng()).openOn(targetMap);
+    },
+    close() {
+      if (popupMap) popupMap.closePopup(popup);
+      popupMap = null;
+    },
+  };
+}
+
 function initMap() {
   if (map) { loadAll(); return; }
-  map = new google.maps.Map(document.getElementById('map'), {
-    center: { lat: 33.40, lng: -111.85 }, zoom: 10,
-    mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
-    gestureHandling: 'greedy',
-    styles: [
-      { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-      { featureType: 'transit', stylers: [{ visibility: 'off' }] }
-    ]
-  });
-  geocoder = new google.maps.Geocoder();
+  map = L.map('map', { zoomControl: true }).setView([33.40, -111.85], 10);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
+  }).addTo(map);
   initCrewButtons();
   initUnscheduledCrewButtons();
   initScheduledCrewButtons();
@@ -932,7 +977,7 @@ function loadJobs() {
 }
 
 function applyJobsData(data, fromCache) {
-  scheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
+  scheduledJobs.forEach(j => { if (j._marker) j._marker.remove(); });
   scheduledJobs = data.jobs || [];
   scheduledJobs.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
   scheduledJobs.forEach(j => { j._status = 'pending'; j._marker = null; j._iw = null; });
@@ -1005,11 +1050,12 @@ function makeSVG(label, color, crew = [], textColor = '#1a1a1a') {
   </svg>`;
 }
 function makeIcon(label, color, crew = [], textColor = '#1a1a1a') {
-  return {
-    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeSVG(label, color, crew, textColor)),
-    scaledSize: new google.maps.Size(34, 47),
-    anchor: new google.maps.Point(17, 47)
-  };
+  return L.icon({
+    iconUrl: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeSVG(label, color, crew, textColor)),
+    iconSize: [34, 47],
+    iconAnchor: [17, 47],
+    popupAnchor: [0, -43],
+  });
 }
  
 // Shared content builders — feed both the desktop InfoWindow and the
@@ -1078,11 +1124,11 @@ function unschedCardHTML(job) {
 function buildScheduledMarker(job) {
   const color = SCHED_PIN;
   const crew = job.crew || [];
-  const marker = new google.maps.Marker({
+  const marker = createMarker({
     position: { lat: job._lat, lng: job._lng }, map,
     icon: makeIcon('•', color, crew, COLORS[job.type] || COLORS.install), title: `${job.num} — ${job.title}`, zIndex: 100
   });
-  const iw = new google.maps.InfoWindow({ content: scheduledCardHTML(job) });
+  const iw = createPopup(scheduledCardHTML(job));
   marker.addListener('click', () => {
     if (isMobile()) {
       setMobileView('map');
@@ -1099,11 +1145,11 @@ function buildScheduledMarker(job) {
 
 function buildUnschedMarker(job, label) {
   const color = COLORS.unscheduled;
-  const marker = new google.maps.Marker({
+  const marker = createMarker({
     position: { lat: job._lat, lng: job._lng }, map,
     icon: makeIcon(label, color), title: `${job.job_num} — ${job.title}`, zIndex: 200
   });
-  const iw = new google.maps.InfoWindow({ content: unschedCardHTML(job) });
+  const iw = createPopup(unschedCardHTML(job));
   marker.addListener('click', () => {
     if (isMobile()) {
       setMobileView('map');
@@ -1360,7 +1406,7 @@ function loadUnscheduled() {
 }
 
 function applyUnschedData(data) {
-  unscheduledJobs.forEach(j => { if (j._marker) j._marker.setMap(null); });
+  unscheduledJobs.forEach(j => { if (j._marker) j._marker.remove(); });
   unscheduledJobs = data.jobs || [];
   unscheduledJobs.forEach(j => { j._status = 'pending'; j._marker = null; j._iw = null; });
   renderList();
@@ -1444,7 +1490,7 @@ function addUnscheduled() {
       return loadUnscheduled();
     })
     .catch(err => {
-      if (job._marker) job._marker.setMap(null);
+      if (job._marker) job._marker.remove();
       unscheduledJobs = unscheduledJobs.filter(j => j !== job);
       renderList();
       alert('Failed to save. Try again.\n' + (err && err.message ? err.message : ''));
@@ -1458,7 +1504,7 @@ function removeUnsched(id) {
   const idx = unscheduledJobs.indexOf(job);
 
   // Optimistic removal: hide it immediately, roll back if the server call fails.
-  if (job._marker) job._marker.setMap(null);
+  if (job._marker) job._marker.remove();
   unscheduledJobs = unscheduledJobs.filter(j => j !== job);
   writeCache(UNSCHED_CACHE_KEY, { jobs: unscheduledJobs });
   renderList();
@@ -1497,10 +1543,10 @@ function highlightItem(id) {
 }
  
 function fitVisible() {
-  const bounds = new google.maps.LatLngBounds(); let any = false;
-  scheduledJobs.forEach(j => { if (j._marker && j._marker.getVisible()) { bounds.extend({ lat: j._lat, lng: j._lng }); any = true; } });
-  unscheduledJobs.forEach(j => { if (j._marker && j._marker.getVisible()) { bounds.extend({ lat: j._lat, lng: j._lng }); any = true; } });
-  if (any) map.fitBounds(bounds);
+  const points = [];
+  scheduledJobs.forEach(j => { if (j._marker && j._marker.getVisible()) points.push([j._lat, j._lng]); });
+  unscheduledJobs.forEach(j => { if (j._marker && j._marker.getVisible()) points.push([j._lat, j._lng]); });
+  if (points.length) map.fitBounds(points, { padding: [30, 30] });
 }
  
 function updateCount() {
@@ -1956,5 +2002,5 @@ function setSidebarWidth(value) {
   localStorage.setItem('sws_sidebar_width', String(width));
   const slider = document.getElementById('sidebar-width');
   if (slider) slider.value = width;
-  if (map && typeof google !== 'undefined') google.maps.event.trigger(map, 'resize');
+  if (map) map.invalidateSize();
 }

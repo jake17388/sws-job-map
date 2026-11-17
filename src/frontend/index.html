@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="SWS Jobs" />
 <meta name="theme-color" content="#122d57" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynwTZOcJn8l5Jx6ZLdxGNSaXlZ0=" crossorigin="" />
 <!-- iOS splash screens (shown briefly while launching from the home screen) -->
 <link rel="apple-touch-startup-image" href="splash/splash-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)">
 <link rel="apple-touch-startup-image" href="splash/splash-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)">
@@ -345,6 +346,6 @@
 <script>
   /* JS will be injected here */
 </script>
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAiuFrr648HGoeFn3BmScaDVAbzJKPfXcA&loading=async&callback=mapsReady" async defer></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" onload="mapsReady()" defer></script>
 </body>
 </html
