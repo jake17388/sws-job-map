@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const template = readFileSync(new URL('../src/frontend/index.html', import.meta.url), 'utf8');
 const frontend = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
+const styles = readFileSync(new URL('../src/frontend/style.css', import.meta.url), 'utf8');
 const routing = readFileSync(new URL('../src/backend/03-routing.js', import.meta.url), 'utf8');
 const backend = readFileSync(new URL('../Code.js', import.meta.url), 'utf8');
 
@@ -93,4 +94,10 @@ test('blank geocoding requests are rejected without calling Census', () => {
   const service = makeGeocoder({ result: { addressMatches: [] } });
   assert.deepEqual(service.geocode('  '), { ok: false, error: 'INVALID_REQUEST' });
   assert.equal(service.fetchCount(), 0);
+});
+
+test('Leaflet controls and popups retain the original map behavior', () => {
+  assert.match(styles, /\.map-controls\s*\{[^}]*z-index:\s*800/);
+  assert.match(frontend, /marker\.bindPopup\(popup\)\.openPopup\(\)/);
+  assert.doesNotMatch(frontend, /popup\.setLatLng\(marker\.getLatLng\(\)\)\.openOn\(targetMap\)/);
 });
