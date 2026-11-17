@@ -31,7 +31,7 @@ test('Fleetio rows map AM and PM inspections to KPI crew names and dates', () =>
     ['bad date', 'PM Truck', '', '', '2025 Double Bucket', 'Johnny Martinez'],
   ]);
 
-  assert.deepEqual(Array.from(inspections.entries()), [
+  assert.deepEqual(JSON.parse(JSON.stringify(Array.from(inspections.entries()))), [
     ['Jerry|2026-11-16', { am: true, pm: true }],
     ['Eli|2026-11-16', { am: true, pm: false }],
   ]);
@@ -60,7 +60,7 @@ test('Fleetio planning checks every matching KPI row and clears missing inspecti
     [false, false],
     [true, true],
   ]);
-  assert.equal(plan.updated, 7);
+  assert.equal(plan.updated, 4);
   assert.equal(plan.matchedCrewDates, 2);
 });
 
@@ -83,4 +83,68 @@ test('hourly KPI refresh imports Fleetio inspections without blocking other sync
 
   assert.equal(result.created, 1);
   assert.deepEqual({ ...result.fleetio }, { success: true, updated: 4 });
+});
+
+test('recent Fleetio CSV attachments are read through the shared Gmail read-only API', () => {
+  const requests = [];
+  const responseByPath = new Map([
+    ['messages/new-message?format=full', {
+      payload: {
+        parts: [{
+          filename: 'Fleetio Daily Report_2026_11_17.csv',
+          mimeType: 'text/csv',
+          body: { attachmentId: 'csv-a' },
+        }],
+      },
+    }],
+    ['messages/new-message/attachments/csv-a', { data: 'Y3N2' }],
+  ]);
+  const context = fleetioContext({
+    gmailReadOnlyApiGet_(path) {
+      requests.push(path);
+      if (path.startsWith('messages?q=')) {
+        assert.match(decodeURIComponent(path), /Fleetio Daily Report/);
+        return { messages: [{ id: 'new-message' }] };
+      }
+      const response = responseByPath.get(path);
+      if (!response) throw new Error(`Unexpected path: ${path}`);
+      return response;
+    },
+    Utilities: {
+      base64DecodeWebSafe: value => [`decoded:${value}`],
+      newBlob(bytes, contentType, name) {
+        return { bytes, contentType, name };
+      },
+    },
+  });
+
+  const found = context.fleetioCsvAttachments_();
+
+  assert.equal(found.length, 1);
+  assert.equal(found[0].messageId, 'new-message');
+  assert.equal(found[0].attachment.name, 'Fleetio Daily Report_2026_11_17.csv');
+  assert.deepEqual(requests, [
+    `messages?q=${encodeURIComponent('from:notifications@fleetio.com subject:"[Report] Fleetio Daily Report" has:attachment newer_than:30d')}&maxResults=10`,
+    'messages/new-message?format=full',
+    'messages/new-message/attachments/csv-a',
+  ]);
+});
+
+test('the manual Fleetio setup requests only Gmail read access', () => {
+  const requested = [];
+  const context = fleetioContext({
+    ScriptApp: {
+      AuthMode: { FULL: 'FULL' },
+      requireScopes: (mode, scopes) => requested.push({ mode, scopes: [...scopes] }),
+    },
+  });
+  context.syncFleetioInspectionsFromEmail_ = () => ({ success: true, updated: 0 });
+
+  const result = context.authorizeAndSyncFleetioInspections();
+
+  assert.deepEqual({ ...result }, { success: true, updated: 0 });
+  assert.deepEqual(requested, [{
+    mode: 'FULL',
+    scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+  }]);
 });

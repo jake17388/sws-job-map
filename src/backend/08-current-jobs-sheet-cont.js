@@ -74,6 +74,12 @@ function refreshInstallKpiFromCalendar_() {
     Logger.log('UKG daily hours import failed during KPI sync: ' + error.message);
     result.ukg_hours = { success: false, error: error.message };
   }
+  try {
+    result.fleetio = syncFleetioInspectionsFromEmail_();
+  } catch (error) {
+    Logger.log('Fleetio inspection import failed during KPI sync: ' + error.message);
+    result.fleetio = { success: false, error: error.message };
+  }
   return result;
 }
 

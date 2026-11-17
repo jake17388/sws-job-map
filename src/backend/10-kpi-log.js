@@ -1,15 +1,17 @@
 // ── Install KPI log ──────────────────────────────────────────────────────────
 const KPI_HEADER_ROW = 1;
 const KPI_FIRST_DATA_ROW = 2;
-const KPI_COLUMN_COUNT = 30;
+const KPI_COLUMN_COUNT = 32;
 const KPI_CREW_SIZE_COLUMN = 8;
 const KPI_TOTAL_JOB_HOURS_COLUMN = 9;
 const KPI_DRIVE_HOURS_COLUMN = 10;
 const KPI_ESTIMATED_PROJECT_HOURS_COLUMN = 11;
 const KPI_TOTAL_CLOCKED_HOURS_COLUMN = 12;
 const KPI_ACTUAL_PROJECT_HOURS_COLUMN = 13;
+const KPI_FLEETIO_AM_COLUMN = 15;
+const KPI_FLEETIO_PM_COLUMN = 16;
 const KPI_FILTER_COLUMN_COUNT = KPI_COLUMN_COUNT;
-const KPI_KEY_COLUMN = 30;
+const KPI_KEY_COLUMN = 32;
 const KPI_KEY_HEADER = 'Calendar KPI Key';
 const KPI_TABLE_NAME = 'InstallLogTable';
 const KPI_HOUR_HEADERS = [
@@ -27,8 +29,35 @@ function getKpiSheet_() {
   ensureKpiDayColumn_(sheet);
   ensureKpiCrewSizeColumn_(sheet);
   ensureKpiHoursColumns_(sheet);
+  ensureKpiFleetioColumns_(sheet);
   ensureKpiFilter_(sheet);
   return sheet;
+}
+
+function ensureKpiFleetioColumns_(sheet) {
+  const headerRange = sheet.getRange(KPI_HEADER_ROW, KPI_FLEETIO_AM_COLUMN, 1, 2);
+  const headers = headerRange.getValues()[0].map(value => String(value || '').trim());
+  if (headers[0] === 'Fleetio AM' && headers[1] === 'Fleetio PM') return false;
+  if (headers[0] !== 'Late Departure (After 6:30)') {
+    throw new Error(`Unexpected KPI column O: ${headers[0] || '(blank)'}`);
+  }
+
+  sheet.insertColumnsBefore(KPI_FLEETIO_AM_COLUMN, 2);
+  const maxRows = sheet.getMaxRows();
+  if (typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.CopyPasteType) {
+    const source = sheet.getRange(KPI_HEADER_ROW, KPI_FLEETIO_AM_COLUMN + 2, maxRows, 2);
+    const destination = sheet.getRange(KPI_HEADER_ROW, KPI_FLEETIO_AM_COLUMN, maxRows, 2);
+    source.copyTo(destination, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+  }
+  sheet.getRange(KPI_HEADER_ROW, KPI_FLEETIO_AM_COLUMN, 1, 2)
+    .setValues([['Fleetio AM', 'Fleetio PM']]);
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= KPI_FIRST_DATA_ROW) {
+    sheet.getRange(KPI_FIRST_DATA_ROW, KPI_FLEETIO_AM_COLUMN, lastRow - KPI_FIRST_DATA_ROW + 1, 2)
+      .insertCheckboxes()
+      .setValue(false);
+  }
+  return true;
 }
 
 function ensureKpiFilter_(sheet) {
@@ -441,6 +470,8 @@ function buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber) {
           : '';
         values[KPI_DRIVE_HOURS_COLUMN - 1] = driveEstimate == null ? '' : driveEstimate;
         values[13] = false;
+        values[KPI_FLEETIO_AM_COLUMN - 1] = false;
+        values[KPI_FLEETIO_PM_COLUMN - 1] = false;
         values[KPI_KEY_COLUMN - 1] = key;
         seeds.push({ key, values });
       });
@@ -579,6 +610,9 @@ function syncInstallJobsToKpi_(jobs, options) {
       const appendRow = Math.max(sheet.getLastRow(), KPI_HEADER_ROW) + 1;
       sheet.getRange(appendRow, 1, plan.rowsToAppend.length, KPI_COLUMN_COUNT)
         .setValues(plan.rowsToAppend.map(kpiWritableRow_));
+      sheet.getRange(appendRow, KPI_FLEETIO_AM_COLUMN, plan.rowsToAppend.length, 2)
+        .insertCheckboxes()
+        .setValue(false);
       sheet.getRange(appendRow, KPI_ACTUAL_PROJECT_HOURS_COLUMN, plan.rowsToAppend.length, 1)
         .setFormulaR1C1('=IF(RC[-1]="","",MAX(0,RC[-1]-RC[-3]))');
     }
