@@ -77,19 +77,21 @@ test('multi-day install events expand to one unchecked row per date and crew mem
   assert.equal(seeds[0].values[11], '');
   assert.equal(seeds[0].values[12], '');
   assert.equal(seeds[0].values[13], false);
-  assert.equal(seeds[0].values[29], 'event-1|2026-11-02|Johnny');
+  assert.equal(seeds[0].values[14], false);
+  assert.equal(seeds[0].values[15], false);
+  assert.equal(seeds[0].values[31], 'event-1|2026-11-02|Johnny');
 });
 
 test('saving a Job Map truck assignment updates the matching KPI truck cell immediately', () => {
-  const row = Array(30).fill('');
+  const row = Array(32).fill('');
   row[1] = new Date(2026, 10, 10, 12);
   row[2] = 'Johnny';
   row[5] = '';
-  row[29] = 'event-1|2026-11-10|Johnny';
+  row[31] = 'event-1|2026-11-10|Johnny';
   const sheet = {
     getLastRow: () => 2,
     getRange(rowNumber, column, rowCount, columnCount) {
-      if (rowNumber === 2 && column === 1 && rowCount === 1 && columnCount === 30) {
+      if (rowNumber === 2 && column === 1 && rowCount === 1 && columnCount === 32) {
         return { getValues: () => [[...row]] };
       }
       if (rowNumber === 2 && column === 6 && rowCount === 1 && columnCount === 1) {
@@ -383,7 +385,7 @@ test('the KPI log filter includes the hidden calendar key so row data sorts toge
       assert.equal(row, 1);
       assert.equal(column, 1);
       assert.equal(rowCount, 1018);
-      assert.equal(columnCount, 30);
+      assert.equal(columnCount, 32);
       return {
         createFilter() {
           created += 1;
@@ -454,7 +456,7 @@ test('the KPI filter fallback preserves criteria and expands through the live la
 
 test('sync planning is idempotent and preserves entered KPI results', () => {
   const context = backendContext();
-  const existing = Array(30).fill('');
+  const existing = Array(32).fill('');
   existing[0] = 'Monday';
   existing[1] = new Date(2026, 10, 2);
   existing[2] = 'Johnny';
@@ -468,7 +470,7 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
   existing[12] = 3.75;
   existing[13] = true;
   existing[14] = 'Waiting on electrical';
-  existing[29] = 'event-1|2026-11-02|Johnny';
+  existing[31] = 'event-1|2026-11-02|Johnny';
 
   const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
   const plan = context.planKpiSync_([
@@ -496,7 +498,7 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
 
 test('sync planning fills a blank drive estimate without overwriting other KPI fields', () => {
   const context = backendContext();
-  const existing = Array(30).fill('');
+  const existing = Array(32).fill('');
   existing[0] = 'Monday';
   existing[1] = new Date(2026, 10, 2, 12);
   existing[2] = 'Johnny';
@@ -505,7 +507,7 @@ test('sync planning fills a blank drive estimate without overwriting other KPI f
   existing[5] = '2022 Crane';
   existing[11] = 4.5;
   existing[13] = false;
-  existing[29] = 'event-1|2026-11-02|Johnny';
+  existing[31] = 'event-1|2026-11-02|Johnny';
   const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
 
   const plan = context.planKpiSync_([
@@ -521,7 +523,7 @@ test('sync planning fills a blank drive estimate without overwriting other KPI f
 
 test('calendar reconciliation refreshes drive time when an event location changes', () => {
   const context = backendContext();
-  const existing = Array(30).fill('');
+  const existing = Array(32).fill('');
   existing[0] = 'Monday';
   existing[1] = new Date(2026, 10, 2, 12);
   existing[2] = 'Johnny';
@@ -529,7 +531,7 @@ test('calendar reconciliation refreshes drive time when an event location change
   existing[4] = 'Monument Sign';
   existing[9] = 2.1;
   existing[13] = false;
-  existing[29] = 'event-1|2026-11-02|Johnny';
+  existing[31] = 'event-1|2026-11-02|Johnny';
 
   const plan = context.planKpiSync_([
     job({
@@ -547,7 +549,7 @@ test('calendar reconciliation refreshes drive time when an event location change
 
 test('sync planning writes a legitimate zero-hour Squarecoil total into a blank cell', () => {
   const context = backendContext();
-  const existing = Array(30).fill('');
+  const existing = Array(32).fill('');
   existing[0] = 'Monday';
   existing[1] = new Date(2026, 10, 2, 12);
   existing[2] = 'Johnny';
@@ -555,7 +557,7 @@ test('sync planning writes a legitimate zero-hour Squarecoil total into a blank 
   existing[4] = 'Monument Sign';
   existing[5] = '2022 Crane';
   existing[13] = false;
-  existing[29] = 'event-1|2026-11-02|Johnny';
+  existing[31] = 'event-1|2026-11-02|Johnny';
 
   const plan = context.planKpiSync_([
     job({ start: '2026-11-02', end: '2026-11-02', crew: ['Johnny'] }),
@@ -574,13 +576,13 @@ test('calendar reconciliation removes stale crew assignments in the requested wi
     ['Monday', new Date(2026, 9, 26, 12), 'Jerry', 'old-job', 'Older job'],
     ['Friday', new Date(2026, 10, 6, 12), 'Manual', '', 'Manual row'],
   ].map(row => {
-    const values = Array(30).fill('');
+    const values = Array(32).fill('');
     row.forEach((value, index) => { values[index] = value; });
     return values;
   });
-  existing[0][29] = 'event-1|2026-11-06|Jonathan';
-  existing[1][29] = 'event-1|2026-11-06|Eli';
-  existing[2][29] = 'old-event|2026-10-26|Jerry';
+  existing[0][31] = 'event-1|2026-11-06|Jonathan';
+  existing[1][31] = 'event-1|2026-11-06|Eli';
+  existing[2][31] = 'old-event|2026-10-26|Jerry';
 
   const plan = context.planKpiSync_([
     job({
@@ -598,8 +600,8 @@ test('calendar reconciliation removes stale crew assignments in the requested wi
   assert.deepEqual(Array.from(plan.rowsToAppend, row => row[2]), ['Randy']);
   assert.equal(plan.rowsToUpdate.length, 1);
   assert.equal(plan.rowsToUpdate[0].index, 1);
-  assert.equal(existing[2][29], 'old-event|2026-10-26|Jerry');
-  assert.equal(existing[3][29], '');
+  assert.equal(existing[2][31], 'old-event|2026-10-26|Jerry');
+  assert.equal(existing[3][31], '');
 });
 
 test('job-hour backfill repeats each Squarecoil total on every matching KPI row', () => {
