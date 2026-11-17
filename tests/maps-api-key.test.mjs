@@ -98,6 +98,8 @@ test('blank geocoding requests are rejected without calling Census', () => {
 
 test('Leaflet controls and popups retain the original map behavior', () => {
   assert.match(styles, /\.map-controls\s*\{[^}]*z-index:\s*800/);
-  assert.match(frontend, /marker\.bindPopup\(popup\)\.openPopup\(\)/);
-  assert.doesNotMatch(frontend, /popup\.setLatLng\(marker\.getLatLng\(\)\)\.openOn\(targetMap\)/);
+  assert.match(frontend, /const popupAnchor = marker\.options\.icon\.options\.popupAnchor \|\| \[0, 0\]/);
+  assert.match(frontend, /popup\.options\.offset = L\.point\(popupAnchor\)/);
+  assert.match(frontend, /popup\.setLatLng\(marker\.getLatLng\(\)\)\.openOn\(targetMap\)/);
+  assert.doesNotMatch(frontend, /marker\.bindPopup\(popup\)/);
 });
