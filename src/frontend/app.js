@@ -1828,6 +1828,12 @@ function updateUnscheduledCrewButtons() {
       button.setAttribute('aria-pressed', String(selected));
     }
   });
+  const summary = document.getElementById('unscheduled-crew-summary');
+  if (summary) {
+    const selectedNames = getSelectedUnscheduledCrew();
+    summary.textContent = selectedNames.length ? selectedNames.join(', ') : 'Select crew members';
+    summary.title = selectedNames.join(', ');
+  }
   renderTruckAssignmentRows('unscheduled-truck-assignments', selectedUnscheduledCrew, selectedUnscheduledTruckAssignments, 'setUnscheduledTruckAssignment');
 }
 

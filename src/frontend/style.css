@@ -254,7 +254,13 @@ header { position: sticky; top: 0; z-index: 100; background: var(--navy-deep); c
 .inp-addr { width: 100%; border: 1px solid #f0d0d5; border-radius: 6px; padding: 7px 10px; font-size: 12px; background: #fff; outline: none; color: #1a1a1a; margin-bottom: 6px; display: block; font-family: 'DM Sans', sans-serif; }
 .inp-addr:focus { border-color: #DC143C; }
 .unscheduled-crew-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #b45d6a; margin: 2px 0 6px; font-family: 'DM Mono', monospace; }
-.unscheduled-crew-btns { margin-bottom: 8px; }
+.unscheduled-crew-dropdown { margin-bottom: 8px; }
+.unscheduled-crew-dropdown > summary { position: relative; list-style: none; min-height: 34px; padding: 8px 34px 8px 10px; border: 1px solid #f0d0d5; border-radius: 6px; background: #fff; color: #667085; cursor: pointer; font-size: 12px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.unscheduled-crew-dropdown > summary::-webkit-details-marker { display: none; }
+.unscheduled-crew-dropdown > summary::after { content: '⌄'; position: absolute; right: 11px; top: 7px; color: #b45d6a; font-size: 15px; transition: transform 0.15s; }
+.unscheduled-crew-dropdown[open] > summary { border-color: #DC143C; border-radius: 6px 6px 0 0; }
+.unscheduled-crew-dropdown[open] > summary::after { transform: rotate(180deg); }
+.unscheduled-crew-btns { margin: 0; padding: 7px; border: 1px solid #f0d0d5; border-top: 0; border-radius: 0 0 6px 6px; background: #fff; }
 .btn-add { width: 100%; padding: 8px; border: none; border-radius: 6px; background: #DC143C; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s; font-family: 'DM Sans', sans-serif; }
 .btn-add:hover { background: #b01030; }
 .btn-add:disabled { background: #ccc; cursor: not-allowed; }
