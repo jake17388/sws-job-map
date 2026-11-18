@@ -8,10 +8,14 @@ const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.met
 const frontendStyles = readFileSync(new URL('../src/frontend/style.css', import.meta.url), 'utf8');
 const backendSource = readFileSync(new URL('../src/backend/05-unscheduled-jobs.js', import.meta.url), 'utf8');
 
-test('the unscheduled form offers optional crew buttons', () => {
+test('the unscheduled form offers optional crew buttons in a compact dropdown', () => {
   assert.match(frontendHtml, /Crew \(optional\)/);
-  assert.match(frontendHtml, /id="unscheduled-crew-btns"/);
+  assert.match(frontendTemplate, /<details[^>]*class="[^"]*unscheduled-crew-dropdown[^"]*"/);
+  assert.match(frontendTemplate, /<summary[^>]*id="unscheduled-crew-summary"[^>]*>Select crew members<\/summary>/);
+  assert.match(frontendTemplate, /id="unscheduled-crew-summary"[\s\S]*id="unscheduled-crew-btns"[\s\S]*<\/details>/);
   assert.match(frontendSource, /function toggleUnscheduledCrew\(name\)/);
+  assert.match(frontendSource, /unscheduled-crew-summary/);
+  assert.match(frontendStyles, /\.unscheduled-crew-dropdown\s*>\s*summary/);
 });
 
 test('the unscheduled form is collapsed behind a calendar toggle and keeps all controls together', () => {
