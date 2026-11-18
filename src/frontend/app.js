@@ -146,11 +146,6 @@ function setMobileView(view) {
   }
 }
 
-function toggleFiltersPanel() {
-  document.getElementById('filters-collapsible').classList.toggle('open');
-  document.getElementById('filters-toggle').classList.toggle('open');
-}
-
 function toggleUnschedPanel() {
   document.getElementById('unsched-collapsible').classList.toggle('open');
   document.getElementById('unsched-toggle').classList.toggle('open');
@@ -731,7 +726,7 @@ function fetchVehicles() {
 let vehicleRefreshInFlight = null;
 function refreshVehicles() {
   if (vehicleRefreshInFlight) return vehicleRefreshInFlight;
-  const buttons = ['truck-refresh', 'map-truck-refresh']
+  const buttons = ['map-truck-refresh']
     .map(id => document.getElementById(id)).filter(Boolean);
   buttons.forEach(btn => { btn.disabled = true; btn.classList.add('is-refreshing'); });
   vehicleRefreshInFlight = (auth ? scriptGet('refreshVehicles').then(data => {
@@ -750,14 +745,9 @@ function refreshVehicles() {
   return vehicleRefreshInFlight;
 }
 
-function toggleVehiclesPanel() {
-  document.getElementById('vehicles-collapsible').classList.toggle('open');
-  document.getElementById('vehicles-toggle').classList.toggle('open');
-}
-
 function toggleMapVehiclesPanel() {
-  document.getElementById('map-vehicles-panel').classList.toggle('open');
-  document.getElementById('map-vehicles-toggle').classList.toggle('open');
+  const button = document.getElementById('map-vehicles-toggle');
+  setMapPanel(button.getAttribute('aria-expanded') === 'true' ? null : 'vehicles');
 }
 
 function focusVehicle(idx) {
@@ -798,7 +788,7 @@ function renderVehiclesPanel() {
       }).join('')
     : '<div style="font-size:11px;color:#ccc;padding:6px 4px">No vehicles loaded yet</div>';
   const html = ageNote + rows;
-  ['vehicle-list-items', 'map-vehicle-list-items'].forEach(id => {
+  ['map-vehicle-list-items'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = html;
   });
@@ -806,7 +796,7 @@ function renderVehiclesPanel() {
 
 function toggleTrucks() {
   showVehicles = !showVehicles;
-  ['btn-trucks', 'map-btn-trucks'].forEach(id => {
+  ['map-btn-trucks'].forEach(id => {
     const btn = document.getElementById(id);
     if (btn) btn.classList.toggle('on', showVehicles);
   });
@@ -870,7 +860,8 @@ function createPopup(content) {
 
 function initMap() {
   if (map) { loadAll(); return; }
-  map = L.map('map', { zoomControl: true }).setView([33.40, -111.85], 10);
+  map = L.map('map', { zoomControl: false, scrollWheelZoom: true }).setView([33.40, -111.85], 10);
+  map.on('click', () => setMapPanel(null));
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors',
@@ -934,22 +925,35 @@ function toggleType(type) {
 }
 function updateButtons() {
   ['install', 'service', 'excavation', 'unscheduled'].forEach(t => {
-    ['btn-', 'map-btn-'].forEach(prefix => {
+    ['map-btn-'].forEach(prefix => {
       const btn = document.getElementById(prefix + t);
       if (btn) activeTypes.has(t) ? btn.classList.add('on') : btn.classList.remove('on');
     });
   });
 }
 function toggleMapFilters() {
-  document.getElementById('map-filter-panel').classList.toggle('open');
-  document.getElementById('map-filter-toggle').classList.toggle('open');
+  const button = document.getElementById('map-filter-toggle');
+  setMapPanel(button.getAttribute('aria-expanded') === 'true' ? null : 'filters');
+}
+function setMapPanel(panelName) {
+  const filterPanel = document.getElementById('map-filter-panel');
+  const vehiclePanel = document.getElementById('map-vehicles-panel');
+  const filterButton = document.getElementById('map-filter-toggle');
+  const vehicleButton = document.getElementById('map-vehicles-toggle');
+  const filterOpen = panelName === 'filters';
+  const vehicleOpen = panelName === 'vehicles';
+  filterPanel.classList.toggle('open', filterOpen);
+  vehiclePanel.classList.toggle('open', vehicleOpen);
+  filterButton.classList.toggle('open', filterOpen);
+  vehicleButton.classList.toggle('open', vehicleOpen);
+  filterButton.setAttribute('aria-expanded', String(filterOpen));
+  vehicleButton.setAttribute('aria-expanded', String(vehicleOpen));
+  if (filterOpen) requestAnimationFrame(() => document.getElementById('job-search').focus());
 }
 function setSearch(val) {
   searchQuery = val.trim();
-  const d = document.getElementById('job-search');
-  const m = document.getElementById('job-search-mobile');
-  if (d && d !== document.activeElement) d.value = val;
-  if (m && m !== document.activeElement) m.value = val;
+  const input = document.getElementById('job-search');
+  if (input && input !== document.activeElement) input.value = val;
   renderList();
 }
  
@@ -1314,8 +1318,6 @@ function resetFilters() {
   document.getElementById('unsched-add').classList.toggle('visible', isAdmin());
   searchQuery = '';
   document.getElementById('job-search').value = '';
-  const ms = document.getElementById('job-search-mobile');
-  if (ms) ms.value = '';
   CREW.forEach(n => activeCrews.add(n));
   updateCrewButtons();
   applyFilters();
@@ -1564,6 +1566,7 @@ document.addEventListener('keydown', e => {
   if (document.getElementById('app').style.display === 'none') return;
   if (e.key === 'Enter' && ['u-num', 'u-title', 'u-addr'].includes(document.activeElement?.id)) submitUnschedForm();
   if (e.key === 'Escape' && editingId !== null) cancelEdit();
+  if (e.key === 'Escape') setMapPanel(null);
 });
 
 // ── Crew filters ─────────────────────────────────────────────────────────────
@@ -1572,7 +1575,7 @@ function crewTextColor(hex) {
   return (0.299*r + 0.587*g + 0.114*b) > 140 ? '#1a1a1a' : '#fff';
 }
 function initCrewButtons() {
-  [['crew-btns', 'crew-btn-'], ['map-crew-btns', 'map-crew-btn-']].forEach(([containerId, prefix]) => {
+  [['map-crew-btns', 'map-crew-btn-']].forEach(([containerId, prefix]) => {
     const container = document.getElementById(containerId);
     if (!container) return;
     container.innerHTML = CREW.map(name => {
@@ -1855,7 +1858,7 @@ function toggleCrew(name) {
 
 function updateCrewButtons() {
   CREW.forEach(name => {
-    ['crew-btn-', 'map-crew-btn-'].forEach(prefix => {
+    ['map-crew-btn-'].forEach(prefix => {
       const btn = document.getElementById(prefix + name);
       if (btn) activeCrews.has(name) ? btn.classList.add('on') : btn.classList.remove('on');
     });
