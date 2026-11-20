@@ -578,6 +578,36 @@ test('sync planning fills a blank drive estimate without overwriting other KPI f
   assert.equal(existing[13], false);
 });
 
+test('fast calendar reconciliation skips slow estimate lookups', () => {
+  let driveLookups = 0;
+  let squarecoilLookups = 0;
+  const context = backendContext();
+  context.getKpiSheet_ = () => ({ getLastRow: () => 1 });
+  context.ensureKpiKeyColumn_ = () => {};
+  context.resizeKpiNativeTable_ = () => {};
+  context.estimateDriveHoursByAddress_ = () => {
+    driveLookups += 1;
+    return new Map();
+  };
+  context.squarecoilInstallHoursByJob_ = () => {
+    squarecoilLookups += 1;
+    return new Map();
+  };
+  context.planKpiSync_ = () => ({
+    rowsToAppend: [],
+    rowsToUpdate: [],
+    rowsToJobHoursUpdate: [],
+    rowsToDriveUpdate: [],
+    rowsToKeyUpdate: [],
+    rowIndexesToDelete: [],
+  });
+
+  context.syncInstallJobsToKpi_([job()], { skipEstimates: true });
+
+  assert.equal(driveLookups, 0);
+  assert.equal(squarecoilLookups, 0);
+});
+
 test('calendar reconciliation refreshes drive time when an event location changes', () => {
   const context = backendContext();
   const existing = Array(32).fill('');
@@ -858,13 +888,10 @@ test('calendar changes use a fast calendar-only sync with a five-minute fallback
   assert.equal(synced[0].options.reconcileStart.getMonth(), 10);
   assert.equal(synced[0].options.reconcileStart.getDate(), 1);
   assert.ok(synced[0].options.reconcileEnd > synced[0].options.reconcileStart);
-  assert.deepEqual(estimateRefreshes, [{
-    jobNums: ['123456', '654321'],
-    forceRefresh: false,
-  }]);
+  assert.equal(synced[0].options.skipEstimates, true);
+  assert.deepEqual(estimateRefreshes, []);
   assert.equal(result.created, 1);
-  assert.equal(ukgImports.length, 1);
-  assert.equal(result.ukg_hours.updated, 2);
+  assert.equal(ukgImports.length, 0);
 });
 
 test('manual estimate refresh force-loads current scheduled and unscheduled job totals', () => {
