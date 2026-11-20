@@ -41,6 +41,7 @@ function ensureInstallKpiSyncStatusSheet_() {
       ['Fleetio', '', '', ''],
     ]);
     sheet.getRange(1, 1, 1, 4).setFontWeight('bold');
+    sheet.getRange(2, 3, 3, 1).setNumberFormat('m/d/yyyy h:mm:ss AM/PM');
     sheet.setFrozenRows(1);
     sheet.autoResizeColumns(1, 4);
   }
@@ -646,7 +647,9 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber,
     const scheduleValues = seed.values.slice(0, 6);
     const changed = scheduleValues.some((value, column) => {
       const current = existing.row[column];
-      if (value instanceof Date) return !(current instanceof Date) || current.getTime() !== value.getTime();
+      if (value instanceof Date) {
+        return !(current instanceof Date) || formatDate(current) !== formatDate(value);
+      }
       return String(current == null ? '' : current) !== String(value == null ? '' : value);
     });
     if (changed) rowsToUpdate.push({ index: existing.index, values: scheduleValues });
