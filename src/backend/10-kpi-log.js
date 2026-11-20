@@ -15,6 +15,12 @@ const KPI_LEGACY_KEY_COLUMN = 30;
 const KPI_KEY_COLUMN = 32;
 const KPI_KEY_HEADER = 'Calendar KPI Key';
 const KPI_TABLE_NAME = 'InstallLogTable';
+const KPI_SYNC_STATUS_SHEET_NAME = 'Sync Status';
+const KPI_SYNC_STATUS_CONNECTIONS = Object.freeze([
+  'Install Calendar',
+  'UKG Hours',
+  'Fleetio',
+]);
 const KPI_HOUR_HEADERS = [
   'Total Estimated Job Hours',
   'Round-Trip Drive Hours',
@@ -22,6 +28,42 @@ const KPI_HOUR_HEADERS = [
   'Total Clocked Hours (Day)',
   'Actual Project Work Hours',
 ];
+
+function ensureInstallKpiSyncStatusSheet_() {
+  const spreadsheet = SpreadsheetApp.openById(KPI_SHEET_ID);
+  let sheet = spreadsheet.getSheetByName(KPI_SYNC_STATUS_SHEET_NAME);
+  if (!sheet) sheet = spreadsheet.insertSheet(KPI_SYNC_STATUS_SHEET_NAME);
+  if (String(sheet.getRange(1, 1).getValue() || '') !== 'Connection') {
+    sheet.getRange(1, 1, 4, 4).setValues([
+      ['Connection', 'Status', 'Last run', 'Details'],
+      ['Install Calendar', '', '', ''],
+      ['UKG Hours', '', '', ''],
+      ['Fleetio', '', '', ''],
+    ]);
+    sheet.getRange(1, 1, 1, 4).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    sheet.autoResizeColumns(1, 4);
+  }
+  return sheet;
+}
+
+function installKpiSyncStatusDetails_(connection, result) {
+  if (!result || result.success === false) return String(result && result.error || 'Unknown error');
+  if (connection === 'Install Calendar') {
+    return `Created ${Number(result.created || 0)}; updated ${Number(result.filled || 0)}; removed ${Number(result.removed || 0)}`;
+  }
+  const reportFound = result.report_found === false ? 'No' : 'Yes';
+  return `Updated ${Number(result.updated || 0)}; matched ${Number(result.matched_crew_dates || 0)}; report found ${reportFound}`;
+}
+
+function recordInstallKpiSyncStatus_(connection, result) {
+  const rowIndex = KPI_SYNC_STATUS_CONNECTIONS.indexOf(String(connection));
+  if (rowIndex === -1) return;
+  const status = result && result.success !== false ? 'OK' : 'ERROR';
+  ensureInstallKpiSyncStatusSheet_()
+    .getRange(rowIndex + 2, 2, 1, 3)
+    .setValues([[status, new Date(), installKpiSyncStatusDetails_(connection, result)]]);
+}
 
 function getKpiSheet_() {
   const spreadsheet = SpreadsheetApp.openById(KPI_SHEET_ID);

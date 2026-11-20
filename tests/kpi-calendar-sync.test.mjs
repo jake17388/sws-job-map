@@ -466,7 +466,7 @@ test('calendar synchronization records a visible status row', () => {
     removed: 4,
   });
 
-  assert.deepEqual(writes[0].values, [
+  assert.deepEqual(JSON.parse(JSON.stringify(writes[0].values)), [
     ['Connection', 'Status', 'Last run', 'Details'],
     ['Install Calendar', '', '', ''],
     ['UKG Hours', '', '', ''],
