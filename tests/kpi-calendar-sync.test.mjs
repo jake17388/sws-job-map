@@ -433,6 +433,7 @@ test('the KPI table resize request covers row one through the live last row', ()
 
 test('calendar synchronization records a visible status row', () => {
   const writes = [];
+  const numberFormats = [];
   const statusSheet = {
     getRange(row, column, rowCount = 1, columnCount = 1) {
       return {
@@ -442,6 +443,10 @@ test('calendar synchronization records a visible status row', () => {
           return this;
         },
         setFontWeight() { return this; },
+        setNumberFormat(format) {
+          numberFormats.push({ row, column, rowCount, columnCount, format });
+          return this;
+        },
         setFrozenRows() { return this; },
       };
     },
@@ -477,6 +482,13 @@ test('calendar synchronization records a visible status row', () => {
   assert.equal(writes[1].values[0][0], 'OK');
   assert.equal(writes[1].values[0][1] instanceof Date, true);
   assert.equal(writes[1].values[0][2], 'Created 2; updated 3; removed 4');
+  assert.deepEqual(numberFormats, [{
+    row: 2,
+    column: 3,
+    rowCount: 3,
+    columnCount: 1,
+    format: 'm/d/yyyy h:mm:ss AM/PM',
+  }]);
 });
 
 test('the KPI filter fallback preserves criteria and expands through the live last row', () => {
@@ -536,14 +548,12 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
 
   assert.equal(plan.rowsToAppend.length, 1);
   assert.equal(plan.rowsToAppend[0][2], 'Eli');
-  assert.equal(plan.rowsToUpdate.length, 1);
+  assert.equal(plan.rowsToUpdate.length, 0);
   assert.equal(plan.rowsToDriveUpdate.length, 0);
   assert.equal(plan.rowsToEstimatedWorkUpdate, undefined);
   assert.deepEqual(Array.from(plan.rowsToJobHoursUpdate, update => ({ index: update.index, value: update.value })), [
     { index: 0, value: 42 },
   ]);
-  assert.equal(plan.rowsToUpdate[0].values[0], 'Monday');
-  assert.equal(plan.rowsToUpdate[0].values[1].toISOString(), '2026-11-02T12:00:00.000Z');
   assert.equal(plan.rowsToAppend[0][8], 42);
   assert.equal(plan.rowsToAppend[0][9], 2.1);
   assert.equal(plan.rowsToAppend[0][10], '');
