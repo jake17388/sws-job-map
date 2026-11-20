@@ -717,14 +717,17 @@ function syncInstallJobsToKpi_(jobs, options) {
   try {
     const sheet = getKpiSheet_();
     ensureKpiKeyColumn_(sheet);
-    const driveHoursByAddress = estimateDriveHoursByAddress_(jobs);
+    const skipEstimates = !!(options && options.skipEstimates);
+    const driveHoursByAddress = skipEstimates ? new Map() : estimateDriveHoursByAddress_(jobs);
     let jobHoursByNumber = new Map();
-    try {
-      jobHoursByNumber = squarecoilInstallHoursByJob_(
-        Array.from(new Set((jobs || []).map(job => String(job && job.num || '')).filter(Boolean)))
-      );
-    } catch (error) {
-      if (typeof Logger !== 'undefined') Logger.log(`Squarecoil install hours failed: ${error.message}`);
+    if (!skipEstimates) {
+      try {
+        jobHoursByNumber = squarecoilInstallHoursByJob_(
+          Array.from(new Set((jobs || []).map(job => String(job && job.num || '')).filter(Boolean)))
+        );
+      } catch (error) {
+        if (typeof Logger !== 'undefined') Logger.log(`Squarecoil install hours failed: ${error.message}`);
+      }
     }
     const lastRow = Math.max(sheet.getLastRow(), KPI_HEADER_ROW);
     const existingRows = lastRow >= KPI_FIRST_DATA_ROW

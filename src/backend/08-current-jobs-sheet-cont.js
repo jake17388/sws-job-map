@@ -35,12 +35,7 @@ function installKpiCalendarContext_() {
   end.setDate(end.getDate() + 60);
   end.setHours(23, 59, 59, 999);
   const installJobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', start, end);
-  const unscheduledJobs = typeof getUnscheduledJobs_ === 'function' ? getUnscheduledJobs_() : [];
-  const jobNums = Array.from(new Set(installJobs.map(job => job.num)
-    .concat(unscheduledJobs.map(job => job.job_num))
-    .map(value => String(value || '').trim())
-    .filter(value => /^\d{5,6}$/.test(value))));
-  return { start, end, installJobs, jobNums };
+  return { start, end, installJobs };
 }
 
 function refreshJobMapEstimatedHours_() {
@@ -70,14 +65,10 @@ function recordInstallKpiStatusSafely_(connection, result) {
 function refreshInstallKpiCalendar_() {
   try {
     const current = installKpiCalendarContext_();
-    try {
-      squarecoilInstallHoursByJob_(current.jobNums, false);
-    } catch (error) {
-      Logger.log('Squarecoil estimate refresh failed during KPI sync: ' + error.message);
-    }
     const result = syncInstallJobsToKpi_(current.installJobs, {
       reconcileStart: current.start,
       reconcileEnd: current.end,
+      skipEstimates: true,
     });
     recordInstallKpiStatusSafely_('Install Calendar', result);
     return result;
@@ -143,5 +134,5 @@ function setupInstallKpiSyncTrigger() {
     .forUserCalendar(INSTALL_CAL_ID)
     .onEventUpdated()
     .create();
-  return refreshInstallKpiFromCalendar_();
+  return refreshInstallKpiCalendar_();
 }
