@@ -11,6 +11,7 @@ const KPI_ACTUAL_PROJECT_HOURS_COLUMN = 13;
 const KPI_FLEETIO_AM_COLUMN = 15;
 const KPI_FLEETIO_PM_COLUMN = 16;
 const KPI_FILTER_COLUMN_COUNT = KPI_COLUMN_COUNT;
+const KPI_LEGACY_KEY_COLUMN = 30;
 const KPI_KEY_COLUMN = 32;
 const KPI_KEY_HEADER = 'Calendar KPI Key';
 const KPI_TABLE_NAME = 'InstallLogTable';
@@ -498,27 +499,101 @@ function kpiRowIsInReconcileWindow_(row, options) {
   return !!date && date >= start && date <= end;
 }
 
+function kpiKeyMatchesRow_(key, row) {
+  const parts = String(key || '').trim().split('|');
+  if (parts.length < 3) return false;
+  const dateValue = (row || [])[1];
+  const date = dateValue instanceof Date && Number.isFinite(dateValue.getTime())
+    ? formatDate(dateValue)
+    : String(dateValue || '').trim();
+  const crewMember = String((row || [])[2] || '').trim();
+  return parts[parts.length - 2] === date && parts[parts.length - 1] === crewMember;
+}
+
+function kpiFallbackKeyForRow_(row) {
+  const dateValue = (row || [])[1];
+  const date = dateValue instanceof Date && Number.isFinite(dateValue.getTime())
+    ? formatDate(dateValue)
+    : String(dateValue || '').trim();
+  const crewMember = String((row || [])[2] || '').trim();
+  const jobNumber = String((row || [])[3] || '').trim();
+  if (!date || !crewMember || !jobNumber) return '';
+  return `${date}|${crewMember}|${jobNumber}`;
+}
+
+function kpiRowPreservationScore_(row) {
+  let score = 0;
+  for (let column = KPI_TOTAL_CLOCKED_HOURS_COLUMN - 1;
+    column < KPI_LEGACY_KEY_COLUMN - 1;
+    column += 1) {
+    const value = (row || [])[column];
+    if (value === true) score += 2;
+    else if (value !== false && value != null && String(value).trim() !== '') score += 1;
+  }
+  return score;
+}
+
 function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber, options) {
   const rowsByKey = new Map();
-  const duplicateRowIndexes = new Set();
+  const rowsByFallbackKey = new Map();
   (existingRows || []).forEach((row, index) => {
-    const key = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
-    if (!key) return;
-    if (rowsByKey.has(key)) duplicateRowIndexes.add(index);
-    else rowsByKey.set(key, { index, row });
+    const canonicalKey = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
+    const legacyKey = String((row || [])[KPI_LEGACY_KEY_COLUMN - 1] || '').trim();
+    const key = kpiKeyMatchesRow_(canonicalKey, row)
+      ? canonicalKey
+      : (kpiKeyMatchesRow_(legacyKey, row) ? legacyKey : '');
+    const candidate = { index, row, key, canonicalKey, legacyKey };
+    if (key) {
+      if (!rowsByKey.has(key)) rowsByKey.set(key, []);
+      rowsByKey.get(key).push(candidate);
+    }
+    const fallbackKey = kpiFallbackKeyForRow_(row);
+    if (fallbackKey) {
+      if (!rowsByFallbackKey.has(fallbackKey)) rowsByFallbackKey.set(fallbackKey, []);
+      rowsByFallbackKey.get(fallbackKey).push(candidate);
+    }
   });
   const rowsToAppend = [];
   const rowsToUpdate = [];
   const rowsToJobHoursUpdate = [];
   const rowsToDriveUpdate = [];
+  const rowsToKeyUpdate = [];
   const seeds = buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber);
   const desiredKeys = new Set(seeds.map(seed => seed.key));
+  const seedsByFallbackKey = new Map();
   seeds.forEach(seed => {
-    const existing = rowsByKey.get(seed.key);
+    const fallbackKey = kpiFallbackKeyForRow_(seed.values);
+    if (!seedsByFallbackKey.has(fallbackKey)) seedsByFallbackKey.set(fallbackKey, []);
+    seedsByFallbackKey.get(fallbackKey).push(seed);
+  });
+  const claimedRowIndexes = new Set();
+  const duplicateRowIndexes = new Set();
+  seeds.forEach(seed => {
+    const fallbackKey = kpiFallbackKeyForRow_(seed.values);
+    const fallbackIsUnambiguous = (seedsByFallbackKey.get(fallbackKey) || []).length === 1;
+    const candidatesByIndex = new Map();
+    (rowsByKey.get(seed.key) || []).forEach(candidate => candidatesByIndex.set(candidate.index, candidate));
+    if (fallbackIsUnambiguous) {
+      (rowsByFallbackKey.get(fallbackKey) || []).forEach(candidate => {
+        if (!claimedRowIndexes.has(candidate.index)) candidatesByIndex.set(candidate.index, candidate);
+      });
+    }
+    const candidates = Array.from(candidatesByIndex.values())
+      .filter(candidate => !claimedRowIndexes.has(candidate.index))
+      .sort((left, right) => kpiRowPreservationScore_(right.row) - kpiRowPreservationScore_(left.row));
+    const existing = candidates[0];
     if (!existing) {
       rowsToAppend.push(seed.values);
-      rowsByKey.set(seed.key, { index: -1, row: seed.values });
       return;
+    }
+    claimedRowIndexes.add(existing.index);
+    candidates.slice(1).forEach(candidate => duplicateRowIndexes.add(candidate.index));
+    if (existing.canonicalKey !== seed.key || kpiKeyMatchesRow_(existing.legacyKey, existing.row)) {
+      rowsToKeyUpdate.push({
+        index: existing.index,
+        key: seed.key,
+        clearLegacy: kpiKeyMatchesRow_(existing.legacyKey, existing.row),
+      });
     }
     const scheduleValues = seed.values.slice(0, 6);
     const changed = scheduleValues.some((value, column) => {
@@ -542,18 +617,27 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber,
       rowsToDriveUpdate.push({ index: existing.index, value: estimatedDrive });
     }
   });
-  const rowIndexesToDelete = [];
+  const rowIndexesToDelete = new Set();
   (existingRows || []).forEach((row, index) => {
-    const key = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
-    if (!key || !kpiRowIsInReconcileWindow_(row, options)) return;
-    if (duplicateRowIndexes.has(index) || !desiredKeys.has(key)) rowIndexesToDelete.push(index);
+    if (!kpiRowIsInReconcileWindow_(row, options)) return;
+    if (duplicateRowIndexes.has(index)) {
+      rowIndexesToDelete.add(index);
+      return;
+    }
+    const canonicalKey = String((row || [])[KPI_KEY_COLUMN - 1] || '').trim();
+    const legacyKey = String((row || [])[KPI_LEGACY_KEY_COLUMN - 1] || '').trim();
+    const key = kpiKeyMatchesRow_(canonicalKey, row)
+      ? canonicalKey
+      : (kpiKeyMatchesRow_(legacyKey, row) ? legacyKey : '');
+    if (key && !claimedRowIndexes.has(index) && !desiredKeys.has(key)) rowIndexesToDelete.add(index);
   });
   return {
     rowsToAppend,
     rowsToUpdate,
     rowsToJobHoursUpdate,
     rowsToDriveUpdate,
-    rowIndexesToDelete,
+    rowsToKeyUpdate,
+    rowIndexesToDelete: Array.from(rowIndexesToDelete).sort((left, right) => left - right),
   };
 }
 
@@ -601,6 +685,11 @@ function syncInstallJobsToKpi_(jobs, options) {
     });
     plan.rowsToDriveUpdate.forEach(update => {
       sheet.getRange(KPI_FIRST_DATA_ROW + update.index, KPI_DRIVE_HOURS_COLUMN).setValue(update.value);
+    });
+    plan.rowsToKeyUpdate.forEach(update => {
+      const rowNumber = KPI_FIRST_DATA_ROW + update.index;
+      sheet.getRange(rowNumber, KPI_KEY_COLUMN).setValue(update.key);
+      if (update.clearLegacy) sheet.getRange(rowNumber, KPI_LEGACY_KEY_COLUMN).setValue('');
     });
     plan.rowIndexesToDelete
       .slice()
