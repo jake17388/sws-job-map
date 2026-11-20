@@ -47,6 +47,15 @@ function job(overrides = {}) {
   };
 }
 
+test('calendar crew parsing recognizes known names even when a separator is missing', () => {
+  const context = backendContext();
+
+  assert.deepEqual(
+    Array.from(context.crewFromCalendarTitle_('(Eli/Johnny/RandyCaden) 261498 Mission Manor')),
+    ['Johnny', 'Eli', 'Randy', 'Caden'],
+  );
+});
+
 test('multi-day install events expand to one unchecked row per date and crew member', () => {
   const context = backendContext();
   const seeds = context.buildKpiSeedRows_(
@@ -604,6 +613,40 @@ test('calendar reconciliation removes stale crew assignments in the requested wi
   assert.equal(existing[3][31], '');
 });
 
+test('calendar reconciliation removes keyless stale schedule rows in the requested window', () => {
+  const context = backendContext();
+  const existing = [
+    ['Friday', new Date(2026, 10, 20, 12), 'Caden', '260300', 'StorQuest'],
+    ['Friday', new Date(2026, 10, 20, 12), 'Jonathan', '261710', 'Wrightson Ridge'],
+    ['Friday', new Date(2026, 10, 20, 12), 'Eli', '261710', 'Wrightson Ridge'],
+    ['Friday', new Date(2026, 10, 20, 12), 'Manual', '', 'Manual note'],
+  ].map(row => {
+    const values = Array(32).fill('');
+    row.forEach((value, index) => { values[index] = value; });
+    return values;
+  });
+
+  const plan = context.planKpiSync_([
+    job({
+      event_id: 'event-261710',
+      start: '2026-11-20',
+      end: '2026-11-20',
+      crew: ['Eli'],
+      num: '261710',
+      title: 'Wrightson Ridge',
+    }),
+  ], existing, new Map(), new Map(), {
+    reconcileStart: new Date(2026, 10, 1),
+    reconcileEnd: new Date(2026, 11, 31, 23, 59, 59),
+  });
+
+  assert.deepEqual(Array.from(plan.rowIndexesToDelete), [0, 1]);
+  assert.deepEqual(Array.from(plan.rowsToKeyUpdate, update => ({
+    index: update.index,
+    key: update.key,
+  })), [{ index: 2, key: 'event-261710|2026-11-20|Eli' }]);
+});
+
 test('calendar reconciliation adopts legacy-key duplicates and preserves the completed row', () => {
   const context = backendContext();
   const completed = Array(32).fill('');
@@ -677,7 +720,7 @@ test('the daily Current Jobs refresh also seeds KPI rows', () => {
   assert.match(currentJobsSource, /syncInstallJobsToKpi_\(installJobs\)/);
 });
 
-test('calendar changes sync immediately with an hourly fallback', () => {
+test('calendar changes use a fast calendar-only sync with a five-minute fallback', () => {
   const deleted = [];
   const created = [];
   const synced = [];
@@ -685,6 +728,8 @@ test('calendar changes sync immediately with an hourly fallback', () => {
   const ukgImports = [];
   const triggers = [
     { getHandlerFunction: () => 'refreshInstallKpiFromCalendar_' },
+    { getHandlerFunction: () => 'refreshInstallKpiCalendar_' },
+    { getHandlerFunction: () => 'refreshInstallKpiReports_' },
     { getHandlerFunction: () => 'handleInstallCalendarChange_' },
     { getHandlerFunction: () => 'refreshCurrentJobs' },
   ];
@@ -700,6 +745,7 @@ test('calendar changes sync immediately with an hourly fallback', () => {
         created.push(plan);
         return {
           timeBased() { plan.timeBased = true; return this; },
+          everyMinutes(minutes) { plan.minutes = minutes; return this; },
           everyHours(hours) { plan.hours = hours; return this; },
           forUserCalendar(calendarId) { plan.calendarId = calendarId; return this; },
           onEventUpdated() { plan.onEventUpdated = true; return this; },
@@ -732,10 +778,21 @@ test('calendar changes sync immediately with an hourly fallback', () => {
 
   const result = context.setupInstallKpiSyncTrigger();
 
-  assert.deepEqual(deleted, ['refreshInstallKpiFromCalendar_', 'handleInstallCalendarChange_']);
+  assert.deepEqual(deleted, [
+    'refreshInstallKpiFromCalendar_',
+    'refreshInstallKpiCalendar_',
+    'refreshInstallKpiReports_',
+    'handleInstallCalendarChange_',
+  ]);
   assert.deepEqual(created, [
     {
-      handler: 'refreshInstallKpiFromCalendar_',
+      handler: 'refreshInstallKpiCalendar_',
+      timeBased: true,
+      minutes: 5,
+      created: true,
+    },
+    {
+      handler: 'refreshInstallKpiReports_',
       timeBased: true,
       hours: 1,
       created: true,
