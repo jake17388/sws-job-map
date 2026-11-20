@@ -431,6 +431,54 @@ test('the KPI table resize request covers row one through the live last row', ()
   assert.match(kpiSource, /resizeKpiNativeTable_\(sheet\);/);
 });
 
+test('calendar synchronization records a visible status row', () => {
+  const writes = [];
+  const statusSheet = {
+    getRange(row, column, rowCount = 1, columnCount = 1) {
+      return {
+        getValue: () => '',
+        setValues(values) {
+          writes.push({ row, column, rowCount, columnCount, values });
+          return this;
+        },
+        setFontWeight() { return this; },
+        setFrozenRows() { return this; },
+      };
+    },
+    setFrozenRows() {},
+    autoResizeColumns() {},
+  };
+  const spreadsheet = {
+    getSheetByName: () => null,
+    insertSheet: name => {
+      assert.equal(name, 'Sync Status');
+      return statusSheet;
+    },
+  };
+  const context = backendContext({
+    SpreadsheetApp: { openById: () => spreadsheet },
+  });
+
+  context.recordInstallKpiSyncStatus_('Install Calendar', {
+    success: true,
+    created: 2,
+    filled: 3,
+    removed: 4,
+  });
+
+  assert.deepEqual(writes[0].values, [
+    ['Connection', 'Status', 'Last run', 'Details'],
+    ['Install Calendar', '', '', ''],
+    ['UKG Hours', '', '', ''],
+    ['Fleetio', '', '', ''],
+  ]);
+  assert.equal(writes[1].row, 2);
+  assert.equal(writes[1].column, 2);
+  assert.equal(writes[1].values[0][0], 'OK');
+  assert.equal(writes[1].values[0][1] instanceof Date, true);
+  assert.equal(writes[1].values[0][2], 'Created 2; updated 3; removed 4');
+});
+
 test('the KPI filter fallback preserves criteria and expands through the live last row', () => {
   const context = backendContext();
   const currentFilter = {
