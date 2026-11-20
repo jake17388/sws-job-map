@@ -57,17 +57,22 @@ function refreshJobMapEstimatedHours_() {
 }
 
 // Reconcile the complete Install Log history and the next 60 calendar days.
-function refreshInstallKpiFromCalendar_() {
+// This path stays lean enough for event-driven and five-minute fallback syncs.
+function refreshInstallKpiCalendar_() {
   const current = installKpiCalendarContext_();
   try {
     squarecoilInstallHoursByJob_(current.jobNums, false);
   } catch (error) {
     Logger.log('Squarecoil estimate refresh failed during KPI sync: ' + error.message);
   }
-  const result = syncInstallJobsToKpi_(current.installJobs, {
+  return syncInstallJobsToKpi_(current.installJobs, {
     reconcileStart: current.start,
     reconcileEnd: current.end,
   });
+}
+
+function refreshInstallKpiReports_() {
+  const result = { success: true };
   try {
     result.ukg_hours = syncUkgDailyHoursFromEmail_();
   } catch (error) {
@@ -83,19 +88,34 @@ function refreshInstallKpiFromCalendar_() {
   return result;
 }
 
-function handleInstallCalendarChange_() {
-  return refreshInstallKpiFromCalendar_();
+function refreshInstallKpiFromCalendar_() {
+  const result = refreshInstallKpiCalendar_();
+  const reports = refreshInstallKpiReports_();
+  result.ukg_hours = reports.ukg_hours;
+  result.fleetio = reports.fleetio;
+  return result;
 }
 
-// Run once from the Apps Script editor to install event-driven sync plus an hourly fallback.
+function handleInstallCalendarChange_() {
+  return refreshInstallKpiCalendar_();
+}
+
+// Run once from the Apps Script editor to install event-driven sync, a fast
+// calendar fallback, and independent hourly email-report imports.
 function setupInstallKpiSyncTrigger() {
   ScriptApp.getProjectTriggers()
     .filter(trigger => [
       'refreshInstallKpiFromCalendar_',
+      'refreshInstallKpiCalendar_',
+      'refreshInstallKpiReports_',
       'handleInstallCalendarChange_',
     ].includes(trigger.getHandlerFunction()))
     .forEach(trigger => ScriptApp.deleteTrigger(trigger));
-  ScriptApp.newTrigger('refreshInstallKpiFromCalendar_')
+  ScriptApp.newTrigger('refreshInstallKpiCalendar_')
+    .timeBased()
+    .everyMinutes(5)
+    .create();
+  ScriptApp.newTrigger('refreshInstallKpiReports_')
     .timeBased()
     .everyHours(1)
     .create();

@@ -521,6 +521,12 @@ function kpiFallbackKeyForRow_(row) {
   return `${date}|${crewMember}|${jobNumber}`;
 }
 
+function kpiRowLooksCalendarManaged_(row) {
+  const crewMember = String((row || [])[2] || '').trim();
+  const jobNumber = String((row || [])[3] || '').trim();
+  return CREW_NAMES.includes(crewMember) && /^\d{5,6}$/.test(jobNumber);
+}
+
 function kpiRowPreservationScore_(row) {
   let score = 0;
   for (let column = KPI_TOTAL_CLOCKED_HOURS_COLUMN - 1;
@@ -629,7 +635,14 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber,
     const key = kpiKeyMatchesRow_(canonicalKey, row)
       ? canonicalKey
       : (kpiKeyMatchesRow_(legacyKey, row) ? legacyKey : '');
-    if (key && !claimedRowIndexes.has(index) && !desiredKeys.has(key)) rowIndexesToDelete.add(index);
+    const fallbackKey = kpiFallbackKeyForRow_(row);
+    const staleKeyedRow = key && !desiredKeys.has(key);
+    const staleKeylessRow = !key
+      && kpiRowLooksCalendarManaged_(row)
+      && !seedsByFallbackKey.has(fallbackKey);
+    if (!claimedRowIndexes.has(index) && (staleKeyedRow || staleKeylessRow)) {
+      rowIndexesToDelete.add(index);
+    }
   });
   return {
     rowsToAppend,

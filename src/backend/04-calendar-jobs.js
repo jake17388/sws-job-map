@@ -120,7 +120,7 @@ function fetchCalendarEvents(calId, type, start, end) {
     const jobNum = numMatch ? numMatch[1] : '';
     const crewMatch = title.match(/^\(([^)]+)\)/);
     const crew = crewMatch
-      ? normalizeCrew(crewMatch[1].split(/[\/,&]/).map(n => n.trim()).filter(n => n))
+      ? knownCrewNamesInText_(crewMatch[1])
       : [];
     let cleanTitle = title
       .replace(/^\([^)]+\)\s*/, '')
@@ -154,6 +154,11 @@ function fetchCalendarEvents(calId, type, start, end) {
     });
   });
   return jobs;
+}
+
+function knownCrewNamesInText_(value) {
+  const text = String(value || '').toLowerCase();
+  return CREW_NAMES.filter(name => text.includes(name.toLowerCase()));
 }
 
 function calendarIdForJobType_(type) {
@@ -217,8 +222,7 @@ function descriptionWithTruckAssignments_(description, crew, assignments) {
 function crewFromCalendarTitle_(title) {
   const match = String(title || '').match(/^\(([^)]+)\)/);
   if (!match) return [];
-  const normalized = normalizeCrew(match[1].split(/[\/,&]/).map(name => name.trim()).filter(Boolean));
-  return CREW_NAMES.filter(name => normalized.includes(name));
+  return knownCrewNamesInText_(match[1]);
 }
 
 function calendarEventRange_(event) {
