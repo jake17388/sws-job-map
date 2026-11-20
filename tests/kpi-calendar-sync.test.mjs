@@ -604,6 +604,52 @@ test('calendar reconciliation removes stale crew assignments in the requested wi
   assert.equal(existing[3][31], '');
 });
 
+test('calendar reconciliation adopts legacy-key duplicates and preserves the completed row', () => {
+  const context = backendContext();
+  const completed = Array(32).fill('');
+  completed[0] = 'Thursday';
+  completed[1] = new Date(2026, 10, 19, 12);
+  completed[2] = 'Johnny';
+  completed[3] = '261547';
+  completed[4] = 'JLL, PDS- Global Luxury Phoenix Survey';
+  completed[11] = 8.5;
+  completed[12] = 7.46;
+  completed[13] = true;
+  completed[31] = 'unrelated-event|2026-11-20|Jerry';
+
+  const blankDuplicate = Array(32).fill('');
+  blankDuplicate[0] = 'Thursday';
+  blankDuplicate[1] = new Date(2026, 10, 19, 12);
+  blankDuplicate[2] = 'Johnny';
+  blankDuplicate[3] = '261547';
+  blankDuplicate[4] = 'JLL, PDS- Global Luxury Phoenix Survey';
+  blankDuplicate[13] = false;
+  blankDuplicate[29] = 'event-1|2026-11-19|Johnny';
+
+  const plan = context.planKpiSync_([
+    job({
+      start: '2026-11-19',
+      end: '2026-11-19',
+      crew: ['Johnny'],
+      num: '261547',
+      title: 'JLL, PDS- Global Luxury Phoenix Survey',
+    }),
+  ], [completed, blankDuplicate], new Map(), new Map(), {
+    reconcileStart: new Date(2026, 10, 1),
+    reconcileEnd: new Date(2026, 10, 30, 23, 59, 59),
+  });
+
+  assert.equal(plan.rowsToAppend.length, 0);
+  assert.deepEqual(Array.from(plan.rowsToKeyUpdate, update => ({
+    index: update.index,
+    key: update.key,
+  })), [{ index: 0, key: 'event-1|2026-11-19|Johnny' }]);
+  assert.deepEqual(Array.from(plan.rowIndexesToDelete), [1]);
+  assert.equal(completed[11], 8.5);
+  assert.equal(completed[12], 7.46);
+  assert.equal(completed[13], true);
+});
+
 test('job-hour backfill repeats each Squarecoil total on every matching KPI row', () => {
   const context = backendContext();
   const rows = [
