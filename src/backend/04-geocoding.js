@@ -6,7 +6,7 @@ function geocodeAddress_(address) {
   if (!normalized) return { ok: false, error: 'INVALID_REQUEST' };
 
   const cache = CacheService.getScriptCache();
-  const cacheKey = 'geocode:v1:' + normalized.toLowerCase().slice(0, 230);
+  const cacheKey = 'geocode:v2:' + normalized.toLowerCase().slice(0, 230);
   const cached = cache.get(cacheKey);
   if (cached) {
     try { return JSON.parse(cached); } catch (err) { /* fetch a fresh result */ }
@@ -36,6 +36,26 @@ function geocodeAddress_(address) {
     }
   } catch (err) {
     result = { ok: false, error: 'UPSTREAM_ERROR' };
+  }
+
+  if (result.error === 'ZERO_RESULTS') {
+    try {
+      const payload = Maps.newGeocoder().setRegion('us').geocode(normalized);
+      const match = payload && payload.results ? payload.results[0] : null;
+      const location = match && match.geometry ? match.geometry.location : null;
+      const lat = location ? Number(location.lat) : NaN;
+      const lng = location ? Number(location.lng) : NaN;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        result = {
+          ok: true,
+          lat,
+          lng,
+          matchedAddress: match.formatted_address || normalized,
+        };
+      }
+    } catch (err) {
+      // Keep the stable Census no-match response if the fallback is unavailable.
+    }
   }
 
   cache.put(cacheKey, JSON.stringify(result), 21600);

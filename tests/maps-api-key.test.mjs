@@ -118,6 +118,7 @@ test('Apps Script geocoding resolves valid addresses missing from Census', () =>
     lng: -112.0879,
     matchedAddress: '1100 W Washington St, Phoenix, AZ 85007, USA',
   });
+  assert.equal(service.geocode(' 1100 W Washington St, Phoenix, AZ 85007 ').ok, true);
   assert.equal(service.fetchCount(), 1);
   assert.equal(service.googleFetchCount(), 1);
 });
