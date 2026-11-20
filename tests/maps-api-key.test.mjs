@@ -29,9 +29,17 @@ test('the authenticated backend route owns Census geocoding', () => {
   assert.match(backend, /geocoding\.geo\.census\.gov\/geocoder\/locations\/onelineaddress/);
 });
 
-function makeGeocoder(payload, statusCode = 200) {
+function makeGeocoder(payload, statusCode = 200, googlePayload = { results: [] }) {
   let fetches = 0;
+  let googleFetches = 0;
   const values = new Map();
+  const googleGeocoder = {
+    setRegion: () => googleGeocoder,
+    geocode: () => {
+      googleFetches += 1;
+      return googlePayload;
+    },
+  };
   const context = vm.createContext({
     JSON,
     Number,
@@ -52,6 +60,7 @@ function makeGeocoder(payload, statusCode = 200) {
         };
       },
     },
+    Maps: { newGeocoder: () => googleGeocoder },
   });
   new vm.Script(backend, { filename: 'Code.js' }).runInContext(context);
   return {
@@ -59,6 +68,7 @@ function makeGeocoder(payload, statusCode = 200) {
       vm.runInContext(`geocodeAddress_(${JSON.stringify(address)})`, context),
     )),
     fetchCount: () => fetches,
+    googleFetchCount: () => googleFetches,
   };
 }
 
@@ -88,6 +98,28 @@ test('Census no-match and upstream failures become stable client errors', () => 
 
   const unavailable = makeGeocoder({}, 503);
   assert.deepEqual(unavailable.geocode('4049 E Presidio St'), { ok: false, error: 'UPSTREAM_ERROR' });
+});
+
+test('Apps Script geocoding resolves valid addresses missing from Census', () => {
+  const service = makeGeocoder(
+    { result: { addressMatches: [] } },
+    200,
+    {
+      results: [{
+        formatted_address: '1100 W Washington St, Phoenix, AZ 85007, USA',
+        geometry: { location: { lat: 33.4482, lng: -112.0879 } },
+      }],
+    },
+  );
+
+  assert.deepEqual(service.geocode('1100 W Washington St, Phoenix, AZ 85007'), {
+    ok: true,
+    lat: 33.4482,
+    lng: -112.0879,
+    matchedAddress: '1100 W Washington St, Phoenix, AZ 85007, USA',
+  });
+  assert.equal(service.fetchCount(), 1);
+  assert.equal(service.googleFetchCount(), 1);
 });
 
 test('blank geocoding requests are rejected without calling Census', () => {
