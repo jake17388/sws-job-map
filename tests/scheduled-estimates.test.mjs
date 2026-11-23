@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 const calendarSource = readFileSync(new URL('../src/backend/04-calendar-jobs.js', import.meta.url), 'utf8');
 const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
 
-function scheduledContext({ estimateTotals, estimateError, driveEstimates, includeNonInstall = false } = {}) {
+function scheduledContext({ estimateTotals, estimateError, includeNonInstall = false } = {}) {
   const calls = [];
   const event = {
     getTitle: () => '(Johnny) 260242 Seton Catholic Gym',
@@ -41,10 +41,6 @@ function scheduledContext({ estimateTotals, estimateError, driveEstimates, inclu
     ].join('-'),
     normalizeCrew: values => values,
     normalizeStoredTruckAssignments_: () => ({}),
-    estimateDriveHoursByAddress_: jobs => {
-      assert.equal(jobs[0].addr, '1150 N Dobson Rd');
-      return driveEstimates || new Map();
-    },
     recommendedInstallDays_: hours => hours > 10 ? 2 : hours > 0 ? 1 : null,
     squarecoilInstallHoursByJob_: (jobNums, forceRefresh, cacheOnly) => {
       calls.push({ jobNums: [...jobNums], forceRefresh, cacheOnly });
@@ -59,7 +55,6 @@ function scheduledContext({ estimateTotals, estimateError, driveEstimates, inclu
 test('scheduled install jobs receive cached SquareCoil totals without looking up other job types', () => {
   const backend = scheduledContext({
     estimateTotals: new Map([['260242', 10]]),
-    driveEstimates: new Map([['1150 n dobson rd', 2.1]]),
     includeNonInstall: true,
   });
 
@@ -67,7 +62,7 @@ test('scheduled install jobs receive cached SquareCoil totals without looking up
 
   assert.deepEqual(backend.calls, [{ jobNums: ['260242'], forceRefresh: false, cacheOnly: true }]);
   assert.equal(result.jobs[0].estimated_install_hours, 10);
-  assert.equal(result.jobs[0].estimated_drive_hours, 2.1);
+  assert.equal('estimated_drive_hours' in result.jobs[0], false);
   assert.equal(result.jobs[0].recommended_install_days, 1);
   assert.equal(result.jobs[1].estimated_install_hours, null);
 });
@@ -84,7 +79,8 @@ test('SquareCoil failures leave scheduled jobs available with an unknown estimat
 test('scheduled list rows and map cards display estimated install hours', () => {
   assert.match(frontendSource, /function scheduledCardHTML\(job\)[\s\S]*estimatedInstallHoursHTML\(job\)[\s\S]*function estimatedInstallHoursHTML/);
   assert.match(frontendSource, /id="item-sched-\$\{idx\}"[\s\S]*estimatedInstallHoursHTML\(job\)[\s\S]*list\.innerHTML/);
-  assert.match(frontendSource, /Drive round trip:/);
+  assert.doesNotMatch(frontendSource, /Drive round trip:/);
+  assert.doesNotMatch(frontendSource, /estimated_drive_hours/);
   assert.match(frontendSource, /Recommended:/);
   assert.doesNotMatch(frontendSource, /Recommended \(1 installer\):/);
 });

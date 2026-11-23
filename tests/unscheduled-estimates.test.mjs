@@ -7,7 +7,7 @@ const backendSource = readFileSync(new URL('../src/backend/05-unscheduled-jobs.j
 const squarecoilSource = readFileSync(new URL('../src/backend/11-squarecoil-estimates.js', import.meta.url), 'utf8');
 const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
 
-function backendContext({ rows, estimateTotals, estimateError, driveEstimates } = {}) {
+function backendContext({ rows, estimateTotals, estimateError } = {}) {
   const calls = [];
   const context = vm.createContext({
     console,
@@ -16,10 +16,6 @@ function backendContext({ rows, estimateTotals, estimateError, driveEstimates } 
     UNSCHEDULED_SHEET_GID: 0,
     normalizeCrew: values => values,
     normalizeStoredTruckAssignments_: () => ({}),
-    estimateDriveHoursByAddress_: jobs => {
-      assert.equal(jobs[0].address, '1150 N Dobson Rd');
-      return driveEstimates || new Map();
-    },
     recommendedInstallDays_: hours => hours > 10 ? 2 : hours > 0 ? 1 : null,
     squarecoilInstallHoursByJob_: (jobNums, forceRefresh, cacheOnly) => {
       calls.push({ jobNums: [...jobNums], forceRefresh, cacheOnly });
@@ -48,10 +44,6 @@ test('unscheduled jobs receive cached SquareCoil install totals in one batch', (
   const backend = backendContext({
     rows,
     estimateTotals: new Map([['260242', 10], ['261170', 0]]),
-    driveEstimates: new Map([
-      ['1150 n dobson rd', 2.1],
-      ['1660 s val vista dr', 1.4],
-    ]),
   });
 
   const result = backend.context.getUnsched();
@@ -62,10 +54,10 @@ test('unscheduled jobs receive cached SquareCoil install totals in one batch', (
     cacheOnly: true,
   }]);
   assert.equal(result.jobs[0].estimated_install_hours, 10);
-  assert.equal(result.jobs[0].estimated_drive_hours, 2.1);
+  assert.equal('estimated_drive_hours' in result.jobs[0], false);
   assert.equal(result.jobs[0].recommended_install_days, 1);
   assert.equal(result.jobs[1].estimated_install_hours, 0);
-  assert.equal(result.jobs[1].estimated_drive_hours, 1.4);
+  assert.equal('estimated_drive_hours' in result.jobs[1], false);
   assert.equal(result.jobs[1].recommended_install_days, null);
 });
 
@@ -87,7 +79,8 @@ test('unscheduled list rows and map cards display estimated install hours', () =
   assert.match(frontendSource, /function unschedCardHTML\(job\)[\s\S]*estimatedInstallHoursHTML\(job/);
   assert.match(frontendSource, /id="item-unsched-\$\{i\}"[\s\S]*estimatedInstallHoursHTML\(job/);
   assert.match(frontendSource, /Est\. total job hrs:/);
-  assert.match(frontendSource, /Drive round trip:/);
+  assert.doesNotMatch(frontendSource, /Drive round trip:/);
+  assert.doesNotMatch(frontendSource, /estimated_drive_hours/);
   assert.match(frontendSource, /Recommended:/);
   assert.doesNotMatch(frontendSource, /Recommended \(1 installer\):/);
   assert.match(frontendSource, /estimated_install_hours/);

@@ -60,7 +60,6 @@ test('multi-day install events expand to one unchecked row per date and crew mem
   const context = backendContext();
   const seeds = context.buildKpiSeedRows_(
     [job({ addr: '1150 N Dobson Rd, Chandler, AZ 85224' })],
-    new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]),
     new Map([['123456', 42]]),
   );
 
@@ -81,7 +80,7 @@ test('multi-day install events expand to one unchecked row per date and crew mem
   assert.equal(seeds[0].values[5], '2022 Crane');
   assert.equal(seeds[0].values[7], '');
   assert.equal(seeds[0].values[8], 42);
-  assert.equal(seeds[0].values[9], 2.1);
+  assert.equal(seeds[0].values[9], '');
   assert.equal(seeds[0].values[10], '');
   assert.equal(seeds[0].values[11], '');
   assert.equal(seeds[0].values[12], '');
@@ -136,7 +135,7 @@ test('scheduled assignment saves invoke the immediate KPI truck sync', () => {
   assert.match(calendarSource, /syncKpiTruckAssignmentsForCalendarUpdates_\(updates\)/);
 });
 
-test('estimated project hours use a row formula based on job dates and same-day job occurrences', () => {
+test('project hours use editable day allocations and no drive-time deduction', () => {
   const context = backendContext();
 
   assert.equal(
@@ -145,21 +144,50 @@ test('estimated project hours use a row formula based on job dates and same-day 
   );
   assert.equal(
     context.kpiEstimatedProjectHoursFormulaR1C1_(),
-    '=IF(OR(RC[-2]="",RC[-1]="",RC[-7]="",RC[-9]="",RC[-3]=""),"",ROUND(MAX(0,(RC[-2]/COUNTUNIQUEIFS(C2,C4,RC[-7]))-RC[-1])/RC[-3],2))',
+    '=IF(OR(RC[-2]="",RC[-7]="",RC[-9]="",RC[-3]=""),"",ROUND(MAX(0,RC[-2]/COUNTUNIQUEIFS(C2,C4,RC[-7])/RC[-3]),2))',
+  );
+  assert.equal(
+    context.kpiDayAllocationFormulaR1C1_(),
+    '=IF(OR(RC[-7]="",RC[-8]=""),"",1/COUNTIFS(C3,RC[-7],C2,RC[-8]))',
+  );
+  assert.equal(
+    context.kpiActualProjectHoursFormulaR1C1_(),
+    '=IF(OR(RC[-1]="",RC[-3]=""),"",ROUND(RC[-1]*RC[-3],2))',
   );
   assert.match(kpiSource, /setKpiEstimatedProjectHourFormulas_\(sheet/);
+});
+
+test('day allocation defaults only blank rows and preserves manual percentages', () => {
+  const context = backendContext();
+  const values = [[''], [0.6], ['']];
+  const formulas = new Map();
+  let numberFormat = '';
+  const sheet = {
+    getRange(row, column, rowCount = 1, columnCount = 1) {
+      if (row === 2 && column === 10 && rowCount === 3 && columnCount === 1) {
+        return {
+          getValues: () => values,
+          setNumberFormat(format) { numberFormat = format; return this; },
+        };
+      }
+      if (column === 10 && rowCount === 1 && columnCount === 1) {
+        return { setFormulaR1C1(formula) { formulas.set(row, formula); } };
+      }
+      throw new Error(`Unexpected range: ${row},${column},${rowCount},${columnCount}`);
+    },
+  };
+
+  context.setKpiDayAllocationFormulas_(sheet, 2, 3);
+
+  assert.deepEqual(Array.from(formulas.keys()), [2, 4]);
+  assert.equal(formulas.get(2), context.kpiDayAllocationFormulaR1C1_());
+  assert.equal(values[1][0], 0.6);
+  assert.equal(numberFormat, '0.00%');
 });
 
 test('events without crew do not create KPI rows', () => {
   const context = backendContext();
   assert.deepEqual(Array.from(context.buildKpiSeedRows_([job({ crew: [] })])), []);
-});
-
-test('drive estimates add five percent, include the return trip, and use decimal hours', () => {
-  const context = backendContext();
-  assert.equal(context.adjustedDriveHours_(3600), 2.1);
-  assert.equal(context.adjustedDriveHours_(1810), 1.06);
-  assert.equal(context.adjustedDriveHours_(0), '');
 });
 
 test('recommended install days allow one long first day then use nine-hour days', () => {
@@ -170,82 +198,6 @@ test('recommended install days allow one long first day then use nine-hour days'
   assert.equal(context.recommendedInstallDays_(10.01), 2);
   assert.equal(context.recommendedInstallDays_(18), 2);
   assert.equal(context.recommendedInstallDays_(18.01), 3);
-});
-
-test('calendar addresses are routed once per unique destination', () => {
-  let requestCount = 0;
-  const directions = {
-    setOrigin(value) { assert.equal(value, '4049 E Presidio St, Mesa, AZ 85215'); return this; },
-    setDestination(value) { assert.equal(value, '1150 N Dobson Rd, Chandler, AZ 85224'); return this; },
-    setMode(value) { assert.equal(value, 'DRIVING'); return this; },
-    getDirections() {
-      requestCount += 1;
-      return { routes: [{ legs: [{ duration: { value: 3600 } }] }] };
-    },
-  };
-  const context = backendContext({
-    Maps: {
-      DirectionFinder: { Mode: { DRIVING: 'DRIVING' } },
-      newDirectionFinder: () => directions,
-    },
-  });
-  const estimates = context.estimateDriveHoursByAddress_([
-    job({ addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
-    job({ event_id: 'event-2', addr: ' 1150 N Dobson Rd,   Chandler, AZ 85224 ' }),
-  ]);
-
-  assert.equal(requestCount, 1);
-  assert.equal(estimates.get('1150 n dobson rd, chandler, az 85224'), 2.1);
-});
-
-test('missing directions leave the drive estimate blank', () => {
-  const context = backendContext({
-    Maps: {
-      DirectionFinder: { Mode: { DRIVING: 'DRIVING' } },
-      newDirectionFinder: () => ({
-        setOrigin() { return this; }, setDestination() { return this; }, setMode() { return this; },
-        getDirections() { return { routes: [] }; },
-      }),
-    },
-  });
-  const estimates = context.estimateDriveHoursByAddress_([job({ addr: 'Unknown address' })]);
-  assert.equal(estimates.get('unknown address'), '');
-});
-
-test('drive estimate cache failures do not interrupt routing', () => {
-  const context = backendContext({
-    CacheService: { getScriptCache: () => ({ get() { throw new Error('cache unavailable'); } }) },
-    Maps: {
-      DirectionFinder: { Mode: { DRIVING: 'DRIVING' } },
-      newDirectionFinder: () => ({
-        setOrigin() { return this; }, setDestination() { return this; }, setMode() { return this; },
-        getDirections() { return { routes: [{ legs: [{ duration: { value: 3600 } }] }] }; },
-      }),
-    },
-  });
-  const estimates = context.estimateDriveHoursByAddress_([
-    job({ addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
-  ]);
-  assert.equal(estimates.get('1150 n dobson rd, chandler, az 85224'), 2.1);
-});
-
-test('drive estimate cache keys include the entire normalized address', () => {
-  const context = backendContext();
-  const sharedPrefix = '123 very long destination '.repeat(12);
-  assert.notEqual(
-    context.driveEstimateCacheKey_(`${sharedPrefix}suite a`),
-    context.driveEstimateCacheKey_(`${sharedPrefix}suite b`),
-  );
-  assert.match(context.driveEstimateCacheKey_('mesa'), /^install_drive_v2:/);
-});
-
-test('new KPI rows receive the calculated drive estimate in column I', () => {
-  const context = backendContext();
-  const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
-  const seeds = context.buildKpiSeedRows_([
-    job({ addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
-  ], estimates);
-  assert.equal(seeds[0].values[9], 2.1);
 });
 
 test('Squarecoil estimate pages sum install labor and exclude project management', () => {
@@ -317,7 +269,7 @@ test('the KPI sync migrates the live sheet to a Day column exactly once', () => 
   assert.deepEqual(Array.from(dayValues, row => row[0]), ['Monday', '', 'Sunday']);
 });
 
-test('the KPI sync inserts and names the clocked-hours column exactly once', () => {
+test('the KPI sync replaces drive hours with editable day allocation exactly once', () => {
   const context = backendContext();
   let headers = [
     'Est. Total Job hrs',
@@ -327,22 +279,31 @@ test('the KPI sync inserts and names the clocked-hours column exactly once', () 
     'Work Completed on Schedule',
   ];
   let insertions = 0;
+  let allocationValues = [[2.1], [0.8]];
+  let allocationFormat = '';
   const sheet = {
-    getLastRow: () => 1,
+    getLastRow: () => 3,
     insertColumnBefore(column) {
       assert.equal(column, 12);
       insertions += 1;
       headers.splice(3, 0, '');
     },
     getRange(row, column, rowCount, columnCount) {
-      assert.equal(row, 1);
-      assert.equal(column, 9);
-      assert.equal(rowCount, 1);
-      assert.equal(columnCount, 5);
-      return {
-        getValues: () => [headers.slice(0, 5)],
-        setValues(values) { headers = Array.from(values[0]); },
-      };
+      if (row === 1 && column === 9 && rowCount === 1 && columnCount === 5) {
+        return {
+          getValues: () => [headers.slice(0, 5)],
+          setValues(values) { headers = Array.from(values[0]); },
+        };
+      }
+      if (row === 2 && column === 10 && rowCount === 2 && columnCount === 1) {
+        return {
+          clearContent() { allocationValues = [[''], ['']]; return this; },
+          setNumberFormat(format) { allocationFormat = format; return this; },
+          getValues: () => allocationValues,
+          setFormulaR1C1() { return this; },
+        };
+      }
+      throw new Error(`Unexpected range: ${row},${column},${rowCount},${columnCount}`);
     },
   };
 
@@ -352,11 +313,28 @@ test('the KPI sync inserts and names the clocked-hours column exactly once', () 
   assert.equal(insertions, 1);
   assert.deepEqual(headers, [
     'Total Estimated Job Hours',
-    'Round-Trip Drive Hours',
+    'Day Allocation %',
     'Estimated Project Hours (Day)',
     'Total Clocked Hours (Day)',
     'Actual Project Work Hours',
   ]);
+  assert.deepEqual(allocationValues, [[''], ['']]);
+  assert.equal(allocationFormat, '0.00%');
+});
+
+test('the KPI sync removes the obsolete Install Metrics drive-hours column', () => {
+  const context = backendContext();
+  let deletedColumn = null;
+  const sheet = {
+    getRange(row, column, rowCount, columnCount) {
+      assert.deepEqual([row, column, rowCount, columnCount], [1, 13, 5, 1]);
+      return { getValues: () => [[''], [''], [''], [''], ['Est. Drie hours']] };
+    },
+    deleteColumn(column) { deletedColumn = column; },
+  };
+
+  assert.equal(context.removeInstallMetricsDriveColumn_(sheet), true);
+  assert.equal(deletedColumn, 13);
 });
 
 test('the KPI sync inserts the Crew Size column exactly once', () => {
@@ -533,7 +511,7 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
   existing[4] = 'Monument Sign';
   existing[5] = '2022 Crane';
   existing[8] = 90;
-  existing[9] = 2.1;
+  existing[9] = 0.6;
   existing[10] = 4.5;
   existing[11] = 8.25;
   existing[12] = 3.75;
@@ -541,21 +519,20 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
   existing[14] = 'Waiting on electrical';
   existing[31] = 'event-1|2026-11-02|Johnny';
 
-  const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
   const plan = context.planKpiSync_([
     job({ start: '2026-11-02', end: '2026-11-02', addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
-  ], [existing], estimates, new Map([['123456', 42]]));
+  ], [existing], new Map([['123456', 42]]));
 
   assert.equal(plan.rowsToAppend.length, 1);
   assert.equal(plan.rowsToAppend[0][2], 'Eli');
   assert.equal(plan.rowsToUpdate.length, 0);
-  assert.equal(plan.rowsToDriveUpdate.length, 0);
+  assert.equal(plan.rowsToAllocationUpdate, undefined);
   assert.equal(plan.rowsToEstimatedWorkUpdate, undefined);
   assert.deepEqual(Array.from(plan.rowsToJobHoursUpdate, update => ({ index: update.index, value: update.value })), [
     { index: 0, value: 42 },
   ]);
   assert.equal(plan.rowsToAppend[0][8], 42);
-  assert.equal(plan.rowsToAppend[0][9], 2.1);
+  assert.equal(plan.rowsToAppend[0][9], '');
   assert.equal(plan.rowsToAppend[0][10], '');
   assert.equal(existing[11], 8.25);
   assert.equal(existing[12], 3.75);
@@ -563,42 +540,12 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
   assert.equal(existing[14], 'Waiting on electrical');
 });
 
-test('sync planning fills a blank drive estimate without overwriting other KPI fields', () => {
-  const context = backendContext();
-  const existing = Array(32).fill('');
-  existing[0] = 'Monday';
-  existing[1] = new Date(2026, 10, 2, 12);
-  existing[2] = 'Johnny';
-  existing[3] = '123456';
-  existing[4] = 'Monument Sign';
-  existing[5] = '2022 Crane';
-  existing[11] = 4.5;
-  existing[13] = false;
-  existing[31] = 'event-1|2026-11-02|Johnny';
-  const estimates = new Map([['1150 n dobson rd, chandler, az 85224', 2.1]]);
-
-  const plan = context.planKpiSync_([
-    job({ start: '2026-11-02', end: '2026-11-02', crew: ['Johnny'], addr: '1150 N Dobson Rd, Chandler, AZ 85224' }),
-  ], [existing], estimates, new Map());
-
-  assert.deepEqual(Array.from(plan.rowsToDriveUpdate, update => ({ index: update.index, value: update.value })), [
-    { index: 0, value: 2.1 },
-  ]);
-  assert.equal(existing[11], 4.5);
-  assert.equal(existing[13], false);
-});
-
 test('fast calendar reconciliation skips slow estimate lookups', () => {
-  let driveLookups = 0;
   let squarecoilLookups = 0;
   const context = backendContext();
   context.getKpiSheet_ = () => ({ getLastRow: () => 1 });
   context.ensureKpiKeyColumn_ = () => {};
   context.resizeKpiNativeTable_ = () => {};
-  context.estimateDriveHoursByAddress_ = () => {
-    driveLookups += 1;
-    return new Map();
-  };
   context.squarecoilInstallHoursByJob_ = () => {
     squarecoilLookups += 1;
     return new Map();
@@ -607,41 +554,13 @@ test('fast calendar reconciliation skips slow estimate lookups', () => {
     rowsToAppend: [],
     rowsToUpdate: [],
     rowsToJobHoursUpdate: [],
-    rowsToDriveUpdate: [],
     rowsToKeyUpdate: [],
     rowIndexesToDelete: [],
   });
 
   context.syncInstallJobsToKpi_([job()], { skipEstimates: true });
 
-  assert.equal(driveLookups, 0);
   assert.equal(squarecoilLookups, 0);
-});
-
-test('calendar reconciliation refreshes drive time when an event location changes', () => {
-  const context = backendContext();
-  const existing = Array(32).fill('');
-  existing[0] = 'Monday';
-  existing[1] = new Date(2026, 10, 2, 12);
-  existing[2] = 'Johnny';
-  existing[3] = '123456';
-  existing[4] = 'Monument Sign';
-  existing[9] = 2.1;
-  existing[13] = false;
-  existing[31] = 'event-1|2026-11-02|Johnny';
-
-  const plan = context.planKpiSync_([
-    job({
-      start: '2026-11-02',
-      end: '2026-11-02',
-      crew: ['Johnny'],
-      addr: 'New destination',
-    }),
-  ], [existing], new Map([['new destination', 3.4]]), new Map());
-
-  assert.deepEqual(Array.from(plan.rowsToDriveUpdate, update => ({ index: update.index, value: update.value })), [
-    { index: 0, value: 3.4 },
-  ]);
 });
 
 test('sync planning writes a legitimate zero-hour Squarecoil total into a blank cell', () => {
@@ -658,7 +577,7 @@ test('sync planning writes a legitimate zero-hour Squarecoil total into a blank 
 
   const plan = context.planKpiSync_([
     job({ start: '2026-11-02', end: '2026-11-02', crew: ['Johnny'] }),
-  ], [existing], new Map(), new Map([['123456', 0]]));
+  ], [existing], new Map([['123456', 0]]));
 
   assert.deepEqual(Array.from(plan.rowsToJobHoursUpdate, update => ({ index: update.index, value: update.value })), [
     { index: 0, value: 0 },
@@ -688,7 +607,7 @@ test('calendar reconciliation removes stale crew assignments in the requested wi
       crew: ['Randy', 'Eli'],
       truck_assignments: {},
     }),
-  ], existing, new Map(), new Map(), {
+  ], existing, new Map(), {
     reconcileStart: new Date(2026, 10, 1),
     reconcileEnd: new Date(2026, 10, 30, 23, 59, 59),
   });
@@ -723,7 +642,7 @@ test('calendar reconciliation removes keyless stale schedule rows in the request
       num: '261710',
       title: 'Wrightson Ridge',
     }),
-  ], existing, new Map(), new Map(), {
+  ], existing, new Map(), {
     reconcileStart: new Date(2026, 10, 1),
     reconcileEnd: new Date(2026, 11, 31, 23, 59, 59),
   });
@@ -765,7 +684,7 @@ test('calendar reconciliation adopts legacy-key duplicates and preserves the com
       num: '261547',
       title: 'JLL, PDS- Global Luxury Phoenix Survey',
     }),
-  ], [completed, blankDuplicate], new Map(), new Map(), {
+  ], [completed, blankDuplicate], new Map(), {
     reconcileStart: new Date(2026, 10, 1),
     reconcileEnd: new Date(2026, 10, 30, 23, 59, 59),
   });
