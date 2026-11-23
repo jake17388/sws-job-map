@@ -1090,20 +1090,15 @@ function scheduledCardHTML(job) {
 }
 function estimatedInstallHoursHTML(job) {
   const rawJobHours = job.estimated_install_hours;
-  const rawDriveHours = job.estimated_drive_hours;
   const rawDays = job.recommended_install_days;
   const jobHours = rawJobHours === null || rawJobHours === '' ? NaN : Number(rawJobHours);
-  const driveHours = rawDriveHours === null || rawDriveHours === '' ? NaN : Number(rawDriveHours);
   const days = rawDays === null || rawDays === '' ? NaN : Number(rawDays);
   const jobKnown = Number.isFinite(jobHours);
-  const driveKnown = Number.isFinite(driveHours);
   const daysKnown = Number.isInteger(days) && days > 0;
   const formatHours = value => String(Math.round(value * 100) / 100);
   const jobStateClass = !jobKnown ? ' unavailable' : jobHours === 0 ? ' zero' : '';
-  const driveStateClass = driveKnown ? ' drive' : ' drive unavailable';
   const daysStateClass = daysKnown ? ' recommended' : ' recommended unavailable';
   return `<span class="estimated-hours${jobStateClass}">Est. total job hrs: ${jobKnown ? formatHours(jobHours) : '—'}</span>
-    <span class="estimated-hours${driveStateClass}">Drive round trip: ${driveKnown ? `${formatHours(driveHours)} hrs` : '—'}</span>
     <span class="estimated-hours${daysStateClass}">Recommended: ${daysKnown ? `${days} ${days === 1 ? 'day' : 'days'}` : '—'}</span>`;
 }
 

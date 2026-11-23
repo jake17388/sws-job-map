@@ -4,7 +4,7 @@ const KPI_FIRST_DATA_ROW = 2;
 const KPI_COLUMN_COUNT = 32;
 const KPI_CREW_SIZE_COLUMN = 8;
 const KPI_TOTAL_JOB_HOURS_COLUMN = 9;
-const KPI_DRIVE_HOURS_COLUMN = 10;
+const KPI_DAY_ALLOCATION_COLUMN = 10;
 const KPI_ESTIMATED_PROJECT_HOURS_COLUMN = 11;
 const KPI_TOTAL_CLOCKED_HOURS_COLUMN = 12;
 const KPI_ACTUAL_PROJECT_HOURS_COLUMN = 13;
@@ -16,6 +16,8 @@ const KPI_KEY_COLUMN = 32;
 const KPI_KEY_HEADER = 'Calendar KPI Key';
 const KPI_TABLE_NAME = 'InstallLogTable';
 const KPI_SYNC_STATUS_SHEET_NAME = 'Sync Status';
+const KPI_METRICS_SHEET_NAME = 'Install Metrics';
+const KPI_METRICS_DRIVE_COLUMN = 13;
 const KPI_SYNC_STATUS_CONNECTIONS = Object.freeze([
   'Install Calendar',
   'UKG Hours',
@@ -23,7 +25,7 @@ const KPI_SYNC_STATUS_CONNECTIONS = Object.freeze([
 ]);
 const KPI_HOUR_HEADERS = [
   'Total Estimated Job Hours',
-  'Round-Trip Drive Hours',
+  'Day Allocation %',
   'Estimated Project Hours (Day)',
   'Total Clocked Hours (Day)',
   'Actual Project Work Hours',
@@ -70,12 +72,24 @@ function getKpiSheet_() {
   const spreadsheet = SpreadsheetApp.openById(KPI_SHEET_ID);
   const sheet = spreadsheet.getSheetByName(KPI_SHEET_NAME);
   if (!sheet) throw new Error(`KPI sheet not found: ${KPI_SHEET_NAME}`);
+  removeInstallMetricsDriveColumn_(spreadsheet.getSheetByName(KPI_METRICS_SHEET_NAME));
   ensureKpiDayColumn_(sheet);
   ensureKpiCrewSizeColumn_(sheet);
   ensureKpiHoursColumns_(sheet);
   ensureKpiFleetioColumns_(sheet);
   ensureKpiFilter_(sheet);
   return sheet;
+}
+
+function removeInstallMetricsDriveColumn_(sheet) {
+  if (!sheet) return false;
+  const values = sheet.getRange(1, KPI_METRICS_DRIVE_COLUMN, 5, 1).getValues();
+  const hasDriveHeader = values.some(row => (
+    /^Est\.?\s+(?:drive|drie)(?:\s+\(hr\)|\s+hours?)?$/i.test(String(row[0] || '').trim())
+  ));
+  if (!hasDriveHeader) return false;
+  sheet.deleteColumn(KPI_METRICS_DRIVE_COLUMN);
+  return true;
 }
 
 function ensureKpiFleetioColumns_(sheet) {
@@ -227,6 +241,7 @@ function ensureKpiDayColumn_(sheet) {
 function ensureKpiHoursColumns_(sheet) {
   const headerRange = sheet.getRange(KPI_HEADER_ROW, KPI_TOTAL_JOB_HOURS_COLUMN, 1, KPI_HOUR_HEADERS.length);
   const headers = headerRange.getValues()[0].map(value => String(value || '').trim());
+  const hadDriveHours = /drive/i.test(headers[1]);
   const alreadyMigrated = headers[3] === KPI_HOUR_HEADERS[3];
   if (!alreadyMigrated) {
     if (!/^Act\. work(?: \(hr\))?$/i.test(headers[3])) {
@@ -237,8 +252,14 @@ function ensureKpiHoursColumns_(sheet) {
   sheet.getRange(KPI_HEADER_ROW, KPI_TOTAL_JOB_HOURS_COLUMN, 1, KPI_HOUR_HEADERS.length)
     .setValues([KPI_HOUR_HEADERS]);
 
-  if (!alreadyMigrated) backfillKpiHourColumns_(sheet);
-  return !alreadyMigrated;
+  if (hadDriveHours && sheet.getLastRow() >= KPI_FIRST_DATA_ROW) {
+    const rowCount = sheet.getLastRow() - KPI_FIRST_DATA_ROW + 1;
+    sheet.getRange(KPI_FIRST_DATA_ROW, KPI_DAY_ALLOCATION_COLUMN, rowCount, 1)
+      .clearContent()
+      .setNumberFormat('0.00%');
+  }
+  if (!alreadyMigrated || hadDriveHours) backfillKpiHourColumns_(sheet);
+  return !alreadyMigrated || hadDriveHours;
 }
 
 function ensureKpiCrewSizeColumn_(sheet) {
@@ -267,7 +288,7 @@ function setKpiCrewSizeFormulas_(sheet, startRow, rowCount) {
 }
 
 function kpiEstimatedProjectHoursFormulaR1C1_() {
-  return '=IF(OR(RC[-2]="",RC[-1]="",RC[-7]="",RC[-9]="",RC[-3]=""),"",ROUND(MAX(0,(RC[-2]/COUNTUNIQUEIFS(C2,C4,RC[-7]))-RC[-1])/RC[-3],2))';
+  return '=IF(OR(RC[-2]="",RC[-7]="",RC[-9]="",RC[-3]=""),"",ROUND(MAX(0,RC[-2]/COUNTUNIQUEIFS(C2,C4,RC[-7])/RC[-3]),2))';
 }
 
 function setKpiEstimatedProjectHourFormulas_(sheet, startRow, rowCount) {
@@ -276,10 +297,31 @@ function setKpiEstimatedProjectHourFormulas_(sheet, startRow, rowCount) {
     .setFormulaR1C1(kpiEstimatedProjectHoursFormulaR1C1_());
 }
 
+function kpiDayAllocationFormulaR1C1_() {
+  return '=IF(OR(RC[-7]="",RC[-8]=""),"",1/COUNTIFS(C3,RC[-7],C2,RC[-8]))';
+}
+
+function setKpiDayAllocationFormulas_(sheet, startRow, rowCount) {
+  if (!rowCount) return;
+  const range = sheet.getRange(startRow, KPI_DAY_ALLOCATION_COLUMN, rowCount, 1);
+  const values = range.getValues();
+  range.setNumberFormat('0.00%');
+  values.forEach((row, index) => {
+    if (row[0] !== '' && row[0] != null) return;
+    sheet.getRange(startRow + index, KPI_DAY_ALLOCATION_COLUMN)
+      .setFormulaR1C1(kpiDayAllocationFormulaR1C1_());
+  });
+}
+
+function kpiActualProjectHoursFormulaR1C1_() {
+  return '=IF(OR(RC[-1]="",RC[-3]=""),"",ROUND(RC[-1]*RC[-3],2))';
+}
+
 function backfillKpiHourColumns_(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow < KPI_FIRST_DATA_ROW) return;
   const rowCount = lastRow - KPI_FIRST_DATA_ROW + 1;
+  setKpiDayAllocationFormulas_(sheet, KPI_FIRST_DATA_ROW, rowCount);
   setKpiEstimatedProjectHourFormulas_(sheet, KPI_FIRST_DATA_ROW, rowCount);
 
   const actualRange = sheet.getRange(KPI_FIRST_DATA_ROW, KPI_ACTUAL_PROJECT_HOURS_COLUMN, rowCount, 1);
@@ -287,15 +329,13 @@ function backfillKpiHourColumns_(sheet) {
   const actualFormulas = typeof actualRange.getFormulasR1C1 === 'function'
     ? actualRange.getFormulasR1C1()
     : actualValues.map(() => ['']);
-  const formula = '=IF(RC[-1]="","",MAX(0,RC[-1]-RC[-3]))';
-  actualRange.setFormulaR1C1(formula);
+  actualRange.setFormulaR1C1(kpiActualProjectHoursFormulaR1C1_());
   actualValues.forEach((row, index) => {
     const existingFormula = actualFormulas[index][0];
     const existingValue = row[0];
-    if (!existingFormula && (existingValue === '' || existingValue == null)) return;
+    if (existingFormula || existingValue === '' || existingValue == null) return;
     const cell = sheet.getRange(KPI_FIRST_DATA_ROW + index, KPI_ACTUAL_PROJECT_HOURS_COLUMN);
-    if (existingFormula) cell.setFormulaR1C1(existingFormula);
-    else cell.setValue(existingValue);
+    cell.setValue(existingValue);
   });
 }
 
@@ -356,106 +396,6 @@ function syncKpiTruckAssignmentsForCalendarUpdates_(updates) {
   return { success: true, rows_updated: rowsUpdated };
 }
 
-function normalizeDriveAddress_(value) {
-  return String(value || '')
-    .replace(/\s*\|\s*/g, ', ')
-    .replace(/\s*,\s*/g, ', ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
-
-function adjustedDriveHours_(durationSeconds) {
-  const seconds = Number(durationSeconds);
-  if (!Number.isFinite(seconds) || seconds <= 0) return '';
-  const hours = (seconds / 3600) * INSTALL_TRUCK_DRIVE_FACTOR * INSTALL_ROUND_TRIP_FACTOR;
-  return Math.round(hours * 100) / 100;
-}
-
-function driveEstimateCache_() {
-  if (typeof CacheService === 'undefined') return null;
-  try { return CacheService.getScriptCache(); }
-  catch (error) { return null; }
-}
-
-function driveEstimateCacheKey_(normalizedAddress) {
-  if (typeof Utilities !== 'undefined') {
-    const digest = Utilities.computeDigest(
-      Utilities.DigestAlgorithm.SHA_256,
-      normalizedAddress,
-      Utilities.Charset.UTF_8,
-    );
-    const hex = digest
-      .map(byte => ((byte + 256) % 256).toString(16).padStart(2, '0'))
-      .join('');
-    return `install_drive_v2:${hex}`;
-  }
-  let hash = 2166136261;
-  for (let index = 0; index < normalizedAddress.length; index += 1) {
-    hash ^= normalizedAddress.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `install_drive_v2:${normalizedAddress.length}:${(hash >>> 0).toString(16)}`;
-}
-
-function readDriveEstimateCache_(cache, key) {
-  if (!cache) return null;
-  try { return cache.get(key); }
-  catch (error) { return null; }
-}
-
-function writeDriveEstimateCache_(cache, key, value) {
-  if (!cache) return;
-  try { cache.put(key, String(value), 21600); }
-  catch (error) {
-    if (typeof Logger !== 'undefined') Logger.log(`Drive estimate cache write failed: ${error.message}`);
-  }
-}
-
-function routeDriveHours_(address) {
-  if (typeof Maps === 'undefined') return '';
-  const directions = Maps.newDirectionFinder()
-    .setOrigin(INSTALL_SHOP_ADDRESS)
-    .setDestination(address)
-    .setMode(Maps.DirectionFinder.Mode.DRIVING)
-    .getDirections();
-  const legs = directions && directions.routes && directions.routes[0]
-    ? directions.routes[0].legs || []
-    : [];
-  const seconds = legs.reduce((total, leg) => total + Number(leg && leg.duration && leg.duration.value || 0), 0);
-  return adjustedDriveHours_(seconds);
-}
-
-function estimateDriveHoursByAddress_(jobs) {
-  const estimates = new Map();
-  const cache = driveEstimateCache_();
-  (jobs || []).forEach(job => {
-    const address = String(job && (job.addr || job.address) || '').replace(/\s+/g, ' ').trim();
-    const normalizedAddress = normalizeDriveAddress_(address);
-    if (!normalizedAddress || estimates.has(normalizedAddress)) return;
-    const cacheKey = driveEstimateCacheKey_(normalizedAddress);
-    const cached = readDriveEstimateCache_(cache, cacheKey);
-    if (cached != null && cached !== '') {
-      const cachedHours = Number(cached);
-      if (Number.isFinite(cachedHours) && cachedHours > 0) {
-        estimates.set(normalizedAddress, cachedHours);
-        return;
-      }
-    }
-    let hours = '';
-    try {
-      hours = routeDriveHours_(address);
-      if (hours !== '') writeDriveEstimateCache_(cache, cacheKey, hours);
-    } catch (error) {
-      if (typeof Logger !== 'undefined') {
-        Logger.log(`Drive estimate failed for ${address}: ${error.message}`);
-      }
-    }
-    estimates.set(normalizedAddress, hours);
-  });
-  return estimates;
-}
-
 function inclusiveDateStrings_(startValue, endValue) {
   const startResult = parseScheduleDate_(startValue, 'start');
   const endResult = parseScheduleDate_(endValue || startValue, 'end');
@@ -482,7 +422,7 @@ function kpiWritableRow_(values) {
   return writable;
 }
 
-function buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber) {
+function buildKpiSeedRows_(jobs, jobHoursByNumber) {
   const seeds = [];
   (jobs || []).forEach(job => {
     if (String(job.type || '').toLowerCase() !== 'install' || !job.event_id) return;
@@ -509,10 +449,6 @@ function buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber) {
           ? jobHoursByNumber.get(jobNum)
           : '';
         values[KPI_TOTAL_JOB_HOURS_COLUMN - 1] = totalJobHours;
-        const driveEstimate = driveHoursByAddress && typeof driveHoursByAddress.get === 'function'
-          ? driveHoursByAddress.get(normalizeDriveAddress_(job.addr))
-          : '';
-        values[KPI_DRIVE_HOURS_COLUMN - 1] = driveEstimate == null ? '' : driveEstimate;
         values[13] = false;
         values[KPI_FLEETIO_AM_COLUMN - 1] = false;
         values[KPI_FLEETIO_PM_COLUMN - 1] = false;
@@ -572,7 +508,7 @@ function kpiRowLooksCalendarManaged_(row) {
 
 function kpiRowPreservationScore_(row) {
   let score = 0;
-  for (let column = KPI_TOTAL_CLOCKED_HOURS_COLUMN - 1;
+  for (let column = KPI_DAY_ALLOCATION_COLUMN - 1;
     column < KPI_LEGACY_KEY_COLUMN - 1;
     column += 1) {
     const value = (row || [])[column];
@@ -582,7 +518,7 @@ function kpiRowPreservationScore_(row) {
   return score;
 }
 
-function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber, options) {
+function planKpiSync_(jobs, existingRows, jobHoursByNumber, options) {
   const rowsByKey = new Map();
   const rowsByFallbackKey = new Map();
   (existingRows || []).forEach((row, index) => {
@@ -605,9 +541,8 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber,
   const rowsToAppend = [];
   const rowsToUpdate = [];
   const rowsToJobHoursUpdate = [];
-  const rowsToDriveUpdate = [];
   const rowsToKeyUpdate = [];
-  const seeds = buildKpiSeedRows_(jobs, driveHoursByAddress, jobHoursByNumber);
+  const seeds = buildKpiSeedRows_(jobs, jobHoursByNumber);
   const desiredKeys = new Set(seeds.map(seed => seed.key));
   const seedsByFallbackKey = new Map();
   seeds.forEach(seed => {
@@ -660,13 +595,6 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber,
           || Number(currentJobHours) !== Number(estimatedJobHours))) {
       rowsToJobHoursUpdate.push({ index: existing.index, value: estimatedJobHours });
     }
-    const currentDrive = existing.row[KPI_DRIVE_HOURS_COLUMN - 1];
-    const estimatedDrive = seed.values[KPI_DRIVE_HOURS_COLUMN - 1];
-    if (estimatedDrive !== ''
-        && ((currentDrive == null || String(currentDrive).trim() === '')
-          || Number(currentDrive) !== Number(estimatedDrive))) {
-      rowsToDriveUpdate.push({ index: existing.index, value: estimatedDrive });
-    }
   });
   const rowIndexesToDelete = new Set();
   (existingRows || []).forEach((row, index) => {
@@ -693,7 +621,6 @@ function planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber,
     rowsToAppend,
     rowsToUpdate,
     rowsToJobHoursUpdate,
-    rowsToDriveUpdate,
     rowsToKeyUpdate,
     rowIndexesToDelete: Array.from(rowIndexesToDelete).sort((left, right) => left - right),
   };
@@ -721,7 +648,6 @@ function syncInstallJobsToKpi_(jobs, options) {
     const sheet = getKpiSheet_();
     ensureKpiKeyColumn_(sheet);
     const skipEstimates = !!(options && options.skipEstimates);
-    const driveHoursByAddress = skipEstimates ? new Map() : estimateDriveHoursByAddress_(jobs);
     let jobHoursByNumber = new Map();
     if (!skipEstimates) {
       try {
@@ -736,16 +662,13 @@ function syncInstallJobsToKpi_(jobs, options) {
     const existingRows = lastRow >= KPI_FIRST_DATA_ROW
       ? sheet.getRange(KPI_FIRST_DATA_ROW, 1, lastRow - KPI_FIRST_DATA_ROW + 1, KPI_COLUMN_COUNT).getValues()
       : [];
-    const plan = planKpiSync_(jobs, existingRows, driveHoursByAddress, jobHoursByNumber, options);
+    const plan = planKpiSync_(jobs, existingRows, jobHoursByNumber, options);
     plan.rowsToUpdate.forEach(update => {
       sheet.getRange(KPI_FIRST_DATA_ROW + update.index, 1, 1, 6)
         .setValues([kpiWritableRow_(update.values)]);
     });
     plan.rowsToJobHoursUpdate.forEach(update => {
       sheet.getRange(KPI_FIRST_DATA_ROW + update.index, KPI_TOTAL_JOB_HOURS_COLUMN).setValue(update.value);
-    });
-    plan.rowsToDriveUpdate.forEach(update => {
-      sheet.getRange(KPI_FIRST_DATA_ROW + update.index, KPI_DRIVE_HOURS_COLUMN).setValue(update.value);
     });
     plan.rowsToKeyUpdate.forEach(update => {
       const rowNumber = KPI_FIRST_DATA_ROW + update.index;
@@ -764,10 +687,11 @@ function syncInstallJobsToKpi_(jobs, options) {
         .insertCheckboxes()
         .setValue(false);
       sheet.getRange(appendRow, KPI_ACTUAL_PROJECT_HOURS_COLUMN, plan.rowsToAppend.length, 1)
-        .setFormulaR1C1('=IF(RC[-1]="","",MAX(0,RC[-1]-RC[-3]))');
+        .setFormulaR1C1(kpiActualProjectHoursFormulaR1C1_());
     }
     const formulaRowCount = Math.max(0, sheet.getLastRow() - KPI_FIRST_DATA_ROW + 1);
     setKpiCrewSizeFormulas_(sheet, KPI_FIRST_DATA_ROW, formulaRowCount);
+    setKpiDayAllocationFormulas_(sheet, KPI_FIRST_DATA_ROW, formulaRowCount);
     setKpiEstimatedProjectHourFormulas_(sheet, KPI_FIRST_DATA_ROW, formulaRowCount);
     resizeKpiNativeTable_(sheet);
     return {
@@ -776,7 +700,6 @@ function syncInstallJobsToKpi_(jobs, options) {
       removed: plan.rowIndexesToDelete.length,
       filled: plan.rowsToUpdate.length,
       estimated_job_hours_filled: plan.rowsToJobHoursUpdate.length,
-      estimated_drive_filled: plan.rowsToDriveUpdate.length,
     };
   } finally {
     if (lock) lock.releaseLock();
@@ -806,6 +729,7 @@ function refreshKpiJobTotals() {
       sheet.getRange(KPI_FIRST_DATA_ROW, KPI_TOTAL_JOB_HOURS_COLUMN, plan.values.length, 1)
         .setValues(plan.values);
       setKpiCrewSizeFormulas_(sheet, KPI_FIRST_DATA_ROW, plan.values.length);
+      setKpiDayAllocationFormulas_(sheet, KPI_FIRST_DATA_ROW, plan.values.length);
       setKpiEstimatedProjectHourFormulas_(sheet, KPI_FIRST_DATA_ROW, plan.values.length);
     }
     return {

@@ -2,9 +2,6 @@ const SHEET_ID = '1CTh3Fd3zvC0XDLTruuNz7RSLdgpVxy0TtCL9fZ2_9JU';
 const UNSCHEDULED_SHEET_GID = 0;
 const KPI_SHEET_ID = '1pBYUoM3gxQoSjnrihwcKcTZHqO_BGXiWo3aZnzuat2A';
 const KPI_SHEET_NAME = 'Install Log';
-const INSTALL_SHOP_ADDRESS = '4049 E Presidio St, Mesa, AZ 85215';
-const INSTALL_TRUCK_DRIVE_FACTOR = 1.05;
-const INSTALL_ROUND_TRIP_FACTOR = 2;
 const ADMIN_USER_NAME = 'Jake Banks';
 
 function recommendedInstallDays_(estimatedJobHours) {

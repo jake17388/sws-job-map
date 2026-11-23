@@ -306,6 +306,8 @@ test('the KPI sync replaces drive hours with editable day allocation exactly onc
       throw new Error(`Unexpected range: ${row},${column},${rowCount},${columnCount}`);
     },
   };
+  let backfills = 0;
+  context.backfillKpiHourColumns_ = () => { backfills += 1; };
 
   context.ensureKpiHoursColumns_(sheet);
   context.ensureKpiHoursColumns_(sheet);
@@ -320,6 +322,7 @@ test('the KPI sync replaces drive hours with editable day allocation exactly onc
   ]);
   assert.deepEqual(allocationValues, [[''], ['']]);
   assert.equal(allocationFormat, '0.00%');
+  assert.equal(backfills, 1);
 });
 
 test('the KPI sync removes the obsolete Install Metrics drive-hours column', () => {

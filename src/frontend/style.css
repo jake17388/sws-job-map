@@ -285,7 +285,6 @@ header { position: sticky; top: 0; z-index: 100; background: var(--navy-deep); c
 .added-by { font-size: 9px; color: #ccc; }
 .estimated-hours { display: inline-block; font-size: 9px; font-weight: 700; color: #245b9f; background: #e7f0fb; padding: 1px 6px; border-radius: 3px; font-family: 'DM Mono', monospace; }
 .estimated-hours.zero { color: #725900; background: #fff2a8; }
-.estimated-hours.drive { color: #6b4a10; background: #fff0c9; }
 .estimated-hours.recommended { color: #1a7040; background: #d8f5e4; }
 .estimated-hours.unavailable { color: #888; background: #f1f1f1; }
 .job-card-estimate { margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
