@@ -305,11 +305,16 @@ function setKpiDayAllocationFormulas_(sheet, startRow, rowCount) {
   if (!rowCount) return;
   const range = sheet.getRange(startRow, KPI_DAY_ALLOCATION_COLUMN, rowCount, 1);
   const values = range.getValues();
-  range.setNumberFormat('0.00%');
+  const formulas = typeof range.getFormulasR1C1 === 'function'
+    ? range.getFormulasR1C1()
+    : values.map(() => ['']);
+  range
+    .setFormulaR1C1(kpiDayAllocationFormulaR1C1_())
+    .setNumberFormat('0.00%');
   values.forEach((row, index) => {
-    if (row[0] !== '' && row[0] != null) return;
+    if (formulas[index][0] || row[0] === '' || row[0] == null) return;
     sheet.getRange(startRow + index, KPI_DAY_ALLOCATION_COLUMN)
-      .setFormulaR1C1(kpiDayAllocationFormulaR1C1_());
+      .setValue(row[0]);
   });
 }
 

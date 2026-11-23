@@ -160,18 +160,21 @@ test('project hours use editable day allocations and no drive-time deduction', (
 test('day allocation defaults only blank rows and preserves manual percentages', () => {
   const context = backendContext();
   const values = [[''], [0.6], ['']];
-  const formulas = new Map();
+  let defaultFormula = '';
+  const restoredValues = new Map();
   let numberFormat = '';
   const sheet = {
     getRange(row, column, rowCount = 1, columnCount = 1) {
       if (row === 2 && column === 10 && rowCount === 3 && columnCount === 1) {
         return {
           getValues: () => values,
+          getFormulasR1C1: () => [[''], [''], ['']],
+          setFormulaR1C1(formula) { defaultFormula = formula; return this; },
           setNumberFormat(format) { numberFormat = format; return this; },
         };
       }
       if (column === 10 && rowCount === 1 && columnCount === 1) {
-        return { setFormulaR1C1(formula) { formulas.set(row, formula); } };
+        return { setValue(value) { restoredValues.set(row, value); } };
       }
       throw new Error(`Unexpected range: ${row},${column},${rowCount},${columnCount}`);
     },
@@ -179,8 +182,8 @@ test('day allocation defaults only blank rows and preserves manual percentages',
 
   context.setKpiDayAllocationFormulas_(sheet, 2, 3);
 
-  assert.deepEqual(Array.from(formulas.keys()), [2, 4]);
-  assert.equal(formulas.get(2), context.kpiDayAllocationFormulaR1C1_());
+  assert.equal(defaultFormula, context.kpiDayAllocationFormulaR1C1_());
+  assert.deepEqual(Array.from(restoredValues.entries()), [[3, 0.6]]);
   assert.equal(values[1][0], 0.6);
   assert.equal(numberFormat, '0.00%');
 });
