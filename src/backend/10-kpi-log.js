@@ -18,6 +18,7 @@ const KPI_TABLE_NAME = 'InstallLogTable';
 const KPI_SYNC_STATUS_SHEET_NAME = 'Sync Status';
 const KPI_METRICS_SHEET_NAME = 'Install Metrics';
 const KPI_METRICS_DRIVE_COLUMN = 13;
+const KPI_METRICS_FIRST_DATA_ROW = 5;
 const KPI_SYNC_STATUS_CONNECTIONS = Object.freeze([
   'Install Calendar',
   'UKG Hours',
@@ -87,9 +88,22 @@ function removeInstallMetricsDriveColumn_(sheet) {
   const hasDriveHeader = values.some(row => (
     /^Est\.?\s+(?:drive|drie)(?:\s+\(hr\)|\s+hours?)?$/i.test(String(row[0] || '').trim())
   ));
-  if (!hasDriveHeader) return false;
-  sheet.deleteColumn(KPI_METRICS_DRIVE_COLUMN);
-  return true;
+  const hasWorkHeader = values.some(row => (
+    /^Est\.?\s+work(?:\s+\(hr\)|\s+hours?)?$/i.test(String(row[0] || '').trim())
+  ));
+  if (!hasDriveHeader && !hasWorkHeader) return false;
+  if (hasDriveHeader) sheet.deleteColumn(KPI_METRICS_DRIVE_COLUMN);
+  const rowCount = Math.max(0, sheet.getLastRow() - KPI_METRICS_FIRST_DATA_ROW + 1);
+  if (rowCount) {
+    sheet.getRange(KPI_METRICS_FIRST_DATA_ROW, KPI_METRICS_DRIVE_COLUMN, rowCount, 1)
+      .setFormulaR1C1(installMetricsWorkHoursFormulaR1C1_())
+      .setNumberFormat('0.0');
+  }
+  return hasDriveHeader;
+}
+
+function installMetricsWorkHoursFormulaR1C1_() {
+  return '=IF(RC[-12]="","",SUMIFS(\'Install Log\'!R2C13:R2291C13,\'Install Log\'!R2C3:R2291C3,RC[-12],\'Install Log\'!R2C2:R2291C2,">="&IF(R2C2="",0,R2C2),\'Install Log\'!R2C2:R2291C2,"<="&IF(R2C5="",2958465,R2C5)))';
 }
 
 function ensureKpiFleetioColumns_(sheet) {
