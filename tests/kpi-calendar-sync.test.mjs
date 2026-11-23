@@ -328,19 +328,32 @@ test('the KPI sync replaces drive hours with editable day allocation exactly onc
   assert.equal(backfills, 1);
 });
 
-test('the KPI sync removes the obsolete Install Metrics drive-hours column', () => {
+test('the KPI sync removes Metrics drive hours and recalculates work from allocations', () => {
   const context = backendContext();
   let deletedColumn = null;
+  let workFormula = '';
+  let workFormat = '';
   const sheet = {
+    getLastRow: () => 11,
     getRange(row, column, rowCount, columnCount) {
-      assert.deepEqual([row, column, rowCount, columnCount], [1, 13, 5, 1]);
-      return { getValues: () => [[''], [''], [''], [''], ['Est. Drie hours']] };
+      if (row === 1 && column === 13 && rowCount === 5 && columnCount === 1) {
+        return { getValues: () => [[''], [''], [''], [''], ['Est. Drie hours']] };
+      }
+      if (row === 5 && column === 13 && rowCount === 7 && columnCount === 1) {
+        return {
+          setFormulaR1C1(formula) { workFormula = formula; return this; },
+          setNumberFormat(format) { workFormat = format; return this; },
+        };
+      }
+      throw new Error(`Unexpected range: ${row},${column},${rowCount},${columnCount}`);
     },
     deleteColumn(column) { deletedColumn = column; },
   };
 
   assert.equal(context.removeInstallMetricsDriveColumn_(sheet), true);
   assert.equal(deletedColumn, 13);
+  assert.equal(workFormula, context.installMetricsWorkHoursFormulaR1C1_());
+  assert.equal(workFormat, '0.0');
 });
 
 test('the KPI sync inserts the Crew Size column exactly once', () => {
