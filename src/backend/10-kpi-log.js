@@ -685,22 +685,165 @@ function planKpiJobHoursBackfill_(existingRows, jobHoursByNumber) {
   return { values, updated };
 }
 
+function kpiCalendarSyncColumns_(sheet) {
+  return kpiReportColumnMap_(sheet, [
+    'Day',
+    'Date',
+    'Crew member',
+    'Job number',
+    'Job name',
+    'Truck',
+    'Crew Size',
+    'Total Estimated Job Hours',
+    'Day Allocation %',
+    'Estimated Project Hours (Day)',
+    'Total Clocked Hours (Day)',
+    'Actual Project Work Hours',
+    'Work Completed on Schedule',
+    'Fleetio AM',
+    'Fleetio PM',
+    'Calendar KPI Key',
+  ]);
+}
+
+function kpiCalendarCanonicalColumnByHeader_() {
+  return {
+    Day: 1,
+    Date: 2,
+    'Crew member': 3,
+    'Job number': 4,
+    'Job name': 5,
+    Truck: 6,
+    'Crew Size': KPI_CREW_SIZE_COLUMN,
+    'Total Estimated Job Hours': KPI_TOTAL_JOB_HOURS_COLUMN,
+    'Day Allocation %': KPI_DAY_ALLOCATION_COLUMN,
+    'Estimated Project Hours (Day)': KPI_ESTIMATED_PROJECT_HOURS_COLUMN,
+    'Total Clocked Hours (Day)': KPI_TOTAL_CLOCKED_HOURS_COLUMN,
+    'Actual Project Work Hours': KPI_ACTUAL_PROJECT_HOURS_COLUMN,
+    'Work Completed on Schedule': 14,
+    'Fleetio AM': KPI_FLEETIO_AM_COLUMN,
+    'Fleetio PM': KPI_FLEETIO_PM_COLUMN,
+    'Calendar KPI Key': KPI_KEY_COLUMN,
+  };
+}
+
+function kpiCalendarCanonicalRows_(liveRows, columns) {
+  const canonicalByHeader = kpiCalendarCanonicalColumnByHeader_();
+  return (liveRows || []).map(liveRow => {
+    const row = Array(KPI_COLUMN_COUNT).fill('');
+    Object.keys(canonicalByHeader).forEach(header => {
+      row[canonicalByHeader[header] - 1] = liveRow[columns[header] - 1];
+    });
+    return row;
+  });
+}
+
+function setKpiCalendarAppendFormulas_(sheet, startRow, rowCount, columns) {
+  if (!rowCount) return;
+  const date = columns.Date;
+  const crew = columns['Crew member'];
+  const jobNumber = columns['Job number'];
+  const jobName = columns['Job name'];
+  const crewSize = columns['Crew Size'];
+  const totalHours = columns['Total Estimated Job Hours'];
+  const allocation = columns['Day Allocation %'];
+  const estimated = columns['Estimated Project Hours (Day)'];
+  const clocked = columns['Total Clocked Hours (Day)'];
+  const actual = columns['Actual Project Work Hours'];
+  sheet.getRange(startRow, crewSize, rowCount, 1)
+    .setFormulaR1C1(`=IF(OR(RC${jobName}="",RC${date}=""),"",COUNTIFS(C${jobName},RC${jobName},C${date},RC${date}))`);
+  sheet.getRange(startRow, allocation, rowCount, 1)
+    .setFormulaR1C1(`=IF(OR(RC${crew}="",RC${date}=""),"",1/COUNTIFS(C${crew},RC${crew},C${date},RC${date}))`)
+    .setNumberFormat('0.00%');
+  sheet.getRange(startRow, estimated, rowCount, 1)
+    .setFormulaR1C1(`=IF(OR(RC${totalHours}="",RC${jobNumber}="",RC${date}="",RC${allocation}=""),"",ROUND(MAX(0,RC${totalHours}/COUNTUNIQUEIFS(C${date},C${jobNumber},RC${jobNumber})/RC${allocation}),2))`)
+    .setNumberFormat('0.00');
+  sheet.getRange(startRow, actual, rowCount, 1)
+    .setFormulaR1C1(`=IF(OR(RC${clocked}="",RC${allocation}=""),"",ROUND(RC${clocked}*RC${allocation},2))`)
+    .setNumberFormat('0.00');
+}
+
+function syncInstallCalendarJobsToKpi_(jobs, options) {
+  const sheet = getKpiReportSheet_();
+  const columns = kpiCalendarSyncColumns_(sheet);
+  const liveColumnCount = sheet.getLastColumn();
+  const lastRow = Math.max(sheet.getLastRow(), KPI_HEADER_ROW);
+  const liveRows = lastRow >= KPI_FIRST_DATA_ROW
+    ? sheet.getRange(KPI_FIRST_DATA_ROW, 1, lastRow - KPI_FIRST_DATA_ROW + 1, liveColumnCount).getValues()
+    : [];
+  const plan = planKpiSync_(
+    jobs,
+    kpiCalendarCanonicalRows_(liveRows, columns),
+    new Map(),
+    options,
+  );
+  const scheduleHeaders = ['Day', 'Date', 'Crew member', 'Job number', 'Job name', 'Truck'];
+  plan.rowsToUpdate.forEach(update => {
+    const rowNumber = KPI_FIRST_DATA_ROW + update.index;
+    scheduleHeaders.forEach((header, index) => {
+      const value = header === 'Date'
+        ? kpiSheetDateSerial_(update.values[index])
+        : update.values[index];
+      sheet.getRange(rowNumber, columns[header]).setValue(value);
+    });
+  });
+  plan.rowsToKeyUpdate.forEach(update => {
+    sheet.getRange(KPI_FIRST_DATA_ROW + update.index, columns['Calendar KPI Key']).setValue(update.key);
+  });
+  plan.rowIndexesToDelete
+    .slice()
+    .sort((left, right) => right - left)
+    .forEach(index => sheet.deleteRow(KPI_FIRST_DATA_ROW + index));
+  if (plan.rowsToAppend.length) {
+    const appendRow = Math.max(sheet.getLastRow(), KPI_HEADER_ROW) + 1;
+    const canonicalByHeader = kpiCalendarCanonicalColumnByHeader_();
+    const liveRowsToAppend = plan.rowsToAppend.map(canonicalRow => {
+      const liveRow = Array(liveColumnCount).fill('');
+      Object.keys(canonicalByHeader).forEach(header => {
+        let value = canonicalRow[canonicalByHeader[header] - 1];
+        if (header === 'Date') value = kpiSheetDateSerial_(value);
+        liveRow[columns[header] - 1] = value;
+      });
+      return liveRow;
+    });
+    sheet.getRange(appendRow, 1, liveRowsToAppend.length, liveColumnCount)
+      .setValues(liveRowsToAppend);
+    sheet.getRange(appendRow, columns['Work Completed on Schedule'], liveRowsToAppend.length, 1)
+      .insertCheckboxes()
+      .setValue(false);
+    ['Fleetio AM', 'Fleetio PM'].forEach(header => {
+      sheet.getRange(appendRow, columns[header], liveRowsToAppend.length, 1)
+        .insertCheckboxes()
+        .setValue(false);
+    });
+    setKpiCalendarAppendFormulas_(sheet, appendRow, liveRowsToAppend.length, columns);
+  }
+  resizeKpiNativeTable_(sheet);
+  return {
+    success: true,
+    created: plan.rowsToAppend.length,
+    removed: plan.rowIndexesToDelete.length,
+    filled: plan.rowsToUpdate.length,
+    estimated_job_hours_filled: 0,
+  };
+}
+
 function syncInstallJobsToKpi_(jobs, options) {
   const lock = typeof LockService !== 'undefined' ? LockService.getScriptLock() : null;
   if (lock) lock.waitLock(10000);
   try {
+    if (options && options.skipEstimates) {
+      return syncInstallCalendarJobsToKpi_(jobs, options);
+    }
     const sheet = getKpiSheet_();
     ensureKpiKeyColumn_(sheet);
-    const skipEstimates = !!(options && options.skipEstimates);
     let jobHoursByNumber = new Map();
-    if (!skipEstimates) {
-      try {
-        jobHoursByNumber = squarecoilInstallHoursByJob_(
-          Array.from(new Set((jobs || []).map(job => String(job && job.num || '')).filter(Boolean)))
-        );
-      } catch (error) {
-        if (typeof Logger !== 'undefined') Logger.log(`Squarecoil install hours failed: ${error.message}`);
-      }
+    try {
+      jobHoursByNumber = squarecoilInstallHoursByJob_(
+        Array.from(new Set((jobs || []).map(job => String(job && job.num || '')).filter(Boolean)))
+      );
+    } catch (error) {
+      if (typeof Logger !== 'undefined') Logger.log(`Squarecoil install hours failed: ${error.message}`);
     }
     const lastRow = Math.max(sheet.getLastRow(), KPI_HEADER_ROW);
     const existingRows = lastRow >= KPI_FIRST_DATA_ROW

@@ -562,20 +562,11 @@ test('sync planning is idempotent and preserves entered KPI results', () => {
 test('fast calendar reconciliation skips slow estimate lookups', () => {
   let squarecoilLookups = 0;
   const context = backendContext();
-  context.getKpiSheet_ = () => ({ getLastRow: () => 1 });
-  context.ensureKpiKeyColumn_ = () => {};
-  context.resizeKpiNativeTable_ = () => {};
+  context.syncInstallCalendarJobsToKpi_ = () => ({ success: true, created: 0 });
   context.squarecoilInstallHoursByJob_ = () => {
     squarecoilLookups += 1;
     return new Map();
   };
-  context.planKpiSync_ = () => ({
-    rowsToAppend: [],
-    rowsToUpdate: [],
-    rowsToJobHoursUpdate: [],
-    rowsToKeyUpdate: [],
-    rowIndexesToDelete: [],
-  });
 
   context.syncInstallJobsToKpi_([job()], { skipEstimates: true });
 
