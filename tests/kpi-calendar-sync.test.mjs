@@ -639,6 +639,100 @@ test('calendar reconciliation removes stale crew assignments in the requested wi
   assert.equal(existing[3][31], '');
 });
 
+test('calendar reconciliation follows headers when Estimated Days shifts KPI columns', () => {
+  const headers = [
+    'Day', 'Date', 'Crew member', 'Job number', 'Job name', 'Truck', 'Trailer',
+    'Crew Size', 'Total Estimated Job Hours', 'Estimated Days', 'Day Allocation %',
+    'Estimated Project Hours (Day)', 'Total Clocked Hours (Day)',
+    'Actual Project Work Hours', 'Work Completed on Schedule', 'Fleetio AM',
+    'Fleetio PM', 'Late Departure (After 6:30)', 'Job Delay', 'Remake', 'Go Back',
+    'Notes', 'Additional KPI 6', 'Additional KPI 7', 'Additional KPI 8',
+    'Additional KPI 9', 'Additional KPI 10', 'Additional KPI 11',
+    'Additional KPI 12', 'Additional KPI 13', 'Additional KPI 14', 'Calendar KPI Key',
+  ];
+  const row = crewMember => {
+    const values = Array(headers.length).fill('');
+    values[0] = 'Tuesday';
+    values[1] = new Date(2026, 10, 24, 12);
+    values[2] = crewMember;
+    values[3] = '260637';
+    values[4] = 'CrossWalk Church LED Check';
+    values[14] = false;
+    values[15] = false;
+    values[16] = false;
+    values[31] = `event-1|2026-11-24|${crewMember}`;
+    return values;
+  };
+  const rows = [headers, row('Caden'), row('Jerry')];
+  const sheet = {
+    getLastColumn: () => headers.length,
+    getLastRow: () => rows.length,
+    getMaxRows: () => 1000,
+    getFilter: () => null,
+    deleteRow(rowNumber) { rows.splice(rowNumber - 1, 1); },
+    getRange(startRow, startColumn, rowCount = 1, columnCount = 1) {
+      const range = {
+        getValue: () => rows[startRow - 1]?.[startColumn - 1] ?? '',
+        getValues: () => rows
+          .slice(startRow - 1, startRow - 1 + rowCount)
+          .map(current => current.slice(startColumn - 1, startColumn - 1 + columnCount)),
+        setValue(value) {
+          for (let rowOffset = 0; rowOffset < rowCount; rowOffset += 1) {
+            for (let columnOffset = 0; columnOffset < columnCount; columnOffset += 1) {
+              rows[startRow - 1 + rowOffset][startColumn - 1 + columnOffset] = value;
+            }
+          }
+          return this;
+        },
+        setValues(values) {
+          values.forEach((current, rowOffset) => {
+            if (!rows[startRow - 1 + rowOffset]) rows[startRow - 1 + rowOffset] = Array(headers.length).fill('');
+            current.forEach((value, columnOffset) => {
+              rows[startRow - 1 + rowOffset][startColumn - 1 + columnOffset] = value;
+            });
+          });
+          return this;
+        },
+        setFormulaR1C1(formula) { return this.setValue(formula); },
+        setNumberFormat() { return this; },
+        insertCheckboxes() { return this; },
+        createFilter() { return this; },
+      };
+      return range;
+    },
+  };
+  const spreadsheet = {
+    getSheetByName: name => (name === 'Install Log' ? sheet : null),
+  };
+  const context = backendContext({
+    SpreadsheetApp: { openById: () => spreadsheet },
+  });
+
+  const result = context.syncInstallJobsToKpi_([
+    job({
+      start: '2026-11-24',
+      end: '2026-11-24',
+      crew: ['Eli', 'Caden'],
+      num: '260637',
+      title: 'CrossWalk Church LED Check',
+      truck_assignments: {},
+    }),
+  ], {
+    skipEstimates: true,
+    reconcileStart: new Date(2026, 10, 1),
+    reconcileEnd: new Date(2027, 0, 31),
+  });
+
+  assert.equal(result.created, 1);
+  assert.equal(result.removed, 1);
+  assert.deepEqual(rows.slice(1).map(current => current[2]).sort(), ['Caden', 'Eli']);
+  const eli = rows.find(current => current[2] === 'Eli');
+  assert.equal(eli[headers.indexOf('Work Completed on Schedule')], false);
+  assert.equal(eli[headers.indexOf('Fleetio AM')], false);
+  assert.equal(eli[headers.indexOf('Fleetio PM')], false);
+  assert.equal(eli[headers.indexOf('Calendar KPI Key')], 'event-1|2026-11-24|Eli');
+});
+
 test('calendar reconciliation removes keyless stale schedule rows in the requested window', () => {
   const context = backendContext();
   const existing = [
