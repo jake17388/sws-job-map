@@ -82,6 +82,31 @@ function getKpiSheet_() {
   return sheet;
 }
 
+function getKpiReportSheet_() {
+  const spreadsheet = SpreadsheetApp.openById(KPI_SHEET_ID);
+  const sheet = spreadsheet.getSheetByName(KPI_SHEET_NAME);
+  if (!sheet) throw new Error(`KPI sheet not found: ${KPI_SHEET_NAME}`);
+  return sheet;
+}
+
+function kpiReportColumnMap_(sheet, requiredHeaders) {
+  const headers = sheet
+    .getRange(KPI_HEADER_ROW, 1, 1, sheet.getLastColumn())
+    .getValues()[0]
+    .map(value => String(value || '').trim().toLowerCase());
+  return (requiredHeaders || []).reduce((columns, header) => {
+    const normalized = String(header || '').trim().toLowerCase();
+    const matches = headers
+      .map((value, index) => (value === normalized ? index + 1 : 0))
+      .filter(Boolean);
+    if (matches.length !== 1) {
+      throw new Error(`Expected exactly one KPI column named "${header}"; found ${matches.length}`);
+    }
+    columns[header] = matches[0];
+    return columns;
+  }, {});
+}
+
 function removeInstallMetricsDriveColumn_(sheet) {
   if (!sheet) return false;
   const values = sheet.getRange(1, KPI_METRICS_DRIVE_COLUMN, 5, 1).getValues();

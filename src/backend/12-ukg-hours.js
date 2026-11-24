@@ -88,7 +88,13 @@ function mergeUkgDailyHoursReports_(reports) {
   return merged;
 }
 
-function planKpiClockedHoursSync_(existingRows, hoursByEmployeeDate) {
+function planKpiClockedHoursSync_(existingRows, hoursByEmployeeDate, columnIndexes) {
+  const indexes = columnIndexes || {};
+  const dateIndex = indexes.date == null ? 1 : indexes.date;
+  const crewIndex = indexes.crew == null ? 2 : indexes.crew;
+  const clockedHoursIndex = indexes.clockedHours == null
+    ? UKG_KPI_CLOCKED_HOURS_INDEX
+    : indexes.clockedHours;
   const employeeIdByCrew = Object.entries(UKG_INSTALL_CREW_BY_EMPLOYEE_ID)
     .reduce((result, entry) => {
       result[entry[1]] = entry[0];
@@ -97,10 +103,10 @@ function planKpiClockedHoursSync_(existingRows, hoursByEmployeeDate) {
   let updated = 0;
   const matched = new Set();
   const values = (existingRows || []).map(row => {
-    const dateKey = ukgDateKey_(row[1]);
-    const employeeId = employeeIdByCrew[String(row[2] || '').trim()];
+    const dateKey = ukgDateKey_(row[dateIndex]);
+    const employeeId = employeeIdByCrew[String(row[crewIndex] || '').trim()];
     const key = employeeId && dateKey ? `${employeeId}|${dateKey}` : '';
-    const existing = row[UKG_KPI_CLOCKED_HOURS_INDEX];
+    const existing = row[clockedHoursIndex];
     if (!key || !hoursByEmployeeDate.has(key)) return [existing];
     matched.add(key);
     const next = hoursByEmployeeDate.get(key);
@@ -167,18 +173,28 @@ function newestUkgCsvAttachment_() {
 }
 
 function syncUkgDailyHoursMap_(hoursByEmployeeDate) {
-  const sheet = getKpiSheet_();
+  const sheet = getKpiReportSheet_();
   const lastRow = sheet.getLastRow();
   if (lastRow < KPI_FIRST_DATA_ROW) {
     return { success: true, updated: 0, matched_crew_dates: 0 };
   }
+  const columns = kpiReportColumnMap_(sheet, [
+    'Date',
+    'Crew member',
+    'Total Clocked Hours (Day)',
+  ]);
   const rowCount = lastRow - KPI_FIRST_DATA_ROW + 1;
+  const readColumnCount = Math.max(...Object.values(columns));
   const existingRows = sheet
-    .getRange(KPI_FIRST_DATA_ROW, 1, rowCount, KPI_TOTAL_CLOCKED_HOURS_COLUMN)
+    .getRange(KPI_FIRST_DATA_ROW, 1, rowCount, readColumnCount)
     .getValues();
-  const plan = planKpiClockedHoursSync_(existingRows, hoursByEmployeeDate);
+  const plan = planKpiClockedHoursSync_(existingRows, hoursByEmployeeDate, {
+    date: columns.Date - 1,
+    crew: columns['Crew member'] - 1,
+    clockedHours: columns['Total Clocked Hours (Day)'] - 1,
+  });
   if (plan.updated) {
-    sheet.getRange(KPI_FIRST_DATA_ROW, KPI_TOTAL_CLOCKED_HOURS_COLUMN, rowCount, 1)
+    sheet.getRange(KPI_FIRST_DATA_ROW, columns['Total Clocked Hours (Day)'], rowCount, 1)
       .setValues(plan.values);
   }
   return {

@@ -93,14 +93,19 @@ function mergeFleetioInspectionReports_(reports) {
   return merged;
 }
 
-function planKpiFleetioInspectionSync_(existingRows, inspections, reportedDates) {
+function planKpiFleetioInspectionSync_(existingRows, inspections, reportedDates, columnIndexes) {
+  const indexes = columnIndexes || {};
+  const dateIndex = indexes.date == null ? 1 : indexes.date;
+  const crewIndex = indexes.crew == null ? 2 : indexes.crew;
+  const amIndex = indexes.am == null ? FLEETIO_AM_INDEX : indexes.am;
+  const pmIndex = indexes.pm == null ? FLEETIO_PM_INDEX : indexes.pm;
   let updated = 0;
   const matched = new Set();
   const values = (existingRows || []).map(row => {
-    const dateKey = fleetioDateKey_(row[1]);
-    const crewName = String(row[2] || '').trim();
-    const existingAm = row[FLEETIO_AM_INDEX];
-    const existingPm = row[FLEETIO_PM_INDEX];
+    const dateKey = fleetioDateKey_(row[dateIndex]);
+    const crewName = String(row[crewIndex] || '').trim();
+    const existingAm = row[amIndex];
+    const existingPm = row[pmIndex];
     if (!dateKey || !reportedDates.has(dateKey)) return [existingAm, existingPm];
     const key = `${crewName}|${dateKey}`;
     const flags = inspections.get(key) || { am: false, pm: false };
@@ -151,19 +156,33 @@ function fleetioCsvAttachments_() {
 }
 
 function syncFleetioInspectionMap_(inspections, reportedDates) {
-  const sheet = getKpiSheet_();
+  const sheet = getKpiReportSheet_();
   const lastRow = sheet.getLastRow();
   if (lastRow < KPI_FIRST_DATA_ROW) {
     return { success: true, updated: 0, matched_crew_dates: 0 };
   }
+  const columns = kpiReportColumnMap_(sheet, [
+    'Date',
+    'Crew member',
+    'Fleetio AM',
+    'Fleetio PM',
+  ]);
   const rowCount = lastRow - KPI_FIRST_DATA_ROW + 1;
+  const readColumnCount = Math.max(...Object.values(columns));
   const existingRows = sheet
-    .getRange(KPI_FIRST_DATA_ROW, 1, rowCount, KPI_FLEETIO_PM_COLUMN)
+    .getRange(KPI_FIRST_DATA_ROW, 1, rowCount, readColumnCount)
     .getValues();
-  const plan = planKpiFleetioInspectionSync_(existingRows, inspections, reportedDates);
+  const plan = planKpiFleetioInspectionSync_(existingRows, inspections, reportedDates, {
+    date: columns.Date - 1,
+    crew: columns['Crew member'] - 1,
+    am: columns['Fleetio AM'] - 1,
+    pm: columns['Fleetio PM'] - 1,
+  });
   if (plan.updated) {
-    sheet.getRange(KPI_FIRST_DATA_ROW, KPI_FLEETIO_AM_COLUMN, rowCount, 2)
-      .setValues(plan.values);
+    sheet.getRange(KPI_FIRST_DATA_ROW, columns['Fleetio AM'], rowCount, 1)
+      .setValues(plan.values.map(row => [row[0]]));
+    sheet.getRange(KPI_FIRST_DATA_ROW, columns['Fleetio PM'], rowCount, 1)
+      .setValues(plan.values.map(row => [row[1]]));
   }
   return {
     success: true,
