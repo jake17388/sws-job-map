@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 const configSource = readFileSync(new URL('../src/backend/01-config.js', import.meta.url), 'utf8');
 const calendarSource = readFileSync(new URL('../src/backend/04-calendar-jobs.js', import.meta.url), 'utf8');
 const unscheduledSource = readFileSync(new URL('../src/backend/05-unscheduled-jobs.js', import.meta.url), 'utf8');
+const kpiSource = readFileSync(new URL('../src/backend/10-kpi-log.js', import.meta.url), 'utf8');
 const routingSource = readFileSync(new URL('../src/backend/03-routing.js', import.meta.url), 'utf8');
 const frontendHtml = readFileSync(new URL('../src/frontend/index.html', import.meta.url), 'utf8');
 const frontendSource = readFileSync(new URL('../src/frontend/app.js', import.meta.url), 'utf8');
@@ -102,6 +103,41 @@ test('single-day scheduling creates a parser-compatible all-day install event an
   assert.equal(backend.created[0].start.getDate(), 5);
   assert.equal(backend.created[0].end.getDate(), 6);
   assert.equal(backend.rows.length, 1);
+});
+
+test('a job can be scheduled exactly once while KPI reconciliation is running', () => {
+  const { context, rows, properties, created } = makeBackend();
+  let held = false;
+  context.LockService.getScriptLock = () => {
+    let acquired = false;
+    function tryLock() {
+      if (held) return false;
+      acquired = held = true;
+      return true;
+    }
+    return {
+      tryLock,
+      waitLock() { if (!tryLock()) throw new Error('Lock timeout'); },
+      releaseLock() { if (acquired) acquired = held = false; },
+    };
+  };
+  context.SpreadsheetApp.flush = () => {};
+  context.Utilities = { getUuid: () => 'kpi-write-lease' };
+  const getProperties = context.PropertiesService.getScriptProperties;
+  context.PropertiesService.getScriptProperties = () => ({
+    ...getProperties(),
+    deleteProperty: key => properties.delete(key),
+  });
+  vm.runInContext(kpiSource, context);
+  context.syncInstallCalendarJobsToKpi_ = () => {
+    assert.equal(context.scheduleUnsched(validRequest()).success, true);
+    assert.equal(context.scheduleUnsched(validRequest()).duplicate, true);
+    return { success: true };
+  };
+
+  assert.equal(context.syncInstallJobsToKpi_([], { skipEstimates: true }).success, true);
+  assert.equal(created.length, 1);
+  assert.equal(rows.length, 1);
 });
 
 test('multi-day scheduling uses standard crew priority and converts the inclusive end date to exclusive', () => {

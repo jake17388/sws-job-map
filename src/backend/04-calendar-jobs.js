@@ -309,6 +309,22 @@ function applyTruckAssignmentUpdates_(updates) {
 }
 
 function updateScheduledAssignments(data) {
+  const { updates, ...result } = saveScheduledAssignments_(data);
+  if (!result.success || typeof syncKpiTruckAssignmentsForCalendarUpdates_ !== 'function') return result;
+  try {
+    const kpiResult = syncKpiTruckAssignmentsForCalendarUpdates_(updates);
+    if (kpiResult.deferred) return { ...result, kpi_sync_deferred: true };
+    return { ...result, kpi_rows_updated: Number(kpiResult.rows_updated || 0) };
+  } catch (e) {
+    return {
+      success: false,
+      partial: true,
+      error: `Assignments were saved, but the KPI truck update failed: ${e.message}`,
+    };
+  }
+}
+
+function saveScheduledAssignments_(data) {
   const lock = typeof LockService !== 'undefined' ? LockService.getScriptLock() : null;
   if (lock) lock.waitLock(10000);
   try {
@@ -355,26 +371,14 @@ function updateScheduledAssignments(data) {
     }
     return { success: false, error: e.message };
   }
-  let kpiRowsUpdated = 0;
-  if (typeof syncKpiTruckAssignmentsForCalendarUpdates_ === 'function') {
-    try {
-      const kpiResult = syncKpiTruckAssignmentsForCalendarUpdates_(updates);
-      kpiRowsUpdated = Number(kpiResult && kpiResult.rows_updated || 0);
-    } catch (e) {
-      return {
-        success: false,
-        partial: true,
-        error: `Assignments were saved, but the KPI truck update failed: ${e.message}`,
-      };
-    }
-  }
   return {
     success: true,
     crew,
     truck_assignments: assignmentResult.assignments,
     title: nextTitle,
     propagated_event_count: Math.max(0, updatedEventCount - 1),
-    kpi_rows_updated: kpiRowsUpdated,
+    kpi_rows_updated: 0,
+    updates,
   };
   } finally {
     if (lock) lock.releaseLock();

@@ -15,6 +15,9 @@ const KPI_LEGACY_KEY_COLUMN = 30;
 const KPI_KEY_COLUMN = 32;
 const KPI_KEY_HEADER = 'Calendar KPI Key';
 const KPI_TABLE_NAME = 'InstallLogTable';
+const KPI_WRITE_LEASE_KEY = 'INSTALL_KPI_WRITE_LEASE';
+// Leave time for Apps Script's six-minute execution limit to stop an abandoned writer.
+const KPI_WRITE_LEASE_MS = 7 * 60 * 1000;
 const KPI_SYNC_STATUS_SHEET_NAME = 'Sync Status';
 const KPI_METRICS_SHEET_NAME = 'Install Metrics';
 const KPI_METRICS_DRIVE_COLUMN = 13;
@@ -31,6 +34,48 @@ const KPI_HOUR_HEADERS = [
   'Total Clocked Hours (Day)',
   'Actual Project Work Hours',
 ];
+
+function withKpiWriteLease_(write) {
+  if (typeof LockService === 'undefined') return write();
+  const busy = { success: false, deferred: true, error: 'Install KPI sync is busy. Try again shortly.' };
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(250)) return busy;
+
+  let properties;
+  let lease;
+  try {
+    properties = PropertiesService.getScriptProperties();
+    const now = Date.now();
+    const current = properties.getProperty(KPI_WRITE_LEASE_KEY);
+    if (current && Number(current.split(':')[0]) > now) return busy;
+    lease = `${now + KPI_WRITE_LEASE_MS}:${Utilities.getUuid()}`;
+    properties.setProperty(KPI_WRITE_LEASE_KEY, lease);
+  } finally {
+    lock.releaseLock();
+  }
+
+  try {
+    try {
+      return write();
+    } finally {
+      if (typeof SpreadsheetApp !== 'undefined') SpreadsheetApp.flush();
+    }
+  } finally {
+    // Keep the scheduling lock around property changes only, never around Sheets calls.
+    const releaseLock = LockService.getScriptLock();
+    if (releaseLock.tryLock(1000)) {
+      try {
+        if (properties.getProperty(KPI_WRITE_LEASE_KEY) === lease) {
+          properties.deleteProperty(KPI_WRITE_LEASE_KEY);
+        }
+      } finally {
+        releaseLock.releaseLock();
+      }
+    } else if (typeof Logger !== 'undefined') {
+      Logger.log('Install KPI lease could not be released and will expire automatically');
+    }
+  }
+}
 
 function ensureInstallKpiSyncStatusSheet_() {
   const spreadsheet = SpreadsheetApp.openById(KPI_SHEET_ID);
@@ -408,16 +453,25 @@ function kpiDateKeysForCalendarEvent_(event) {
 }
 
 function syncKpiTruckAssignmentsForCalendarUpdates_(updates) {
+  return withKpiWriteLease_(() => writeKpiTruckAssignments_(updates));
+}
+
+function writeKpiTruckAssignments_(updates) {
+  const installUpdates = (updates || []).filter(update => update && update.calendarId === INSTALL_CAL_ID);
+  if (!installUpdates.length) return { success: true, rows_updated: 0 };
+  const calendar = CalendarApp.getCalendarById(INSTALL_CAL_ID);
+  if (!calendar) throw new Error('Install calendar not found');
   const desiredTruckByKey = new Map();
-  (updates || []).forEach(update => {
-    if (!update || String(update.calendarId || '') !== String(INSTALL_CAL_ID)) return;
-    const event = update.event;
-    const eventId = event && typeof event.getId === 'function' ? String(event.getId()) : '';
+  installUpdates.forEach(update => {
+    const eventId = String(update.event.getId());
     if (!eventId) return;
+    const event = calendar.getEventById(eventId);
+    if (!event) return;
+    const assignments = normalizeStoredTruckAssignments_(event.getTag(TRUCK_ASSIGNMENTS_TAG));
     const crew = crewFromCalendarTitle_(event.getTitle());
     const dates = kpiDateKeysForCalendarEvent_(event);
     crew.forEach(name => {
-      const truckName = vehicleNameForKpi_((update.assignments || {})[name]);
+      const truckName = vehicleNameForKpi_(assignments[name]);
       dates.forEach(date => desiredTruckByKey.set(kpiKey_(eventId, date, name), truckName));
     });
   });
@@ -778,13 +832,20 @@ function syncInstallCalendarJobsToKpi_(jobs, options) {
     options,
   );
   const scheduleHeaders = ['Day', 'Date', 'Crew member', 'Job number', 'Job name', 'Truck'];
+  const scheduleColumns = scheduleHeaders.map((header, index) => ({ column: columns[header], index }));
+  scheduleColumns.sort((left, right) => left.column - right.column);
+  const columnGroups = [];
+  scheduleColumns.forEach(entry => {
+    const group = columnGroups[columnGroups.length - 1];
+    if (group && entry.column === group[0].column + group.length) group.push(entry);
+    else columnGroups.push([entry]);
+  });
   plan.rowsToUpdate.forEach(update => {
     const rowNumber = KPI_FIRST_DATA_ROW + update.index;
-    scheduleHeaders.forEach((header, index) => {
-      const value = header === 'Date'
-        ? kpiSheetDateSerial_(update.values[index])
-        : update.values[index];
-      sheet.getRange(rowNumber, columns[header]).setValue(value);
+    const values = kpiWritableRow_(update.values);
+    columnGroups.forEach(group => {
+      sheet.getRange(rowNumber, group[0].column, 1, group.length)
+        .setValues([group.map(entry => values[entry.index])]);
     });
   });
   plan.rowsToKeyUpdate.forEach(update => {
@@ -829,18 +890,15 @@ function syncInstallCalendarJobsToKpi_(jobs, options) {
 }
 
 function syncInstallJobsToKpi_(jobs, options) {
-  const lock = typeof LockService !== 'undefined' ? LockService.getScriptLock() : null;
-  if (lock) lock.waitLock(10000);
-  try {
-    if (options && options.skipEstimates) {
-      return syncInstallCalendarJobsToKpi_(jobs, options);
-    }
+  return withKpiWriteLease_(() => {
+    const currentJobs = typeof jobs === 'function' ? jobs() : jobs;
+    if (options && options.skipEstimates) return syncInstallCalendarJobsToKpi_(currentJobs, options);
     const sheet = getKpiSheet_();
     ensureKpiKeyColumn_(sheet);
     let jobHoursByNumber = new Map();
     try {
       jobHoursByNumber = squarecoilInstallHoursByJob_(
-        Array.from(new Set((jobs || []).map(job => String(job && job.num || '')).filter(Boolean)))
+        Array.from(new Set((currentJobs || []).map(job => String(job && job.num || '')).filter(Boolean)))
       );
     } catch (error) {
       if (typeof Logger !== 'undefined') Logger.log(`Squarecoil install hours failed: ${error.message}`);
@@ -849,7 +907,7 @@ function syncInstallJobsToKpi_(jobs, options) {
     const existingRows = lastRow >= KPI_FIRST_DATA_ROW
       ? sheet.getRange(KPI_FIRST_DATA_ROW, 1, lastRow - KPI_FIRST_DATA_ROW + 1, KPI_COLUMN_COUNT).getValues()
       : [];
-    const plan = planKpiSync_(jobs, existingRows, jobHoursByNumber, options);
+    const plan = planKpiSync_(currentJobs, existingRows, jobHoursByNumber, options);
     plan.rowsToUpdate.forEach(update => {
       sheet.getRange(KPI_FIRST_DATA_ROW + update.index, 1, 1, 6)
         .setValues([kpiWritableRow_(update.values)]);
@@ -888,18 +946,14 @@ function syncInstallJobsToKpi_(jobs, options) {
       filled: plan.rowsToUpdate.length,
       estimated_job_hours_filled: plan.rowsToJobHoursUpdate.length,
     };
-  } finally {
-    if (lock) lock.releaseLock();
-  }
+  });
 }
 
 function refreshKpiJobTotals() {
   if (!isSquarecoilEstimateConfigured_()) {
     return { success: false, error: 'Squarecoil credentials are not configured' };
   }
-  const lock = typeof LockService !== 'undefined' ? LockService.getScriptLock() : null;
-  if (lock) lock.waitLock(10000);
-  try {
+  return withKpiWriteLease_(() => {
     const sheet = getKpiSheet_();
     ensureKpiKeyColumn_(sheet);
     const lastRow = sheet.getLastRow();
@@ -925,9 +979,7 @@ function refreshKpiJobTotals() {
       jobs_resolved: jobHoursByNumber.size,
       rows_updated: plan.updated,
     };
-  } finally {
-    if (lock) lock.releaseLock();
-  }
+  });
 }
 
 function syncInstallCalendarToKpi(data) {
@@ -941,8 +993,7 @@ function syncInstallCalendarToKpi(data) {
   if (toResult.date < fromResult.date) return { success: false, error: 'To date cannot be before from date' };
   const end = new Date(toResult.date);
   end.setHours(23, 59, 59, 999);
-  const jobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', fromResult.date, end);
-  return syncInstallJobsToKpi_(jobs, {
+  return syncInstallJobsToKpi_(() => fetchCalendarEvents(INSTALL_CAL_ID, 'install', fromResult.date, end), {
     reconcileStart: fromResult.date,
     reconcileEnd: end,
   });

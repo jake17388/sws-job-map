@@ -117,14 +117,16 @@ test('saving a Job Map truck assignment updates the matching KPI truck cell imme
   const event = {
     getId: () => 'event-1',
     getTitle: () => '(Johnny) 123456 Monument Sign',
+    getTag: () => JSON.stringify({ Johnny: 'crane-1' }),
     getStartTime: () => new Date(2026, 10, 10),
     getEndTime: () => new Date(2026, 10, 11),
   };
+  context.CalendarApp = { getCalendarById: () => ({ getEventById: () => event }) };
 
   const result = context.syncKpiTruckAssignmentsForCalendarUpdates_([{
     calendarId: context.calendarIdForJobType_('install'),
     event,
-    assignments: { Johnny: 'crane-1' },
+    assignments: { Johnny: 'flatbed-1' },
   }]);
 
   assert.deepEqual(JSON.parse(JSON.stringify(result)), { success: true, rows_updated: 1 });
@@ -943,7 +945,8 @@ test('calendar changes use a fast calendar-only sync with a five-minute fallback
       estimateRefreshes.push({ jobNums: [...jobNums], forceRefresh });
       return new Map();
     },
-    syncInstallJobsToKpi_(jobs, options) {
+    syncInstallJobsToKpi_(getJobs, options) {
+      const jobs = getJobs();
       synced.push({ jobs, options });
       return { success: true, created: jobs.length };
     },

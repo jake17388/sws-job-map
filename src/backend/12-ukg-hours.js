@@ -173,6 +173,10 @@ function newestUkgCsvAttachment_() {
 }
 
 function syncUkgDailyHoursMap_(hoursByEmployeeDate) {
+  return withKpiWriteLease_(() => writeKpiClockedHours_(hoursByEmployeeDate));
+}
+
+function writeKpiClockedHours_(hoursByEmployeeDate) {
   const sheet = getKpiReportSheet_();
   const lastRow = sheet.getLastRow();
   if (lastRow < KPI_FIRST_DATA_ROW) {

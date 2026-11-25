@@ -156,6 +156,10 @@ function fleetioCsvAttachments_() {
 }
 
 function syncFleetioInspectionMap_(inspections, reportedDates) {
+  return withKpiWriteLease_(() => writeKpiFleetioInspections_(inspections, reportedDates));
+}
+
+function writeKpiFleetioInspections_(inspections, reportedDates) {
   const sheet = getKpiReportSheet_();
   const lastRow = sheet.getLastRow();
   if (lastRow < KPI_FIRST_DATA_ROW) {

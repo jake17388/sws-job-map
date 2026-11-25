@@ -34,8 +34,7 @@ function installKpiCalendarContext_() {
   const end = new Date();
   end.setDate(end.getDate() + 60);
   end.setHours(23, 59, 59, 999);
-  const installJobs = fetchCalendarEvents(INSTALL_CAL_ID, 'install', start, end);
-  return { start, end, installJobs };
+  return { start, end };
 }
 
 function refreshJobMapEstimatedHours_() {
@@ -64,12 +63,18 @@ function recordInstallKpiStatusSafely_(connection, result) {
 // This path stays lean enough for event-driven and five-minute fallback syncs.
 function refreshInstallKpiCalendar_() {
   try {
-    const current = installKpiCalendarContext_();
-    const result = syncInstallJobsToKpi_(current.installJobs, {
-      reconcileStart: current.start,
-      reconcileEnd: current.end,
+    const { start, end } = installKpiCalendarContext_();
+    const startedAt = Date.now();
+    const result = syncInstallJobsToKpi_(() => fetchCalendarEvents(INSTALL_CAL_ID, 'install', start, end), {
+      reconcileStart: start,
+      reconcileEnd: end,
       skipEstimates: true,
     });
+    if (result.deferred) {
+      Logger.log('Install KPI calendar refresh deferred because a writer is active');
+      return result;
+    }
+    Logger.log(`Install KPI calendar refresh reconciled in ${Date.now() - startedAt} ms`);
     recordInstallKpiStatusSafely_('Install Calendar', result);
     return result;
   } catch (error) {
