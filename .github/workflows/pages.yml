@@ -18,7 +18,7 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment-retry.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -44,9 +44,19 @@ jobs:
 
       - name: Deploy to GitHub Pages
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Wait before retrying Pages
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 15
+
+      - name: Retry GitHub Pages deployment
+        if: steps.deployment.outcome == 'failure'
+        id: deployment-retry
         uses: actions/deploy-pages@v4
 
       - name: Smoke test deployed frontend
         run: |
           curl --fail --location --silent --show-error --retry 4 --retry-delay 3 \
-            "${{ steps.deployment.outputs.page_url }}" | grep -q "SWS Job Map"
+            "${{ steps.deployment.outputs.page_url || steps.deployment-retry.outputs.page_url }}" | grep -q "SWS Job Map"
