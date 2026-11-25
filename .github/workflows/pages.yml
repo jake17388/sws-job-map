@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -41,6 +42,31 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
+
+      - name: Wait for Pages artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The upload can complete before the Actions API lists the artifact.
+          deadline=$((SECONDS + 60))
+          while (( SECONDS < deadline )); do
+            if count=$(timeout 5s gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+              --jq '[.artifacts[] | select(.name == "github-pages")] | length'); then
+              case "$count" in
+                1) exit 0 ;;
+                0) ;;
+                *)
+                  echo "::error::Multiple github-pages artifacts found. Start a fresh workflow run."
+                  exit 1
+                  ;;
+              esac
+            fi
+            sleep 3
+          done
+          echo "::error::The github-pages artifact did not become visible within 60 seconds."
+          exit 1
 
       - name: Deploy to GitHub Pages
         id: deployment
