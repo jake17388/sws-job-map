@@ -3,7 +3,7 @@
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwbVJqFkNCzb9QS2HU950x0164bPS3DNDjehotGbjTV_WDc8lC6G7PXXfvfVizVVvml/exec';
 // Bump this on every deploy — shown in the app footer and used to detect
 // when the installed iOS home-screen app is running stale cached code.
-const APP_VERSION = '2026.11.23.1';
+const APP_VERSION = '2026.11.25.1';
  
 const COLORS = { install:'#3aad6e', service:'#4169E1', excavation:'#FFBF00', unscheduled:'#DC143C' };
 const SCHED_PIN = '#1e4589'; // matches the SWS brand navy used in the header
@@ -11,8 +11,9 @@ const TYPE_INIT = { install:'I', service:'S', excavation:'E' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const GEO_ERRORS = { ZERO_RESULTS:'Address not found', UPSTREAM_ERROR:'Map lookup unavailable', INVALID_REQUEST:'Invalid address', UNKNOWN_ERROR:'Server error' };
-const CREW = ['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy', 'Jake', 'Caden'];
-const CREW_COLORS = { Johnny:'#F97316', Jonathan:'#5B9CF6', Randy:'#3aad6e', Eli:'#5E35B1', Jerry:'#FFBF00', Jake:'#111111', Caden:'#8E402A' };
+const CREW = ['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy', 'Jake', 'Caden', 'Gio'];
+const CREW_COLORS = { Johnny:'#F97316', Jonathan:'#5B9CF6', Randy:'#3aad6e', Eli:'#5E35B1', Jerry:'#FFBF00', Jake:'#111111', Caden:'#8E402A', Gio:'#D0D0D0' };
+const CREW_BADGE_TEXT_COLORS = { Gio:'#555' };
  
 // Keep the app and its sheets above the iOS keyboard without using the
 // visual viewport as the app's normal height (that can leave a bottom gap).
@@ -1070,7 +1071,7 @@ function scheduledCardHTML(job) {
   const dateStr = job.start === job.end ? fmtDate(job.start) : `${fmtDate(job.start)} – ${fmtDate(job.end)}`;
   const crew = job.crew || [];
   const crewChips = crew.length > 0
-    ? `<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">${crew.map(n => `<span style="font-size:10px;font-weight:700;color:${CREW_COLORS[n]||'#555'};background:${CREW_COLORS[n]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[n]||'#999'}44">${n}</span>`).join('')}</div>`
+    ? `<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">${crew.map(n => `<span style="font-size:10px;font-weight:700;color:${CREW_BADGE_TEXT_COLORS[n]||CREW_COLORS[n]||'#555'};background:${CREW_COLORS[n]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[n]||'#999'}44">${n}</span>`).join('')}</div>`
     : '';
   const truckChips = truckAssignmentsHTML(job.crew || [], job.truck_assignments || {});
   const index = scheduledJobs.indexOf(job);
@@ -1366,7 +1367,7 @@ function renderList() {
         <div class="job-num">${escapeHtml(job.num || '—')}</div>
         <div class="job-title">${escapeHtml(job.title)}</div>
         <div class="job-meta"><span class="badge ${job.type}">${job.type}</span>${dateStr}${estimatedInstallHoursHTML(job)}</div>
-        ${(job.crew||[]).length>0?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${(job.crew||[]).map(n=>`<span style="font-size:10px;font-weight:700;color:${CREW_COLORS[n]||'#555'};background:${CREW_COLORS[n]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[n]||'#999'}55">${n}</span>`).join('')}</div>`:''}
+        ${(job.crew||[]).length>0?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${(job.crew||[]).map(n=>`<span style="font-size:10px;font-weight:700;color:${CREW_BADGE_TEXT_COLORS[n]||CREW_COLORS[n]||'#555'};background:${CREW_COLORS[n]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[n]||'#999'}55">${n}</span>`).join('')}</div>`:''}
         ${truckAssignmentsHTML(job.crew || [], job.truck_assignments || {})}
         ${errText}
       </div>
@@ -1837,7 +1838,7 @@ function updateUnscheduledCrewButtons() {
 
 function crewChipsHTML(crew) {
   if (!crew || crew.length === 0) return '';
-  return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">${crew.map(name => `<span style="font-size:10px;font-weight:700;color:${CREW_COLORS[name]||'#555'};background:${CREW_COLORS[name]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[name]||'#999'}55">${escapeHtml(name)}</span>`).join('')}</div>`;
+  return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">${crew.map(name => `<span style="font-size:10px;font-weight:700;color:${CREW_BADGE_TEXT_COLORS[name]||CREW_COLORS[name]||'#555'};background:${CREW_COLORS[name]||'#999'}22;padding:2px 7px;border-radius:3px;border:1px solid ${CREW_COLORS[name]||'#999'}55">${escapeHtml(name)}</span>`).join('')}</div>`;
 }
 
 function toggleCrew(name) {

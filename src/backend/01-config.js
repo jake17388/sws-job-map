@@ -18,7 +18,7 @@ const EXCAV_CAL_ID   = 'c_86ccbe589549562e734ff696a2cebbefc071fe607283d4a7cac31c
 
 const SKIP_KEYWORDS = ['no install','hunter out','johnny out','randy off','jake out','eli out','crane service','2018 crane','mother\'s day','memorial day'];
 
-const CREW_NAMES = ['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy', 'Jake', 'Caden'];
+const CREW_NAMES = ['Johnny', 'Eli', 'Jerry', 'Jonathan', 'Randy', 'Jake', 'Caden', 'Gio'];
 const TRUCK_ASSIGNMENTS_TAG = 'sws_truck_assignments_v1';
 function normalizeCrew(names) {
   return names.map(n => {
