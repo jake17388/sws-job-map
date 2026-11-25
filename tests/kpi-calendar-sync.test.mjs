@@ -573,6 +573,73 @@ test('fast calendar reconciliation skips slow estimate lookups', () => {
   assert.equal(squarecoilLookups, 0);
 });
 
+function kpiLockContext() {
+  const properties = new Map();
+  let held = false;
+  let now = Date.now();
+  class Clock extends Date {
+    static now() { return now; }
+  }
+  const context = backendContext({
+    Date: Clock,
+    LockService: {
+      getScriptLock() {
+        let ownsLock = false;
+        function tryLock() {
+          if (held) return false;
+          ownsLock = held = true;
+          return true;
+        }
+        return {
+          tryLock,
+          waitLock() { if (!tryLock()) throw new Error('Lock timeout'); },
+          releaseLock() { if (ownsLock) ownsLock = held = false; },
+        };
+      },
+    },
+    PropertiesService: { getScriptProperties: () => ({
+      getProperty: key => properties.get(key) || null,
+      setProperty: (key, value) => properties.set(key, value),
+      deleteProperty: key => properties.delete(key),
+    }) },
+    Utilities: { getUuid: () => String(now) },
+  });
+  return { context, properties, advanceTime: milliseconds => { now += milliseconds; } };
+}
+
+test('calendar KPI reconciliation lets scheduling acquire its lock and defers overlapping KPI writers', () => {
+  const { context, properties } = kpiLockContext();
+  let reconciliations = 0;
+  context.syncInstallCalendarJobsToKpi_ = () => {
+    reconciliations += 1;
+    assert.equal(context.scheduleUnsched({ id: '' }).error, 'Invalid job identity');
+    assert.equal(context.syncInstallJobsToKpi_([], { skipEstimates: true }).deferred, true);
+    return { success: true };
+  };
+
+  assert.equal(context.syncInstallJobsToKpi_([], { skipEstimates: true }).success, true);
+  assert.equal(reconciliations, 1);
+  assert.equal(properties.size, 0);
+});
+
+test('KPI reconciliation can recover an expired lease and releases it after an error', () => {
+  const { context, properties, advanceTime } = kpiLockContext();
+  let abandoned;
+  context.syncInstallCalendarJobsToKpi_ = () => {
+    abandoned = Array.from(properties);
+    return { success: true };
+  };
+  context.syncInstallJobsToKpi_([], { skipEstimates: true });
+  assert.equal(abandoned.length, 1);
+  abandoned.forEach(([key, value]) => properties.set(key, value));
+  assert.equal(context.syncInstallJobsToKpi_([], { skipEstimates: true }).deferred, true);
+  advanceTime(8 * 60 * 1000);
+  context.syncInstallCalendarJobsToKpi_ = () => { throw new Error('Sheets unavailable'); };
+
+  assert.throws(() => context.syncInstallJobsToKpi_([], { skipEstimates: true }), /Sheets unavailable/);
+  assert.equal(properties.size, 0);
+});
+
 test('sync planning writes a legitimate zero-hour Squarecoil total into a blank cell', () => {
   const context = backendContext();
   const existing = Array(32).fill('');
